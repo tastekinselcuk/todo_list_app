@@ -233,8 +233,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Check, Trash2, Edit, Filter, GripVertical } from 'lucide-vue-next'
-import { useTodoStore } from '@/stores/todo'
-import type { Todo } from '@/types'
+import { useTodoStore, type Todo } from '@/stores/todo'
 import draggable from 'vuedraggable'
 import PomodoroTimer from './PomodoroTimer.vue'
 

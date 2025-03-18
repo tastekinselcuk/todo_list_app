@@ -112,10 +112,6 @@ import { ref } from 'vue'
 import { Calendar, X } from 'lucide-vue-next'
 import { useTodoStore } from '@/stores/todo'
 
-const props = defineProps<{
-  open: boolean
-}>()
-
 const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
