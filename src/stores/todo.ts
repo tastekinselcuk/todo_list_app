@@ -4,14 +4,13 @@ import { ref, watch } from 'vue'
 export type Priority = 'low' | 'medium' | 'high'
 
 export interface Todo {
-  id: string
-  title: string
-  description: string
-  completed: boolean
-  dueDate: Date | null
-  priority: Priority
-  categoryId: string
-  createdAt: Date
+  id: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  categoryId: string;
+  priority: 'low' | 'medium' | 'high';
+  dueDate: string | null;
 }
 
 export interface Category {

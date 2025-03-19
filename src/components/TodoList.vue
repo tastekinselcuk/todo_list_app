@@ -117,7 +117,7 @@
                     v-if="todo.dueDate"
                     class="text-xs text-gray-500"
                   >
-                    Due: {{ new Date(todo.dueDate).toLocaleDateString() }}
+                    Due: {{ formatDate(todo.dueDate) }}
                   </span>
                   <span
                     class="text-xs px-2 py-1 rounded-full"
@@ -292,8 +292,14 @@ const editingTodo = ref<Todo>({
   completed: false,
   categoryId: '',
   priority: 'low',
-  dueDate: '',
+  dueDate: null,
 })
+
+// Update date display logic
+const formatDate = (date: string | null) => {
+  if (!date) return '';
+  return new Date(date).toLocaleDateString()
+}
 
 const openEditDialog = (todo: Todo) => {
   editingTodo.value = { ...todo }
