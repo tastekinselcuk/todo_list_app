@@ -20,6 +20,13 @@ export interface Category {
   icon: string
 }
 
+export interface QuickNote {
+  id: string;
+  content: string;
+  createdAt: string;
+  completed: boolean; // Add completed property
+}
+
 const defaultCategories: Category[] = [
   { id: '1', name: 'Work', color: '#EF4444', icon: 'briefcase' },
   { id: '2', name: 'Personal', color: '#3B82F6', icon: 'user' },
@@ -39,14 +46,16 @@ export const useTodoStore = defineStore('todo', () => {
 
   const todos = ref<Todo[]>(initialData.todos)
   const categories = ref<Category[]>(initialData.categories)
+  const quickNotes = ref<QuickNote[]>(initialData.quickNotes || [])
 
   // Watch for changes and save to localStorage
   watch(
-    [todos, categories],
+    [todos, categories, quickNotes],
     () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         todos: todos.value,
-        categories: categories.value
+        categories: categories.value,
+        quickNotes: quickNotes.value
       }))
     },
     { deep: true }
@@ -113,6 +122,29 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
+  const addQuickNote = (content: string) => {
+    quickNotes.value.unshift({
+      id: crypto.randomUUID(),
+      content,
+      createdAt: new Date().toISOString(),
+      completed: false, // Initialize as incomplete
+    })
+  }
+
+  const toggleQuickNote = (id: string) => {
+    const note = quickNotes.value.find(n => n.id === id)
+    if (note) {
+      note.completed = !note.completed
+    }
+  }
+
+  const deleteQuickNote = (id: string) => {
+    const index = quickNotes.value.findIndex(note => note.id === id)
+    if (index !== -1) {
+      quickNotes.value.splice(index, 1)
+    }
+  }
+
   return {
     todos,
     categories,
@@ -125,5 +157,9 @@ export const useTodoStore = defineStore('todo', () => {
     deleteCategory,
     editCategory,
     reorderTodos, // Add this to the returned object
+    quickNotes,
+    addQuickNote,
+    deleteQuickNote,
+    toggleQuickNote,
   }
 })
