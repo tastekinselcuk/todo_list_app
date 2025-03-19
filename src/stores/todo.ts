@@ -52,18 +52,10 @@ export const useTodoStore = defineStore('todo', () => {
     { deep: true }
   )
 
-  // Convert stored dates back to Date objects
-  todos.value = todos.value.map(todo => ({
-    ...todo,
-    createdAt: new Date(todo.createdAt),
-    dueDate: todo.dueDate ? new Date(todo.dueDate) : null
-  }))
-
-  const addTodo = (todo: Omit<Todo, 'id' | 'createdAt'>) => {
+  const addTodo = (todo: Omit<Todo, 'id'>) => {
     todos.value.push({
       ...todo,
       id: crypto.randomUUID(),
-      createdAt: new Date(),
     })
   }
 
@@ -91,13 +83,7 @@ export const useTodoStore = defineStore('todo', () => {
   const updateTodo = (updatedTodo: Todo) => {
     const index = todos.value.findIndex(t => t.id === updatedTodo.id)
     if (index !== -1) {
-      // Ensure dates are properly handled
-      const todo = {
-        ...updatedTodo,
-        dueDate: updatedTodo.dueDate ? new Date(updatedTodo.dueDate) : null,
-        createdAt: new Date(updatedTodo.createdAt)
-      }
-      todos.value[index] = todo
+      todos.value[index] = updatedTodo
     }
   }
 

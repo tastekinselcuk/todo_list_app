@@ -112,6 +112,11 @@ import { ref } from 'vue'
 import { Calendar, X } from 'lucide-vue-next'
 import { useTodoStore } from '@/stores/todo'
 
+// Add prop definition for open
+defineProps<{
+  open: boolean
+}>()
+
 const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
@@ -128,12 +133,13 @@ const handleSubmit = () => {
   todoStore.addTodo({
     title: title.value,
     description: description.value,
-    dueDate: dueDate.value ? new Date(dueDate.value) : null,
+    dueDate: dueDate.value || null, // Convert to string or null
     priority: priority.value,
     categoryId: categoryId.value,
     completed: false,
   })
 
+  // Reset form
   title.value = ''
   description.value = ''
   dueDate.value = ''
