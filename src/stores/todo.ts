@@ -118,9 +118,6 @@ export const useTodoStore = defineStore('todo', () => {
       return { success: false, message: 'Cannot delete the last category' }
     }
 
-    // Find the next available category to move todos to
-    const nextCategory = categories.value.find(c => c.id !== id)
-
     // Remove the todos and category
     todos.value = todos.value.filter(todo => todo.categoryId !== id)
     const index = categories.value.findIndex(c => c.id === id)
