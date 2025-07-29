@@ -1,17 +1,6 @@
 <template>
   <div class="min-h-screen bg-gray-50 p-8">
     <div class="max-w-4xl mx-auto space-y-8">
-      <header class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">
-          Pomodoro Todo
-        </h1>
-        <button
-          @click="showAddTodoDialog = true"
-          class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90"
-        >
-          Add Todo
-        </button>
-      </header>
 
       <TodoList />
       

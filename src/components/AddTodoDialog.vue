@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 bg-black/80"
+      class="fixed inset-0 z-50 bg-black/50"
       @click="$emit('update:open', false)"
     ></div>
     

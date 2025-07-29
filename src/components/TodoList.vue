@@ -37,8 +37,8 @@
               v-for="category in todoStore.categories"
               :key="category.id"
               @click="handleCategoryToggle(category.id)"
-              class="group flex items-center gap-2 h-8 rounded-md px-3 text-xs border cursor-pointer transition-colors"
-              :class="[
+              class="group flex items-center gap-2 h-8 rounded-md px-3 text-xs border cursor-pointer transition-colors relative"
+              :class=" [
                 selectedCategories.includes(category.id) 
                   ? 'text-white'
                   : 'hover:bg-accent'
@@ -50,10 +50,13 @@
               }"
             >
               <span>{{ category.name }}</span>
-              <X 
-                v-if="selectedCategories.includes(category.id)"
-                class="h-3 w-3 opacity-60 group-hover:opacity-100" 
-              />
+              <button
+                v-if="todoStore.categories.length > 1"
+                @click.stop="deleteCategory(category.id)"
+                class="opacity-0 group-hover:opacity-100 hover:text-destructive ml-1"
+              >
+                <Trash2 class="h-3 w-3" />
+              </button>
             </div>
 
             <!-- Priority Filter -->
@@ -192,40 +195,90 @@
     <!-- Add Category Dialog -->
     <dialog
       ref="categoryDialog"
-      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md"
+      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md border"
     >
-      <h2 class="text-lg font-semibold mb-4">Add Category</h2>
-      <form @submit.prevent="handleAddCategory" class="space-y-4">
-        <div>
-          <label class="block text-sm mb-1">Name</label>
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-lg font-semibold">Add Category</h2>
+        <button
+          @click="closeCategoryDialog"
+          class="p-1.5 rounded-md hover:bg-accent"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+
+      <form @submit.prevent="handleAddCategory" class="space-y-6">
+        <!-- Name Input -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium">Category Name</label>
           <input
             v-model="newCategory.name"
             type="text"
-            class="w-full rounded-md border p-2"
+            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+            placeholder="Enter category name"
             required
           />
         </div>
-        <div>
-          <label class="block text-sm mb-1">Color</label>
-          <input
-            v-model="newCategory.color"
-            type="color"
-            class="w-full rounded-md border p-2 h-10"
-          />
+
+        <!-- Color Selection -->
+        <div class="space-y-4">
+          <label class="text-sm font-medium">Color</label>
+          
+          <!-- Predefined Colors -->
+          <div class="space-y-2">
+            <div class="text-xs text-muted-foreground mb-2">Suggested Colors</div>
+            <div class="grid grid-cols-8 gap-2">
+              <button
+                v-for="color in predefinedColors"
+                :key="color"
+                type="button"
+                class="w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                :class="{ 'ring-2 ring-primary ring-offset-2': newCategory.color === color }"
+                :style="{ backgroundColor: color }"
+                @click="newCategory.color = color"
+              />
+            </div>
+          </div>
+
+          <!-- Custom Color Input -->
+          <div class="space-y-2">
+            <div class="text-xs text-muted-foreground">Custom Hex Color</div>
+            <div class="flex items-start gap-3">
+              <div class="flex-1">
+                <div class="flex items-center gap-3">
+                  <input
+                    v-model="newCategory.color"
+                    type="text"
+                    class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="#000000"
+                    pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+                  />
+                  <div
+                    class="w-10 h-10 rounded-md border shrink-0"
+                    :style="{ backgroundColor: newCategory.color }"
+                  />
+                </div>
+                <p class="text-xs text-muted-foreground mt-1">
+                  Enter a hex color code (e.g., #FF0000 for red)
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="flex justify-end gap-2">
+
+        <div class="flex justify-end gap-2 pt-4 border-t">
           <button
             type="button"
             @click="closeCategoryDialog"
-            class="px-4 py-2 rounded-md border hover:bg-gray-100"
+            class="px-4 py-2 rounded-md text-sm hover:bg-accent"
           >
             Cancel
           </button>
           <button
             type="submit"
-            class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90"
+            class="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90"
           >
-            Add
+            Create Category
           </button>
         </div>
       </form>
@@ -234,32 +287,81 @@
     <!-- Edit Todo Dialog -->
     <dialog
       ref="editDialog"
-      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md"
+      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-lg border"
     >
-      <h2 class="text-lg font-semibold mb-4">Edit Todo</h2>
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg font-semibold">Edit Task</h2>
+        <button
+          @click="closeEditDialog"
+          class="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+
       <form @submit.prevent="handleEditSubmit" class="space-y-4">
-        <div>
-          <label class="block text-sm mb-1">Title</label>
+        <div class="space-y-2">
+          <label for="edit-title" class="text-sm font-medium">
+            Title
+          </label>
           <input
-            v-model="editingTodo.title"
+            id="edit-title"
             type="text"
-            class="w-full rounded-md border p-2"
+            v-model="editingTodo.title"
+            class="w-full rounded-md border border-input px-3 py-2"
             required
           />
         </div>
-        <div>
-          <label class="block text-sm mb-1">Description</label>
+        
+        <div class="space-y-2">
+          <label for="edit-description" class="text-sm font-medium">
+            Description
+          </label>
           <textarea
+            id="edit-description"
             v-model="editingTodo.description"
-            class="w-full rounded-md border p-2"
-            rows="3"
+            class="w-full rounded-md border border-input px-3 py-2 min-h-[100px]"
           ></textarea>
         </div>
-        <div>
-          <label class="block text-sm mb-1">Category</label>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label for="edit-dueDate" class="text-sm font-medium flex items-center gap-2">
+              <Calendar class="h-4 w-4" />
+              Due Date
+            </label>
+            <input
+              id="edit-dueDate"
+              type="date"
+              v-model="editingTodo.dueDate"
+              class="w-full rounded-md border border-input px-3 py-2"
+            />
+          </div>
+          
+          <div class="space-y-2">
+            <label for="edit-priority" class="text-sm font-medium">
+              Priority
+            </label>
+            <select
+              id="edit-priority"
+              v-model="editingTodo.priority"
+              class="w-full rounded-md border border-input px-3 py-2"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="space-y-2">
+          <label for="edit-category" class="text-sm font-medium">
+            Category
+          </label>
           <select
+            id="edit-category"
             v-model="editingTodo.categoryId"
-            class="w-full rounded-md border p-2"
+            class="w-full rounded-md border border-input px-3 py-2"
           >
             <option
               v-for="category in todoStore.categories"
@@ -270,38 +372,13 @@
             </option>
           </select>
         </div>
-        <div>
-          <label class="block text-sm mb-1">Priority</label>
-          <select
-            v-model="editingTodo.priority"
-            class="w-full rounded-md border p-2"
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm mb-1">Due Date</label>
-          <input
-            v-model="editingTodo.dueDate"
-            type="date"
-            class="w-full rounded-md border p-2"
-          />
-        </div>
-        <div class="flex justify-end gap-2">
-          <button
-            type="button"
-            @click="closeEditDialog"
-            class="px-4 py-2 rounded-md border hover:bg-gray-100"
-          >
-            Cancel
-          </button>
+        
+        <div class="flex justify-end">
           <button
             type="submit"
-            class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90"
+            class="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2"
           >
-            Save
+            Save Changes
           </button>
         </div>
       </form>
@@ -416,6 +493,18 @@ const newCategory = ref({
   icon: 'folder' // default icon
 })
 
+// Predefined colors for category
+const predefinedColors = [
+  '#EF4444', // Red
+  '#F97316', // Orange
+  '#F59E0B', // Amber
+  '#10B981', // Emerald
+  '#06B6D4', // Cyan
+  '#3B82F6', // Blue
+  '#6366F1', // Indigo
+  '#8B5CF6', // Violet
+]
+
 // Watch showCategoryDialog changes
 watch(showCategoryDialog, (show) => {
   if (show) {
@@ -441,6 +530,33 @@ const hasActiveFilters = computed(() => {
          selectedPriority.value !== 'all' || 
          !showCompleted.value
 })
+
+const deleteCategory = async (categoryId: string) => {
+  const todoCount = todoStore.getTodosInCategory(categoryId)
+  
+  let shouldDelete = false
+  if (todoCount > 0) {
+    shouldDelete = confirm(
+      `This category contains ${todoCount} note${todoCount === 1 ? '' : 's'}. ` +
+      'Deleting it will also permanently delete all associated notes. ' +
+      'Are you sure you want to continue?'
+    )
+  } else {
+    shouldDelete = confirm('Are you sure you want to delete this category?')
+  }
+
+  if (shouldDelete) {
+    const result = todoStore.deleteCategory(categoryId)
+    if (!result.success) {
+      alert(result.message || 'Cannot delete the category')
+    }
+    // Remove the category from selected categories if it was selected
+    const index = selectedCategories.value.indexOf(categoryId)
+    if (index !== -1) {
+      selectedCategories.value.splice(index, 1)
+    }
+  }
+}
 </script>
 
 <style scoped>

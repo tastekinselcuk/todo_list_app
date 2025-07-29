@@ -108,11 +108,27 @@ export const useTodoStore = defineStore('todo', () => {
     })
   }
 
+  const getTodosInCategory = (categoryId: string) => {
+    return todos.value.filter(todo => todo.categoryId === categoryId).length
+  }
+
   const deleteCategory = (id: string) => {
+    // First check if it's not the last category
+    if (categories.value.length <= 1) {
+      return { success: false, message: 'Cannot delete the last category' }
+    }
+
+    // Find the next available category to move todos to
+    const nextCategory = categories.value.find(c => c.id !== id)
+
+    // Remove the todos and category
+    todos.value = todos.value.filter(todo => todo.categoryId !== id)
     const index = categories.value.findIndex(c => c.id === id)
     if (index !== -1) {
       categories.value.splice(index, 1)
     }
+
+    return { success: true }
   }
 
   const editCategory = (id: string, updates: Partial<Category>) => {
@@ -161,5 +177,6 @@ export const useTodoStore = defineStore('todo', () => {
     addQuickNote,
     deleteQuickNote,
     toggleQuickNote,
+    getTodosInCategory,
   }
 })
