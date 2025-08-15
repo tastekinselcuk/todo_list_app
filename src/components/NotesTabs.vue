@@ -52,6 +52,9 @@
       </div>
     </div>
 
+    <div v-else-if="activeTab === 'secure'">
+      <SecureNotes />
+    </div>
     <div v-else>
       <slot />
     </div>
@@ -62,6 +65,7 @@
 import { ref } from 'vue'
 import { Trash2 } from 'lucide-vue-next'
 import { useTodoStore } from '@/stores/todo'
+import SecureNotes from './SecureNotes.vue'
 
 const todoStore = useTodoStore()
 const activeTab = ref('detailed')
@@ -70,6 +74,7 @@ const quickNote = ref('')
 const tabs = [
   { id: 'detailed', name: 'Detailed Notes' },
   { id: 'quick', name: 'Quick Notes' },
+  { id: 'secure', name: 'Secure Notes' },
 ]
 
 const addQuickNote = () => {
