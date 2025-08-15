@@ -134,7 +134,7 @@
          
          <div class="flex items-center gap-2">
            <button
-             @click="editSession(currentSession)"
+             @click="editSession(currentSession!)"
              class="px-3 h-8 rounded-md text-xs border border-blue-200 text-blue-600 hover:bg-blue-50 flex items-center gap-1"
            >
              <Edit class="h-3 w-3" />
@@ -768,21 +768,7 @@ const saveSession = () => {
   closeSessionDialog()
 }
 
-const deleteSession = (id: string) => {
-  if (confirm('Are you sure you want to delete this session? All notes in this session will also be deleted.')) {
-    // Delete session
-    passwordSessions.value = passwordSessions.value.filter(s => s.id !== id)
-    savePasswordSessions()
-    
-    // Delete associated notes
-    localStorage.removeItem(`secure-notes-${id}`)
-    
-    // If current session is deleted, logout
-    if (currentSession.value?.id === id) {
-      logout()
-    }
-  }
-}
+
 
 const deleteCurrentSession = () => {
   if (!currentSession.value) return
