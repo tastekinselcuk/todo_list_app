@@ -117,41 +117,44 @@
         <!-- Tasks List -->
         <div class="space-y-4">
           <template v-if="isGrouped">
-            <div 
-              v-for="category in todoStore.categories" 
-              :key="category.id"
-              class="space-y-2"
-            >
-              <!-- Category Header -->
-              <div 
-                class="font-medium text-sm flex items-center gap-2 px-2"
-                :style="{ color: category.color }"
-              >
-                <Folder class="h-4 w-4" />
-                {{ category.name }}
-              </div>
-              
-              <!-- Category Tasks -->
-              <div 
-                class="space-y-2 p-3 rounded-lg"
-                :style="{
-                  backgroundColor: `${category.color}05`,
-                  borderColor: `${category.color}30`,
-                }"
-              >
+                         <div 
+               v-for="(groupData, categoryId) in groupedTodos" 
+               :key="categoryId"
+               class="space-y-2"
+             >
+               <!-- Category Group Container -->
+               <div 
+                 class="rounded-lg p-3"
+                 :style="{
+                   backgroundColor: `${groupData.category.color}15`,
+                   borderColor: `${groupData.category.color}40`,
+                   border: `1px solid ${groupData.category.color}40`,
+                 }"
+               >
+                 <!-- Category Header -->
+                 <div 
+                   class="font-medium text-sm flex items-center gap-2 px-2 mb-3"
+                   :style="{ color: groupData.category.color }"
+                 >
+                   <Folder class="h-4 w-4" />
+                   {{ groupData.category.name }}
+                 </div>
+                 
+                 <!-- Category Tasks -->
+                 <div class="space-y-2">
                 <draggable
-                  v-model="groupedTodos[category.id]"
+                  v-model="groupData.todos"
                   item-key="id"
                   class="space-y-2"
                   handle=".drag-handle"
                   @end="handleDragEnd"
                 >
                   <template #item="{ element: todo }">
-                    <div
-                      class="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border-l-4"
-                      :class="{ 'opacity-60': todo.completed }"
-                      :style="{ borderLeftColor: category.color }"
-                    >
+                                         <div
+                       class="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border-l-4"
+                       :class="{ 'opacity-60': todo.completed }"
+                       :style="{ borderLeftColor: groupData.category.color }"
+                     >
                       <div class="flex items-center space-x-4">
                         <button
                           class="p-2 rounded-md hover:bg-accent drag-handle"
@@ -189,7 +192,7 @@
                               <span
                                 class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
                                 :style="{
-                                  backgroundColor: `${getCategoryColor(todo.categoryId)}20`,
+                                  backgroundColor: `${getCategoryColor(todo.categoryId)}25`,
                                   color: getCategoryColor(todo.categoryId)
                                 }"
                               >
@@ -251,6 +254,7 @@
                     </div>
                   </template>
                 </draggable>
+                </div>
               </div>
             </div>
           </template>
@@ -304,15 +308,15 @@
                       <!-- Metadata Row -->
                       <div class="flex items-center flex-wrap gap-2">
                         <!-- Category Badge -->
-                        <span
-                          class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                          :style="{
-                            backgroundColor: `${getCategoryColor(todo.categoryId)}20`,
-                            color: getCategoryColor(todo.categoryId)
-                          }"
-                        >
-                          {{ getCategoryName(todo.categoryId) }}
-                        </span>
+                                                 <span
+                           class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                           :style="{
+                             backgroundColor: `${getCategoryColor(todo.categoryId)}25`,
+                             color: getCategoryColor(todo.categoryId)
+                           }"
+                         >
+                           {{ getCategoryName(todo.categoryId) }}
+                         </span>
                         
                         <!-- Priority Dot -->
                         <span
@@ -612,12 +616,27 @@ const filteredTodosArray = computed({
 })
 
 const groupedTodos = computed(() => {
-  const groups: { [key: string]: Todo[] } = {}
-  todoStore.categories.forEach(category => {
-    groups[category.id] = filteredTodos.value
+  const groups: { [key: string]: { category: any, todos: Todo[] } } = {}
+  
+  // Eğer kategori filtresi varsa, sadece seçili kategorileri göster
+  const categoriesToShow = selectedCategories.value.length > 0 
+    ? todoStore.categories.filter(cat => selectedCategories.value.includes(cat.id))
+    : todoStore.categories
+  
+  categoriesToShow.forEach(category => {
+    const categoryTodos = filteredTodos.value
       .filter(todo => todo.categoryId === category.id)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    
+    // Sadece todo'su olan kategorileri göster
+    if (categoryTodos.length > 0) {
+      groups[category.id] = {
+        category,
+        todos: categoryTodos
+      }
+    }
   })
+  
   return groups
 })
 
@@ -682,7 +701,14 @@ const handleEditSubmit = () => {
 }
 
 const handleDragEnd = () => {
-  // Optional: Add any additional logic after drag ends
+  // Update the order in the store for grouped view
+  if (isGrouped.value) {
+    Object.values(groupedTodos.value).forEach(groupData => {
+      if (groupData.todos.length > 0) {
+        todoStore.reorderTodos(groupData.todos)
+      }
+    })
+  }
 }
 
 // Add new refs and state
