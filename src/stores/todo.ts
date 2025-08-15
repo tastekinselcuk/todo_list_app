@@ -11,6 +11,8 @@ export interface Todo {
   categoryId: string;
   priority: 'low' | 'medium' | 'high';
   dueDate: string | null;
+  createdAt: string; // Add createdAt property
+  updatedAt: string; // Add updatedAt property
 }
 
 export interface Category {
@@ -61,11 +63,14 @@ export const useTodoStore = defineStore('todo', () => {
     { deep: true }
   )
 
-  const addTodo = (todo: Omit<Todo, 'id'>) => {
-    todos.value.push({
+  const addTodo = (todo: Omit<Todo, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newTodo = {
       ...todo,
       id: crypto.randomUUID(),
-    })
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    todos.value.push(newTodo)
   }
 
   const toggleTodo = (id: string) => {
@@ -89,10 +94,13 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  const updateTodo = (updatedTodo: Todo) => {
-    const index = todos.value.findIndex(t => t.id === updatedTodo.id)
+  const updateTodo = (todo: Todo) => {
+    const index = todos.value.findIndex(t => t.id === todo.id)
     if (index !== -1) {
-      todos.value[index] = updatedTodo
+      todos.value[index] = {
+        ...todo,
+        updatedAt: new Date().toISOString()
+      }
     }
   }
 

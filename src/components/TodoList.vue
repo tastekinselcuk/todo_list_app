@@ -63,13 +63,23 @@
             <div class="relative h-8">
               <select
                 v-model="selectedPriority"
-                class="h-full appearance-none rounded-md border border-input px-3 pr-8 text-xs cursor-pointer hover:bg-accent"
+                class="h-full appearance-none rounded-md border border-input pl-8 pr-8 text-xs cursor-pointer hover:bg-accent"
               >
                 <option value="all">All Priorities</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">Low Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="high">High Priority</option>
               </select>
+              <!-- Priority Indicator Dot -->
+              <div 
+                class="absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ring-2 ring-opacity-30"
+                :class="{
+                  'bg-emerald-500 ring-emerald-200': selectedPriority === 'low',
+                  'bg-yellow-500 ring-yellow-200': selectedPriority === 'medium',
+                  'bg-red-500 ring-red-200': selectedPriority === 'high',
+                  'bg-gray-300 ring-gray-200': selectedPriority === 'all'
+                }"
+              ></div>
               <ChevronDown class="h-3 w-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
             </div>
 
@@ -80,6 +90,16 @@
             >
               <Check class="h-3 w-3" :class="{ 'opacity-50': !showCompleted }" />
               {{ showCompleted ? 'Hide Completed' : 'Show Completed' }}
+            </button>
+
+            <!-- Group Notes Toggle -->
+            <button
+              @click="isGrouped = !isGrouped"
+              class="h-8 px-3 rounded-md text-xs border border-input hover:bg-accent flex items-center gap-2"
+              :class="{ 'bg-primary/10 border-primary text-primary': isGrouped }"
+            >
+              <FolderTree class="h-3 w-3" />
+              {{ isGrouped ? 'Ungroup Notes' : 'Group Notes' }}
             </button>
 
             <!-- Clear Filters -->
@@ -96,7 +116,146 @@
 
         <!-- Tasks List -->
         <div class="space-y-4">
+          <template v-if="isGrouped">
+            <div 
+              v-for="category in todoStore.categories" 
+              :key="category.id"
+              class="space-y-2"
+            >
+              <!-- Category Header -->
+              <div 
+                class="font-medium text-sm flex items-center gap-2 px-2"
+                :style="{ color: category.color }"
+              >
+                <Folder class="h-4 w-4" />
+                {{ category.name }}
+              </div>
+              
+              <!-- Category Tasks -->
+              <div 
+                class="space-y-2 p-3 rounded-lg"
+                :style="{
+                  backgroundColor: `${category.color}05`,
+                  borderColor: `${category.color}30`,
+                }"
+              >
+                <draggable
+                  v-model="groupedTodos[category.id]"
+                  item-key="id"
+                  class="space-y-2"
+                  handle=".drag-handle"
+                  @end="handleDragEnd"
+                >
+                  <template #item="{ element: todo }">
+                    <div
+                      class="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border-l-4"
+                      :class="{ 'opacity-60': todo.completed }"
+                      :style="{ borderLeftColor: category.color }"
+                    >
+                      <div class="flex items-center space-x-4">
+                        <button
+                          class="p-2 rounded-md hover:bg-accent drag-handle"
+                          title="Drag to reorder"
+                        >
+                          <GripVertical class="h-4 w-4 text-gray-400" />
+                        </button>
+                        
+                        <button
+                          @click="todoStore.toggleTodo(todo.id)"
+                          class="p-2 rounded-md hover:bg-accent"
+                          :class="{ 'bg-green-100 text-green-600': todo.completed }"
+                        >
+                          <Check
+                            class="h-5 w-5"
+                            :class="{ 'opacity-100': todo.completed, 'opacity-30': !todo.completed }"
+                          />
+                        </button>
+                        
+                        <div>
+                          <h3
+                            class="font-medium"
+                            :class="{ 'line-through': todo.completed }"
+                          >
+                            {{ todo.title }}
+                          </h3>
+                          <p
+                            v-if="todo.description"
+                            class="text-sm text-gray-500"
+                          >
+                            {{ todo.description }}
+                          </p>
+                          <div class="mt-2">
+                            <div class="flex items-center flex-wrap gap-2">
+                              <span
+                                class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                :style="{
+                                  backgroundColor: `${getCategoryColor(todo.categoryId)}20`,
+                                  color: getCategoryColor(todo.categoryId)
+                                }"
+                              >
+                                {{ getCategoryName(todo.categoryId) }}
+                              </span>
+                              
+                              <span
+                                class="inline-flex items-center"
+                                :title="`Priority: ${todo.priority}`"
+                              >
+                                <span 
+                                  class="w-3 h-3 rounded-full ring-2 ring-opacity-30"
+                                  :class="{
+                                    'bg-red-500 ring-red-200': todo.priority === 'high',
+                                    'bg-yellow-500 ring-yellow-200': todo.priority === 'medium',
+                                    'bg-emerald-500 ring-emerald-200': todo.priority === 'low'
+                                  }"
+                                />
+                              </span>
+
+                              <span
+                                v-if="todo.dueDate"
+                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-50 border border-emerald-100"
+                                :class="{
+                                  'bg-red-50 border-red-100 text-red-700': isOverdue(todo.dueDate),
+                                  'text-emerald-700': !isOverdue(todo.dueDate)
+                                }"
+                              >
+                                <Calendar class="h-3 w-3" />
+                                {{ formatDate(todo.dueDate) }}
+                              </span>
+
+                              <span
+                                v-if="todo.createdAt"
+                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-50 border border-gray-100 text-gray-600"
+                              >
+                                <Clock class="h-3 w-3" />
+                                {{ formatRelativeTime(todo.createdAt) }}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="flex items-center space-x-2">
+                        <button 
+                          @click="openEditDialog(todo)"
+                          class="p-2 rounded-md hover:bg-accent"
+                        >
+                          <Edit class="h-4 w-4" />
+                        </button>
+                        <button
+                          @click="todoStore.deleteTodo(todo.id)"
+                          class="p-2 rounded-md hover:bg-accent text-red-500 hover:text-red-600"
+                        >
+                          <Trash2 class="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </draggable>
+              </div>
+            </div>
+          </template>
           <draggable
+            v-else
             v-model="filteredTodosArray"
             item-key="id"
             class="space-y-4"
@@ -141,32 +300,57 @@
                     >
                       {{ todo.description }}
                     </p>
-                    <div class="flex items-center space-x-2 mt-1">
-                      <span
-                        class="inline-flex items-center px-2 py-1 rounded-full text-xs"
-                        :style="{
-                          backgroundColor: `${getCategoryColor(todo.categoryId)}20`,
-                          color: getCategoryColor(todo.categoryId)
-                        }"
-                      >
-                        {{ getCategoryName(todo.categoryId) }}
-                      </span>
-                      <span
-                        v-if="todo.dueDate"
-                        class="text-xs text-gray-500"
-                      >
-                        Due: {{ formatDate(todo.dueDate) }}
-                      </span>
-                      <span
-                        class="text-xs px-2 py-1 rounded-full"
-                        :class="{
-                          'bg-red-100 text-red-600': todo.priority === 'high',
-                          'bg-yellow-100 text-yellow-600': todo.priority === 'medium',
-                          'bg-blue-100 text-blue-600': todo.priority === 'low'
-                        }"
-                      >
-                        {{ todo.priority }}
-                      </span>
+                    <div class="mt-2">
+                      <!-- Metadata Row -->
+                      <div class="flex items-center flex-wrap gap-2">
+                        <!-- Category Badge -->
+                        <span
+                          class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                          :style="{
+                            backgroundColor: `${getCategoryColor(todo.categoryId)}20`,
+                            color: getCategoryColor(todo.categoryId)
+                          }"
+                        >
+                          {{ getCategoryName(todo.categoryId) }}
+                        </span>
+                        
+                        <!-- Priority Dot -->
+                        <span
+                          class="inline-flex items-center"
+                          :title="`Priority: ${todo.priority}`"
+                        >
+                          <span 
+                            class="w-3 h-3 rounded-full ring-2 ring-opacity-30"
+                            :class="{
+                              'bg-red-500 ring-red-200': todo.priority === 'high',
+                              'bg-yellow-500 ring-yellow-200': todo.priority === 'medium',
+                              'bg-emerald-500 ring-emerald-200': todo.priority === 'low'
+                            }"
+                          />
+                        </span>
+
+                        <!-- Due Date Badge -->
+                        <span
+                          v-if="todo.dueDate"
+                          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-50 border border-emerald-100"
+                          :class="{
+                            'bg-red-50 border-red-100 text-red-700': isOverdue(todo.dueDate),
+                            'text-emerald-700': !isOverdue(todo.dueDate)
+                          }"
+                        >
+                          <Calendar class="h-3 w-3" />
+                          {{ formatDate(todo.dueDate) }}
+                        </span>
+
+                        <!-- Created Date Badge -->
+                        <span
+                          v-if="todo.createdAt"
+                          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-50 border border-gray-100 text-gray-600"
+                        >
+                          <Clock class="h-3 w-3" />
+                          {{ formatRelativeTime(todo.createdAt) }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -392,7 +576,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Check, Trash2, Edit, Filter, GripVertical, Tags, X, Plus, ChevronDown } from 'lucide-vue-next'
+import { Check, Trash2, Edit, Filter, GripVertical, Tags, X, Plus, ChevronDown, Calendar, Clock, FolderTree, Folder } from 'lucide-vue-next'
 import { useTodoStore, type Todo } from '@/stores/todo'
 import draggable from 'vuedraggable'
 import PomodoroTimer from './PomodoroTimer.vue'
@@ -404,6 +588,7 @@ const todoStore = useTodoStore()
 const selectedCategories = ref<string[]>([])
 const selectedPriority = ref('all')
 const showCompleted = ref(true)
+const isGrouped = ref(false)
 
 const filteredTodos = computed(() => {
   return todoStore.todos.filter((todo) => {
@@ -416,11 +601,24 @@ const filteredTodos = computed(() => {
 
 // Convert filtered todos to an array for drag and drop
 const filteredTodosArray = computed({
-  get: () => filteredTodos.value,
+  get: () => {
+    const todos = [...filteredTodos.value]
+    return todos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  },
   set: (newValue) => {
     // Update the order in the store
     todoStore.reorderTodos(newValue)
   }
+})
+
+const groupedTodos = computed(() => {
+  const groups: { [key: string]: Todo[] } = {}
+  todoStore.categories.forEach(category => {
+    groups[category.id] = filteredTodos.value
+      .filter(todo => todo.categoryId === category.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  })
+  return groups
 })
 
 const handleCategoryToggle = (categoryId: string) => {
@@ -461,6 +659,12 @@ const editingTodo = ref<Todo>({
 const formatDate = (date: string | null) => {
   if (!date) return '';
   return new Date(date).toLocaleDateString()
+}
+
+// Add formatDateTime function
+const formatDateTime = (date: string | null) => {
+  if (!date) return '';
+  return new Date(date).toLocaleString();
 }
 
 const openEditDialog = (todo: Todo) => {
@@ -556,6 +760,43 @@ const deleteCategory = async (categoryId: string) => {
       selectedCategories.value.splice(index, 1)
     }
   }
+}
+
+// New functions for date formatting and overdue checking
+const isOverdue = (date: string | null) => {
+  if (!date) return false;
+  return new Date(date) < new Date(new Date().setHours(0, 0, 0, 0));
+}
+
+const formatRelativeTime = (date: string) => {
+  if (!date) return '';
+  const now = new Date();
+  const past = new Date(date);
+  const diffTime = Math.abs(now.getTime() - past.getTime());
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return formatDate(date);
+}
+
+// Add these new functions in the script section:
+const isCategoryCompleted = (categoryId: string) => {
+  const categoryTodos = todoStore.todos.filter(todo => todo.categoryId === categoryId)
+  return categoryTodos.length > 0 && categoryTodos.every(todo => todo.completed)
+}
+
+const toggleCategoryCompletion = (categoryId: string) => {
+  const shouldComplete = !isCategoryCompleted(categoryId)
+  todoStore.todos
+    .filter(todo => todo.categoryId === categoryId)
+    .forEach(todo => {
+      if (todo.completed !== shouldComplete) {
+        todoStore.toggleTodo(todo.id)
+      }
+    })
 }
 </script>
 
