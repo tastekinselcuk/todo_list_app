@@ -653,6 +653,8 @@ const editingTodo = ref<Todo>({
   categoryId: '',
   priority: 'low',
   dueDate: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
 })
 
 // Update date display logic
@@ -661,11 +663,7 @@ const formatDate = (date: string | null) => {
   return new Date(date).toLocaleDateString()
 }
 
-// Add formatDateTime function
-const formatDateTime = (date: string | null) => {
-  if (!date) return '';
-  return new Date(date).toLocaleString();
-}
+
 
 const openEditDialog = (todo: Todo) => {
   editingTodo.value = { ...todo }
@@ -782,22 +780,9 @@ const formatRelativeTime = (date: string) => {
   return formatDate(date);
 }
 
-// Add these new functions in the script section:
-const isCategoryCompleted = (categoryId: string) => {
-  const categoryTodos = todoStore.todos.filter(todo => todo.categoryId === categoryId)
-  return categoryTodos.length > 0 && categoryTodos.every(todo => todo.completed)
-}
 
-const toggleCategoryCompletion = (categoryId: string) => {
-  const shouldComplete = !isCategoryCompleted(categoryId)
-  todoStore.todos
-    .filter(todo => todo.categoryId === categoryId)
-    .forEach(todo => {
-      if (todo.completed !== shouldComplete) {
-        todoStore.toggleTodo(todo.id)
-      }
-    })
-}
+
+
 </script>
 
 <style scoped>
