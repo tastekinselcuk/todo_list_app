@@ -748,8 +748,14 @@ const closeCategoryDialog = () => {
 }
 
 const handleAddCategory = () => {
-  todoStore.addCategory(newCategory.value)
-  closeCategoryDialog()
+  const result = todoStore.addCategory(newCategory.value)
+  
+  if (result.success) {
+    closeCategoryDialog()
+  } else {
+    // Show error message to user
+    alert(result.message || 'Failed to add category')
+  }
 }
 
 // Add computed property for active filters

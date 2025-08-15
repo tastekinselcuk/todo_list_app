@@ -110,10 +110,21 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   const addCategory = (category: Omit<Category, 'id'>) => {
+    // Check for duplicate names (case-insensitive)
+    const existingCategory = categories.value.find(c => 
+      c.name.toLowerCase().trim() === category.name.toLowerCase().trim()
+    )
+    
+    if (existingCategory) {
+      return { success: false, message: `A category with the name "${category.name}" already exists. Please choose a different name.` }
+    }
+    
     categories.value.push({
       ...category,
       id: crypto.randomUUID(),
     })
+    
+    return { success: true }
   }
 
   const getTodosInCategory = (categoryId: string) => {
@@ -139,8 +150,23 @@ export const useTodoStore = defineStore('todo', () => {
   const editCategory = (id: string, updates: Partial<Category>) => {
     const category = categories.value.find(c => c.id === id)
     if (category) {
+      // If updating name, check for duplicates
+      if (updates.name) {
+        const existingCategory = categories.value.find(c => 
+          c.name.toLowerCase().trim() === updates.name!.toLowerCase().trim() &&
+          c.id !== id // Exclude current category when editing
+        )
+        
+        if (existingCategory) {
+          return { success: false, message: `A category with the name "${updates.name}" already exists. Please choose a different name.` }
+        }
+      }
+      
       Object.assign(category, updates)
+      return { success: true }
     }
+    
+    return { success: false, message: 'Category not found' }
   }
 
   const addQuickNote = (content: string) => {

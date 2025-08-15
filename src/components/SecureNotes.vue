@@ -2,52 +2,60 @@
   <div class="space-y-6">
          <!-- Password Entry Section -->
      <div v-if="!isAuthenticated" class="max-w-2xl mx-auto space-y-6">
-       <!-- Sessions Management -->
-       <div class="bg-white p-6 rounded-lg shadow-sm border space-y-4">
-         <div class="flex items-center justify-between">
-           <div class="text-center space-y-2 flex-1">
-             <Shield class="h-12 w-12 mx-auto text-primary" />
-             <h2 class="text-xl font-semibold">Password Sessions</h2>
-             <p class="text-sm text-gray-600">Manage your secure note sessions</p>
-           </div>
-           <button
-             @click="openAddSessionDialog"
-             class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
-           >
-             <Plus class="h-4 w-4" />
-             New Session
-           </button>
-         </div>
+               <!-- Sessions Management -->
+        <div class="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+          <div class="relative">
+            <div class="text-center space-y-2">
+              <Shield class="h-12 w-12 mx-auto text-primary" />
+              <h2 class="text-xl font-semibold">Password Sessions</h2>
+              <p class="text-sm text-gray-600">Manage your secure note sessions</p>
+            </div>
+            <button
+              @click="openAddSessionDialog"
+              class="absolute top-0 right-0 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
+            >
+              <Plus class="h-4 w-4" />
+              New Session
+            </button>
+          </div>
          
-         <!-- Sessions List -->
-         <div v-if="passwordSessions.length > 0" class="space-y-3">
-           <div
-             v-for="session in passwordSessions"
-             :key="session.id"
-             class="flex items-center justify-between p-4 border rounded-lg hover:bg-accent"
-           >
-             <div class="flex-1">
-               <h3 class="font-medium">{{ session.name }}</h3>
-               <p class="text-sm text-gray-600">Created: {{ formatDate(session.createdAt) }}</p>
-             </div>
-             <div class="flex items-center gap-2">
-               <button
-                 @click="editSession(session)"
-                 class="p-2 hover:bg-accent rounded"
-                 title="Edit session"
-               >
-                 <Edit class="h-4 w-4" />
-               </button>
-               <button
-                 @click="deleteSession(session.id)"
-                 class="p-2 hover:bg-accent text-red-500 rounded"
-                 title="Delete session"
-               >
-                 <Trash2 class="h-4 w-4" />
-               </button>
-             </div>
-           </div>
-         </div>
+                   <!-- Sessions List -->
+          <div v-if="passwordSessions.length > 0" class="space-y-3">
+            <div
+              v-for="session in passwordSessions"
+              :key="session.id"
+              :class="[
+                'flex items-center justify-between p-4 border rounded-lg transition-all duration-200',
+                selectedSession?.id === session.id
+                  ? 'border-primary bg-primary/5 shadow-md'
+                  : 'hover:bg-accent border-gray-200'
+              ]"
+            >
+              <div 
+                :class="[
+                  'flex-1 cursor-pointer transition-colors',
+                  selectedSession?.id === session.id
+                    ? 'text-primary'
+                    : 'hover:text-primary'
+                ]"
+                @click="selectSession(session)"
+              >
+                <div class="flex items-center gap-2">
+                  <h3 class="font-medium">{{ session.name }}</h3>
+                  <span 
+                    v-if="selectedSession?.id === session.id"
+                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary text-white"
+                  >
+                    Selected
+                  </span>
+                </div>
+                <p class="text-sm text-gray-600">Created: {{ formatDate(session.createdAt) }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <!-- No buttons in session list - only delete from within session -->
+              </div>
+            </div>
+          </div>
          
          <div v-else class="text-center py-8 text-gray-500">
            <Shield class="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -55,51 +63,61 @@
          </div>
        </div>
        
-       <!-- Login Section -->
-       <div v-if="passwordSessions.length > 0" class="bg-white p-6 rounded-lg shadow-sm border space-y-4">
-         <div class="text-center space-y-2">
-           <Lock class="h-12 w-12 mx-auto text-primary" />
-           <h2 class="text-xl font-semibold">Access Secure Notes</h2>
-           <p class="text-sm text-gray-600">Enter your session password to access private notes</p>
-         </div>
-         
-         <form @submit.prevent="authenticate" class="space-y-4">
-           <div class="space-y-2">
-             <label for="master-password" class="text-sm font-medium">Session Password</label>
-             <div class="relative">
-               <input
-                 id="master-password"
-                 v-model="masterPassword"
-                 :type="showPassword ? 'text' : 'password'"
-                 class="w-full rounded-md border border-input px-3 py-2 pr-10 text-sm"
-                 placeholder="Enter your session password"
-                 required
-               />
-               <button
-                 type="button"
-                 @click="showPassword = !showPassword"
-                 class="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
-               >
-                 <Eye v-if="showPassword" class="h-4 w-4" />
-                 <EyeOff v-else class="h-4 w-4" />
-               </button>
-             </div>
-           </div>
-           
-           <button
-             type="submit"
-             class="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
-             :disabled="isLoading"
-           >
-             <Loader2 v-if="isLoading" class="h-4 w-4 mx-auto animate-spin" />
-             <span v-else>Access Secure Notes</span>
-           </button>
-         </form>
-         
-         <div v-if="errorMessage" class="text-red-500 text-sm text-center">
-           {{ errorMessage }}
-         </div>
-       </div>
+        <!-- Login Section -->
+        <div id="password-input-section" v-if="selectedSession" class="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+          <div class="text-center space-y-2">
+            <Lock class="h-12 w-12 mx-auto text-primary" />
+            <h2 class="text-xl font-semibold">Access {{ selectedSession.name }}</h2>
+            <p class="text-sm text-gray-600">Enter password for {{ selectedSession.name }} session</p>
+          </div>
+          
+          <form @submit.prevent="authenticate" class="space-y-4">
+            <div class="space-y-2">
+              <label for="master-password" class="text-sm font-medium">Session Password</label>
+              <div class="relative">
+                <input
+                  id="master-password"
+                  v-model="masterPassword"
+                  :type="showPassword ? 'text' : 'password'"
+                  class="w-full rounded-md border border-input px-3 py-2 pr-10 text-sm"
+                  :placeholder="`Enter password for ${selectedSession.name}`"
+                  required
+                />
+
+                <button
+                  type="button"
+                  @click="showPassword = !showPassword"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
+                >
+                  <Eye v-if="showPassword" class="h-4 w-4" />
+                  <EyeOff v-else class="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            
+            <div class="flex gap-2">
+              <button
+                type="button"
+                @click="selectedSession = null"
+                class="flex-1 px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="flex-1 bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
+                :disabled="isLoading"
+              >
+                <Loader2 v-if="isLoading" class="h-4 w-4 mx-auto animate-spin" />
+                <span v-else>Access Session</span>
+              </button>
+            </div>
+          </form>
+          
+          <div v-if="errorMessage" class="text-red-500 text-sm text-center">
+            {{ errorMessage }}
+          </div>
+        </div>
      </div>
 
     <!-- Secure Notes Content -->
@@ -116,6 +134,20 @@
          
          <div class="flex items-center gap-2">
            <button
+             @click="editSession(currentSession)"
+             class="px-3 h-8 rounded-md text-xs border border-blue-200 text-blue-600 hover:bg-blue-50 flex items-center gap-1"
+           >
+             <Edit class="h-3 w-3" />
+             Edit Session
+           </button>
+           <button
+             @click="deleteCurrentSession"
+             class="px-3 h-8 rounded-md text-xs border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"
+           >
+             <Trash2 class="h-3 w-3" />
+             Delete Session
+           </button>
+           <button
              @click="showAddNoteDialog = true"
              class="px-3 h-8 rounded-md text-xs bg-primary text-white hover:bg-primary/90 flex items-center gap-1"
            >
@@ -124,7 +156,7 @@
            </button>
            <button
              @click="logout"
-             class="px-3 h-8 rounded-md text-xs border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"
+             class="px-3 h-8 rounded-md text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"
            >
              <LogOut class="h-3 w-3" />
              Logout
@@ -377,6 +409,72 @@
       </form>
          </dialog>
      
+     <!-- Password Verification Dialog -->
+     <dialog
+       ref="passwordVerificationDialog"
+       class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md border"
+     >
+       <div class="flex justify-between items-center mb-4">
+         <h2 class="text-lg font-semibold">Verify Password</h2>
+         <button
+           @click="closePasswordVerification"
+           class="p-1 hover:bg-accent rounded"
+         >
+           <X class="h-4 w-4" />
+         </button>
+       </div>
+
+       <div class="space-y-4">
+         <p class="text-sm text-gray-600">
+           Please enter your current password to edit this session.
+         </p>
+         
+         <div class="space-y-2">
+           <label for="verification-password" class="text-sm font-medium">Current Password</label>
+           <div class="relative">
+             <input
+               id="verification-password"
+               v-model="verificationPassword"
+               :type="showPassword ? 'text' : 'password'"
+               class="w-full rounded-md border border-input px-3 py-2 pr-10"
+               placeholder="Enter your current password"
+               required
+             />
+             <button
+               type="button"
+               @click="showPassword = !showPassword"
+               class="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
+             >
+               <Eye v-if="showPassword" class="h-4 w-4" />
+               <EyeOff v-else class="h-4 w-4" />
+             </button>
+           </div>
+         </div>
+         
+         <div v-if="verificationError" class="text-red-500 text-sm text-center">
+           {{ verificationError }}
+         </div>
+         
+         <div class="flex justify-end gap-2 pt-4 border-t">
+           <button
+             type="button"
+             @click="closePasswordVerification"
+             class="px-4 py-2 rounded-md text-sm hover:bg-accent"
+           >
+             Cancel
+           </button>
+           <button
+             @click="verifyPassword"
+             class="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90"
+             :disabled="isVerifyingPassword"
+           >
+             <Loader2 v-if="isVerifyingPassword" class="h-4 w-4 animate-spin" />
+             <span v-else>Verify Password</span>
+           </button>
+         </div>
+       </div>
+     </dialog>
+     
      <!-- Add/Edit Session Dialog -->
      <dialog
        ref="sessionDialog"
@@ -429,6 +527,10 @@
            </div>
          </div>
          
+         <div v-if="sessionError" class="text-red-500 text-sm text-center bg-red-50 p-3 rounded border border-red-200">
+           {{ sessionError }}
+         </div>
+         
          <div class="flex justify-end gap-2 pt-4 border-t">
            <button
              type="button"
@@ -479,6 +581,7 @@ interface PasswordSession {
 
 const isAuthenticated = ref(false)
 const currentSession = ref<PasswordSession | null>(null)
+const selectedSession = ref<PasswordSession | null>(null)
 const masterPassword = ref('')
 const showPassword = ref(false)
 const isLoading = ref(false)
@@ -487,6 +590,12 @@ const showAddNoteDialog = ref(false)
 const noteDialog = ref<HTMLDialogElement | null>(null)
 const showSessionDialog = ref(false)
 const sessionDialog = ref<HTMLDialogElement | null>(null)
+const passwordVerificationDialog = ref<HTMLDialogElement | null>(null)
+const showPasswordVerification = ref(false)
+const verificationPassword = ref('')
+const isVerifyingPassword = ref(false)
+const verificationError = ref('')
+const sessionError = ref('')
 
 const passwordSessions = ref<PasswordSession[]>([])
 const secureNotes = ref<SecureNote[]>([])
@@ -552,7 +661,7 @@ const saveSecureNotes = () => {
 
 // Authentication with session password
 const authenticate = async () => {
-  if (!masterPassword.value.trim()) return
+  if (!masterPassword.value.trim() || !selectedSession.value) return
   
   isLoading.value = true
   errorMessage.value = ''
@@ -560,13 +669,12 @@ const authenticate = async () => {
   // Simulate authentication delay
   await new Promise(resolve => setTimeout(resolve, 500))
   
-  // Find matching session
-  const session = passwordSessions.value.find(s => s.password === masterPassword.value.trim())
-  
-  if (session) {
-    currentSession.value = session
+  // Check if password matches selected session
+  if (selectedSession.value.password === masterPassword.value.trim()) {
+    currentSession.value = selectedSession.value
     isAuthenticated.value = true
     masterPassword.value = ''
+    selectedSession.value = null
     loadSecureNotes()
   } else {
     errorMessage.value = 'Invalid password for this session'
@@ -578,7 +686,25 @@ const authenticate = async () => {
 const logout = () => {
   isAuthenticated.value = false
   currentSession.value = null
+  selectedSession.value = null
   secureNotes.value = []
+}
+
+const selectSession = (session: PasswordSession) => {
+  selectedSession.value = session
+  masterPassword.value = ''
+  errorMessage.value = ''
+  
+  // Scroll to password input section after a short delay to ensure DOM is updated
+  setTimeout(() => {
+    const passwordSection = document.getElementById('password-input-section')
+    if (passwordSection) {
+      passwordSection.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      })
+    }
+  }, 100)
 }
 
 
@@ -596,9 +722,24 @@ const openAddSessionDialog = () => {
 const closeSessionDialog = () => {
   showSessionDialog.value = false
   sessionDialog.value?.close()
+  sessionError.value = ''
 }
 
 const saveSession = () => {
+  // Clear previous errors
+  sessionError.value = ''
+  
+  // Check for duplicate names (case-insensitive)
+  const existingSession = passwordSessions.value.find(s => 
+    s.name.toLowerCase().trim() === editingSession.value.name.toLowerCase().trim() &&
+    s.id !== editingSession.value.id // Exclude current session when editing
+  )
+  
+  if (existingSession) {
+    sessionError.value = `A session with the name "${editingSession.value.name}" already exists. Please choose a different name.`
+    return
+  }
+  
   if (editingSession.value.id) {
     // Update existing session
     const index = passwordSessions.value.findIndex(s => s.id === editingSession.value.id)
@@ -606,6 +747,11 @@ const saveSession = () => {
       passwordSessions.value[index] = {
         ...editingSession.value,
         updatedAt: new Date().toISOString()
+      }
+      
+      // If updating current session, update the reference
+      if (currentSession.value?.id === editingSession.value.id) {
+        currentSession.value = { ...editingSession.value, updatedAt: new Date().toISOString() }
       }
     }
   } else {
@@ -638,14 +784,59 @@ const deleteSession = (id: string) => {
   }
 }
 
+const deleteCurrentSession = () => {
+  if (!currentSession.value) return
+  
+  if (confirm(`Are you sure you want to delete "${currentSession.value.name}" session? All notes in this session will also be deleted.`)) {
+    // Delete current session
+    passwordSessions.value = passwordSessions.value.filter(s => s.id !== currentSession.value!.id)
+    savePasswordSessions()
+    
+    // Delete associated notes
+    localStorage.removeItem(`secure-notes-${currentSession.value.id}`)
+    
+    // Logout since session is deleted
+    logout()
+  }
+}
+
 const editNote = (note: SecureNote) => {
   editingNote.value = { ...note }
   showAddNoteDialog.value = true
 }
 
 const editSession = (session: PasswordSession) => {
+  // This function is now only called from within the session
+  // so we can assume the user is logged in
   editingSession.value = { ...session }
-  showSessionDialog.value = true
+  showPasswordVerification.value = true
+}
+
+const verifyPassword = async () => {
+  if (!verificationPassword.value.trim()) return
+  
+  isVerifyingPassword.value = true
+  verificationError.value = ''
+  
+  // Simulate verification delay
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // Check if password matches current session
+  if (verificationPassword.value.trim() === currentSession.value?.password) {
+    showPasswordVerification.value = false
+    showSessionDialog.value = true
+    verificationPassword.value = ''
+  } else {
+    verificationError.value = 'Invalid password. Please try again.'
+  }
+  
+  isVerifyingPassword.value = false
+}
+
+const closePasswordVerification = () => {
+  showPasswordVerification.value = false
+  verificationPassword.value = ''
+  verificationError.value = ''
 }
 
 const closeNoteDialog = () => {
@@ -714,6 +905,14 @@ watch(showSessionDialog, (show) => {
     sessionDialog.value?.showModal()
   } else {
     sessionDialog.value?.close()
+  }
+})
+
+watch(showPasswordVerification, (show) => {
+  if (show) {
+    passwordVerificationDialog.value?.showModal()
+  } else {
+    passwordVerificationDialog.value?.close()
   }
 })
 
