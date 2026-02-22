@@ -3,16 +3,16 @@
          <!-- Password Entry Section -->
      <div v-if="!isAuthenticated" class="max-w-2xl mx-auto space-y-6">
                <!-- Sessions Management -->
-        <div class="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+        <div class="bg-card text-card-foreground p-6 rounded-lg shadow-sm border border-border space-y-4">
           <div class="relative">
             <div class="text-center space-y-2">
               <Shield class="h-12 w-12 mx-auto text-primary" />
               <h2 class="text-xl font-semibold">Password Sessions</h2>
-              <p class="text-sm text-gray-600">Manage your secure note sessions</p>
+              <p class="text-sm text-muted-foreground">Manage your secure note sessions</p>
             </div>
             <button
               @click="openAddSessionDialog"
-              class="absolute top-0 right-0 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
+              class="absolute top-0 right-0 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
             >
               <Plus class="h-4 w-4" />
               New Session
@@ -28,7 +28,7 @@
                 'flex items-center justify-between p-4 border rounded-lg transition-all duration-200',
                 selectedSession?.id === session.id
                   ? 'border-primary bg-primary/5 shadow-md'
-                  : 'hover:bg-accent border-gray-200'
+                  : 'hover:bg-accent border-border'
               ]"
             >
               <div 
@@ -44,12 +44,12 @@
                   <h3 class="font-medium">{{ session.name }}</h3>
                   <span 
                     v-if="selectedSession?.id === session.id"
-                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary text-white"
+                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground"
                   >
                     Selected
                   </span>
                 </div>
-                <p class="text-sm text-gray-600">Created: {{ formatDate(session.created_at) }}</p>
+                <p class="text-sm text-muted-foreground">Created: {{ formatDate(session.created_at) }}</p>
               </div>
               <div class="flex items-center gap-2">
                 <!-- No buttons in session list - only delete from within session -->
@@ -57,18 +57,18 @@
             </div>
           </div>
          
-         <div v-else class="text-center py-8 text-gray-500">
+         <div v-else class="text-center py-8 text-muted-foreground">
            <Shield class="h-12 w-12 mx-auto mb-3 opacity-50" />
            <p>No password sessions yet. Create your first session to get started!</p>
          </div>
        </div>
        
         <!-- Login Section -->
-        <div id="password-input-section" v-if="selectedSession" class="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+        <div id="password-input-section" v-if="selectedSession" class="bg-card text-card-foreground p-6 rounded-lg shadow-sm border border-border space-y-4">
           <div class="text-center space-y-2">
             <Lock class="h-12 w-12 mx-auto text-primary" />
             <h2 class="text-xl font-semibold">Access {{ selectedSession.name }}</h2>
-            <p class="text-sm text-gray-600">Enter password for {{ selectedSession.name }} session</p>
+            <p class="text-sm text-muted-foreground">Enter password for {{ selectedSession.name }} session</p>
           </div>
           
           <form @submit.prevent="authenticate" class="space-y-4">
@@ -79,7 +79,7 @@
                   id="master-password"
                   v-model="masterPassword"
                   :type="showPassword ? 'text' : 'password'"
-                  class="w-full rounded-md border border-input px-3 py-2 pr-10 text-sm"
+                  class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 pr-10 text-sm"
                   :placeholder="`Enter password for ${selectedSession.name}`"
                   required
                 />
@@ -99,13 +99,13 @@
               <button
                 type="button"
                 @click="selectedSession = null"
-                class="flex-1 px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                class="flex-1 px-4 py-2 rounded-md border border-input bg-background text-foreground hover:bg-accent transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                class="flex-1 bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
+                class="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
                 :disabled="isLoading"
               >
                 <Loader2 v-if="isLoading" class="h-4 w-4 mx-auto animate-spin" />
@@ -114,7 +114,7 @@
             </div>
           </form>
           
-          <div v-if="errorMessage" class="text-red-500 text-sm text-center">
+          <div v-if="errorMessage" class="text-destructive text-sm text-center">
             {{ errorMessage }}
           </div>
         </div>
@@ -123,40 +123,40 @@
     <!-- Secure Notes Content -->
     <div v-else class="space-y-4">
              <!-- Header with Logout -->
-       <div class="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm border">
+       <div class="flex items-center justify-between bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border">
          <div class="flex items-center gap-3">
-           <Shield class="h-6 w-6 text-green-600" />
+           <Shield class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
            <div>
              <h2 class="text-lg font-semibold">Secure Notes</h2>
-             <p class="text-sm text-gray-600">{{ currentSession?.name }} - Your private notes and passwords</p>
+             <p class="text-sm text-muted-foreground">{{ currentSession?.name }} - Your private notes and passwords</p>
            </div>
          </div>
          
          <div class="flex items-center gap-2">
            <button
              @click="editSession(currentSession!)"
-             class="px-3 h-8 rounded-md text-xs border border-blue-200 text-blue-600 hover:bg-blue-50 flex items-center gap-1"
+             class="px-3 h-8 rounded-md text-xs border border-primary/30 text-primary hover:bg-primary/10 flex items-center gap-1"
            >
              <Edit class="h-3 w-3" />
              Edit Session
            </button>
            <button
              @click="deleteCurrentSession"
-             class="px-3 h-8 rounded-md text-xs border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"
+             class="px-3 h-8 rounded-md text-xs border border-destructive/30 text-destructive hover:bg-destructive/10 flex items-center gap-1"
            >
              <Trash2 class="h-3 w-3" />
              Delete Session
            </button>
            <button
              @click="showAddNoteDialog = true"
-             class="px-3 h-8 rounded-md text-xs bg-primary text-white hover:bg-primary/90 flex items-center gap-1"
+             class="px-3 h-8 rounded-md text-xs bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1"
            >
              <Plus class="h-3 w-3" />
              Add Note
            </button>
            <button
              @click="logout"
-             class="px-3 h-8 rounded-md text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"
+             class="px-3 h-8 rounded-md text-xs border border-input text-muted-foreground hover:bg-accent flex items-center gap-1"
            >
              <LogOut class="h-3 w-3" />
              Logout
@@ -169,7 +169,7 @@
         <div
           v-for="note in secureNotes"
           :key="note.id"
-          class="bg-white p-4 rounded-lg shadow-sm border space-y-3"
+          class="bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border space-y-3"
         >
           <div class="flex items-start justify-between">
             <div class="flex-1">
@@ -178,16 +178,16 @@
                 <span
                   class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
                   :class="{
-                    'bg-blue-100 text-blue-700': note.type === 'password',
-                    'bg-purple-100 text-purple-700': note.type === 'note',
-                    'bg-orange-100 text-orange-700': note.type === 'secret'
+                    'bg-blue-500/15 text-blue-700 dark:text-blue-300': note.type === 'password',
+                    'bg-violet-500/15 text-violet-700 dark:text-violet-300': note.type === 'note',
+                    'bg-amber-500/15 text-amber-700 dark:text-amber-300': note.type === 'secret'
                   }"
                 >
                   {{ note.type }}
                 </span>
               </div>
               
-              <p v-if="note.description" class="text-sm text-gray-600 mb-3">
+              <p v-if="note.description" class="text-sm text-muted-foreground mb-3">
                 {{ note.description }}
               </p>
               
@@ -195,16 +195,16 @@
               <div v-if="note.type === 'password'" class="space-y-2">
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="text-xs font-medium text-gray-500">Username</label>
+                    <label class="text-xs font-medium text-muted-foreground">Username</label>
                     <div class="flex items-center gap-2 mt-1">
                       <input
                         :value="note.username || ''"
                         readonly
-                        class="flex-1 text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded"
+                        class="flex-1 text-sm bg-muted border border-border text-foreground px-2 py-1 rounded"
                       />
                       <button
                         @click="copyToClipboard(note.username || '')"
-                        class="p-1 hover:bg-gray-200 rounded"
+                        class="p-1 hover:bg-accent rounded"
                         title="Copy username"
                       >
                         <Copy class="h-3 w-3" />
@@ -213,16 +213,16 @@
                   </div>
                   
                   <div>
-                    <label class="text-xs font-medium text-gray-500">Password</label>
+                    <label class="text-xs font-medium text-muted-foreground">Password</label>
                     <div class="flex items-center gap-2 mt-1">
                       <input
                         :value="note.password_encrypted || ''"
                         readonly
-                        class="flex-1 text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded"
+                        class="flex-1 text-sm bg-muted border border-border text-foreground px-2 py-1 rounded"
                       />
                       <button
                         @click="copyToClipboard(note.password_encrypted || '')"
-                        class="p-1 hover:bg-gray-200 rounded"
+                        class="p-1 hover:bg-accent rounded"
                         title="Copy password"
                       >
                         <Copy class="h-3 w-3" />
@@ -232,11 +232,11 @@
                 </div>
                 
                 <div v-if="note.url" class="flex items-center gap-2">
-                  <label class="text-xs font-medium text-gray-500">URL:</label>
+                  <label class="text-xs font-medium text-muted-foreground">URL:</label>
                   <a
                     :href="note.url"
                     target="_blank"
-                    class="text-sm text-blue-600 hover:underline"
+                    class="text-sm text-primary hover:underline"
                   >
                     {{ note.url }}
                   </a>
@@ -244,12 +244,12 @@
               </div>
               
               <!-- Regular Note Content -->
-              <div v-else-if="note.type === 'note'" class="bg-gray-50 p-3 rounded border">
+              <div v-else-if="note.type === 'note'" class="bg-muted p-3 rounded border border-border">
                 <p class="text-sm whitespace-pre-wrap">{{ note.content }}</p>
               </div>
               
               <!-- Secret Content -->
-              <div v-else-if="note.type === 'secret'" class="bg-gray-50 p-3 rounded border">
+              <div v-else-if="note.type === 'secret'" class="bg-muted p-3 rounded border border-border">
                 <p class="text-sm font-mono">{{ note.content }}</p>
               </div>
             </div>
@@ -264,7 +264,7 @@
               </button>
               <button
                 @click="deleteNote(note.id)"
-                class="p-2 hover:bg-accent text-red-500 rounded"
+                class="p-2 hover:bg-accent text-destructive rounded"
                 title="Delete note"
               >
                 <Trash2 class="h-4 w-4" />
@@ -272,7 +272,7 @@
             </div>
           </div>
           
-          <div class="flex items-center justify-between text-xs text-gray-500">
+          <div class="flex items-center justify-between text-xs text-muted-foreground">
             <span>Created: {{ formatDate(note.created_at) }}</span>
             <span v-if="note.updated_at !== note.created_at">
               Updated: {{ formatDate(note.updated_at) }}
@@ -280,7 +280,7 @@
           </div>
         </div>
         
-        <div v-if="secureNotes.length === 0" class="text-center py-8 text-gray-500">
+        <div v-if="secureNotes.length === 0" class="text-center py-8 text-muted-foreground">
           <Shield class="h-12 w-12 mx-auto mb-3 opacity-50" />
           <p>No secure notes yet. Create your first private note!</p>
         </div>
@@ -290,7 +290,7 @@
     <!-- Add/Edit Note Dialog -->
     <dialog
       ref="noteDialog"
-      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-lg border"
+      class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-lg border border-border backdrop:bg-black/55"
     >
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-lg font-semibold">
@@ -311,7 +311,7 @@
             id="note-title"
             v-model="editingNote.title"
             type="text"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
             required
           />
         </div>
@@ -321,7 +321,7 @@
           <select
             id="note-type"
             v-model="editingNote.type"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
             required
           >
             <option value="password">Password</option>
@@ -336,7 +336,7 @@
             id="note-description"
             v-model="editingNote.description"
             type="text"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
             placeholder="Brief description of this note"
           />
         </div>
@@ -350,7 +350,7 @@
                 id="note-username"
                 v-model="editingNote.username"
                 type="text"
-                class="w-full rounded-md border border-input px-3 py-2"
+                class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
                 placeholder="Username or email"
               />
             </div>
@@ -361,7 +361,7 @@
                 id="note-password"
                 v-model="editingNote.password_encrypted"
                 type="text"
-                class="w-full rounded-md border border-input px-3 py-2"
+                class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
                 placeholder="Password"
               />
             </div>
@@ -373,7 +373,7 @@
               id="note-url"
               v-model="editingNote.url"
               type="url"
-              class="w-full rounded-md border border-input px-3 py-2"
+              class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
               placeholder="https://example.com"
             />
           </div>
@@ -385,7 +385,7 @@
           <textarea
             id="note-content"
             v-model="editingNote.content"
-            class="w-full rounded-md border border-input px-3 py-2 min-h-[100px]"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 min-h-[100px]"
             :placeholder="editingNote.type === 'secret' ? 'Enter your secret content...' : 'Enter your note content...'"
             required
           ></textarea>
@@ -401,7 +401,7 @@
           </button>
           <button
             type="submit"
-            class="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90"
+            class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
           >
             {{ editingNote.id ? 'Update' : 'Create' }} Note
           </button>
@@ -412,7 +412,7 @@
      <!-- Password Verification Dialog -->
      <dialog
        ref="passwordVerificationDialog"
-       class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md border"
+       class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-md border border-border backdrop:bg-black/55"
      >
        <div class="flex justify-between items-center mb-4">
          <h2 class="text-lg font-semibold">Verify Password</h2>
@@ -425,7 +425,7 @@
        </div>
 
        <div class="space-y-4">
-         <p class="text-sm text-gray-600">
+         <p class="text-sm text-muted-foreground">
            Please enter your current password to edit this session.
          </p>
          
@@ -436,7 +436,7 @@
                id="verification-password"
                v-model="verificationPassword"
                :type="showPassword ? 'text' : 'password'"
-               class="w-full rounded-md border border-input px-3 py-2 pr-10"
+               class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 pr-10"
                placeholder="Enter your current password"
                required
              />
@@ -451,7 +451,7 @@
            </div>
          </div>
          
-         <div v-if="verificationError" class="text-red-500 text-sm text-center">
+         <div v-if="verificationError" class="text-destructive text-sm text-center">
            {{ verificationError }}
          </div>
          
@@ -465,7 +465,7 @@
            </button>
            <button
              @click="verifyPassword"
-             class="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90"
+             class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
              :disabled="isVerifyingPassword"
            >
              <Loader2 v-if="isVerifyingPassword" class="h-4 w-4 animate-spin" />
@@ -478,7 +478,7 @@
      <!-- Add/Edit Session Dialog -->
      <dialog
        ref="sessionDialog"
-       class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md border"
+       class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-md border border-border backdrop:bg-black/55"
      >
        <div class="flex justify-between items-center mb-4">
          <h2 class="text-lg font-semibold">
@@ -499,7 +499,7 @@
              id="session-name"
              v-model="editingSession.name"
              type="text"
-             class="w-full rounded-md border border-input px-3 py-2"
+             class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
              placeholder="e.g., Work, Personal, Banking"
              required
            />
@@ -512,7 +512,7 @@
                id="session-password"
                v-model="editingSession.password_hash"
                :type="showPassword ? 'text' : 'password'"
-               class="w-full rounded-md border border-input px-3 py-2 pr-10"
+               class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 pr-10"
                placeholder="Enter a password for this session"
                required
              />
@@ -527,7 +527,7 @@
            </div>
          </div>
          
-         <div v-if="sessionError" class="text-red-500 text-sm text-center bg-red-50 p-3 rounded border border-red-200">
+         <div v-if="sessionError" class="text-destructive text-sm text-center bg-destructive/10 p-3 rounded border border-destructive/20">
            {{ sessionError }}
          </div>
          
@@ -541,7 +541,7 @@
            </button>
            <button
              type="submit"
-             class="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90"
+             class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
            >
              {{ editingSession.id ? 'Update' : 'Create' }} Session
            </button>
@@ -984,3 +984,4 @@ onMounted(() => {
 <style scoped>
 /* Add any custom styles here */
 </style>
+

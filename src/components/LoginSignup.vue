@@ -1,17 +1,17 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-primary/10 to-purple-100 flex items-center justify-center p-4">
+  <div class="min-h-screen bg-gradient-to-br from-background to-muted text-foreground flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       <!-- Logo / Header -->
       <div class="text-center mb-8">
         <div class="inline-flex items-center justify-center w-14 h-14 bg-primary rounded-lg mb-4">
           <CheckCircle2 class="h-8 w-8 text-white" />
         </div>
-        <h1 class="text-3xl font-bold text-gray-900">TodoFlow</h1>
-        <p class="text-gray-600 text-sm mt-2">Manage your tasks, secure your notes</p>
+        <h1 class="text-3xl font-bold text-foreground">TodoFlow</h1>
+        <p class="text-muted-foreground text-sm mt-2">Manage your tasks, secure your notes</p>
       </div>
 
       <!-- Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div class="bg-card text-card-foreground rounded-lg shadow-sm border border-border p-8">
         <!-- Tab -->
         <div class="flex gap-4 mb-6 border-b">
           <button
@@ -20,7 +20,7 @@
               'pb-3 px-4 font-medium transition-colors border-b-2',
               isLogin
                 ? 'text-primary border-primary'
-                : 'text-gray-600 border-transparent hover:text-gray-900'
+                : 'text-muted-foreground border-transparent hover:text-foreground'
             ]"
           >
             Sign In
@@ -31,7 +31,7 @@
               'pb-3 px-4 font-medium transition-colors border-b-2',
               !isLogin
                 ? 'text-primary border-primary'
-                : 'text-gray-600 border-transparent hover:text-gray-900'
+                : 'text-muted-foreground border-transparent hover:text-foreground'
             ]"
           >
             Sign Up
@@ -42,33 +42,33 @@
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <!-- Email -->
           <div class="space-y-2">
-            <label for="email" class="text-sm font-medium text-gray-700">Email Address</label>
+            <label for="email" class="text-sm font-medium text-foreground">Email Address</label>
             <input
               id="email"
               v-model="formData.email"
               type="email"
               placeholder="you@example.com"
-              class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
+              class="w-full px-4 py-2 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
               required
             />
           </div>
 
           <!-- Password -->
           <div class="space-y-2">
-            <label for="password" class="text-sm font-medium text-gray-700">Password</label>
+            <label for="password" class="text-sm font-medium text-foreground">Password</label>
             <div class="relative">
               <input
                 id="password"
                 v-model="formData.password"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="••••••••"
-                class="w-full px-4 py-2 pr-10 rounded-lg border border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
+                class="w-full px-4 py-2 pr-10 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
                 required
               />
               <button
                 type="button"
                 @click="showPassword = !showPassword"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <Eye v-if="showPassword" class="h-4 w-4" />
                 <EyeOff v-else class="h-4 w-4" />
@@ -78,20 +78,20 @@
 
           <!-- Confirm Password (for signup) -->
           <div v-if="!isLogin" class="space-y-2">
-            <label for="confirmPassword" class="text-sm font-medium text-gray-700">Confirm Password</label>
+            <label for="confirmPassword" class="text-sm font-medium text-foreground">Confirm Password</label>
             <div class="relative">
               <input
                 id="confirmPassword"
                 v-model="formData.confirmPassword"
                 :type="showConfirmPassword ? 'text' : 'password'"
                 placeholder="••••••••"
-                class="w-full px-4 py-2 pr-10 rounded-lg border border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
+                class="w-full px-4 py-2 pr-10 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
                 required
               />
               <button
                 type="button"
                 @click="showConfirmPassword = !showConfirmPassword"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <Eye v-if="showConfirmPassword" class="h-4 w-4" />
                 <EyeOff v-else class="h-4 w-4" />
@@ -100,13 +100,13 @@
           </div>
 
           <!-- Error Message -->
-          <div v-if="error" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
+          <div v-if="error" class="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm flex items-start gap-3">
             <AlertCircle class="h-5 w-5 flex-shrink-0 mt-0.5" />
             <span>{{ error }}</span>
           </div>
 
           <!-- Success Message -->
-          <div v-if="successMessage" class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
+          <div v-if="successMessage" class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
             <CheckCircle2 class="h-5 w-5 flex-shrink-0 mt-0.5" />
             <span>{{ successMessage }}</span>
           </div>
@@ -115,7 +115,7 @@
           <button
             type="submit"
             :disabled="isLoading"
-            class="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            class="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <Loader2 v-if="isLoading" class="h-4 w-4 animate-spin" />
             <span>{{ isLogin ? 'Sign In' : 'Create Account' }}</span>
@@ -135,7 +135,7 @@
       </div>
 
       <!-- Terms -->
-      <p class="text-center text-xs text-gray-600 mt-6">
+      <p class="text-center text-xs text-muted-foreground mt-6">
         By signing up, you agree to our<br />
         <a href="#" class="text-primary hover:underline">Terms of Service</a> and
         <a href="#" class="text-primary hover:underline">Privacy Policy</a>
@@ -145,13 +145,13 @@
     <!-- Forgot Password Dialog -->
     <dialog
       ref="forgotPasswordDialog"
-      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-sm border"
+      class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-sm border border-border backdrop:bg-black/55"
     >
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-lg font-semibold">Reset Password</h2>
         <button
           @click="closeForgotPassword"
-          class="p-1 hover:bg-gray-100 rounded"
+          class="p-1 hover:bg-accent rounded"
         >
           <X class="h-5 w-5" />
         </button>
@@ -159,26 +159,26 @@
 
       <form @submit.prevent="handlePasswordReset" class="space-y-4">
         <div class="space-y-2">
-          <label for="reset-email" class="text-sm font-medium text-gray-700">Email Address</label>
+          <label for="reset-email" class="text-sm font-medium text-foreground">Email Address</label>
           <input
             id="reset-email"
             v-model="resetEmail"
             type="email"
             placeholder="you@example.com"
-            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
+            class="w-full px-4 py-2 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors text-sm"
             required
           />
         </div>
 
-        <p class="text-sm text-gray-600">
+        <p class="text-sm text-muted-foreground">
           We'll send you an email with a link to reset your password.
         </p>
 
-        <div v-if="resetError" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div v-if="resetError" class="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm">
           {{ resetError }}
         </div>
 
-        <div v-if="resetSuccess" class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+        <div v-if="resetSuccess" class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-lg text-sm">
           {{ resetSuccess }}
         </div>
 
@@ -186,14 +186,14 @@
           <button
             type="button"
             @click="closeForgotPassword"
-            class="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
+            class="flex-1 px-4 py-2 rounded-lg border border-input text-foreground hover:bg-accent font-medium"
           >
             Cancel
           </button>
           <button
             type="submit"
             :disabled="isLoading"
-            class="flex-1 bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            class="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <Loader2 v-if="isLoading" class="h-4 w-4 animate-spin" />
             <span>Send Reset Link</span>

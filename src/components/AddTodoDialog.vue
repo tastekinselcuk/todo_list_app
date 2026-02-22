@@ -8,7 +8,7 @@
     
     <div
       v-if="open"
-      class="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg"
+      class="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-card text-card-foreground p-6 shadow-lg sm:rounded-lg"
     >
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-semibold">Add New Task</h2>
@@ -29,7 +29,7 @@
             id="title"
             type="text"
             v-model="title"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
             required
           />
         </div>
@@ -41,7 +41,7 @@
           <textarea
             id="description"
             v-model="description"
-            class="w-full rounded-md border border-input px-3 py-2 min-h-[100px]"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 min-h-[100px]"
           ></textarea>
         </div>
         
@@ -55,7 +55,7 @@
               id="dueDate"
               type="date"
               v-model="dueDate"
-              class="w-full rounded-md border border-input px-3 py-2"
+              class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
             />
           </div>
           
@@ -66,7 +66,7 @@
             <select
               id="priority"
               v-model="priority"
-              class="w-full rounded-md border border-input px-3 py-2"
+              class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -82,7 +82,7 @@
           <select
             id="category"
             v-model="categoryId"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
           >
             <option
               v-for="category in todoStore.categories"

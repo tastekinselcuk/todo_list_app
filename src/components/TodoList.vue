@@ -3,7 +3,7 @@
     <NotesTabs>
       <div class="space-y-4">
         <!-- Filters Section -->
-        <div class="bg-white p-4 rounded-lg shadow-sm border space-y-4">
+        <div class="bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border space-y-4">
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold flex items-center gap-2">
               <Filter class="h-5 w-5" />
@@ -12,7 +12,7 @@
             <div class="flex gap-2">
               <button
                 @click="showAddTodoDialog = true"
-                class="px-3 h-8 rounded-md text-xs bg-primary text-white hover:bg-primary/90 flex items-center gap-1"
+                class="px-3 h-8 rounded-md text-xs bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1"
               >
                 <Plus class="h-3 w-3" />
                 Add Todo
@@ -59,7 +59,7 @@
             <div class="relative h-8">
               <select
                 v-model="selectedPriority"
-                class="h-full appearance-none rounded-md border border-input pl-8 pr-8 text-xs cursor-pointer hover:bg-accent"
+                class="h-full appearance-none rounded-md border border-input bg-background text-foreground pl-8 pr-8 text-xs cursor-pointer hover:bg-accent"
               >
                 <option value="all">All Priorities</option>
                 <option value="low">Low Priority</option>
@@ -73,7 +73,7 @@
                   'bg-emerald-500 ring-emerald-200': selectedPriority === 'low',
                   'bg-yellow-500 ring-yellow-200': selectedPriority === 'medium',
                   'bg-red-500 ring-red-200': selectedPriority === 'high',
-                  'bg-gray-300 ring-gray-200': selectedPriority === 'all'
+                  'bg-muted-foreground/40 ring-border': selectedPriority === 'all'
                 }"
               ></div>
               <ChevronDown class="h-3 w-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
@@ -102,7 +102,7 @@
             <button
               v-if="hasActiveFilters"
               @click="clearFilters"
-              class="h-8 px-3 rounded-md text-xs text-red-500 border border-red-200 hover:bg-red-50 flex items-center gap-2"
+              class="h-8 px-3 rounded-md text-xs text-destructive border border-destructive/30 hover:bg-destructive/10 flex items-center gap-2"
             >
               <X class="h-3 w-3" />
               Clear Filters
@@ -147,7 +147,7 @@
                 >
                   <template #item="{ element: todo }">
                                          <div
-                       class="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border-l-4"
+                       class="flex items-center justify-between p-4 bg-card text-card-foreground rounded-lg shadow-sm border border-border border-l-4"
                        :class="{ 'opacity-60': todo.completed }"
                        :style="{ borderLeftColor: groupData.category.color }"
                      >
@@ -156,13 +156,13 @@
                           class="p-2 rounded-md hover:bg-accent drag-handle"
                           title="Drag to reorder"
                         >
-                          <GripVertical class="h-4 w-4 text-gray-400" />
+                          <GripVertical class="h-4 w-4 text-muted-foreground" />
                         </button>
                         
                         <button
                           @click="todoStore.toggleTodo(todo.id)"
                           class="p-2 rounded-md hover:bg-accent"
-                          :class="{ 'bg-green-100 text-green-600': todo.completed }"
+                          :class="{ 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300': todo.completed }"
                         >
                           <Check
                             class="h-5 w-5"
@@ -179,7 +179,7 @@
                           </h3>
                           <p
                             v-if="todo.description"
-                            class="text-sm text-gray-500"
+                            class="text-sm text-muted-foreground"
                           >
                             {{ todo.description }}
                           </p>
@@ -211,10 +211,10 @@
 
                               <span
                                 v-if="todo.dueDate"
-                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-50 border border-emerald-100"
+                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-500/10 border border-emerald-500/20"
                                 :class="{
-                                  'bg-red-50 border-red-100 text-red-700': isOverdue(todo.dueDate),
-                                  'text-emerald-700': !isOverdue(todo.dueDate)
+                                  'bg-destructive/10 border-destructive/20 text-destructive': isOverdue(todo.dueDate),
+                                  'text-emerald-700 dark:text-emerald-300': !isOverdue(todo.dueDate)
                                 }"
                               >
                                 <Calendar class="h-3 w-3" />
@@ -223,7 +223,7 @@
 
                               <span
                                 v-if="todo.createdAt"
-                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-50 border border-gray-100 text-gray-600"
+                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted border border-border text-muted-foreground"
                               >
                                 <Clock class="h-3 w-3" />
                                 {{ formatRelativeTime(todo.createdAt) }}
@@ -242,7 +242,7 @@
                         </button>
                         <button
                           @click="todoStore.deleteTodo(todo.id)"
-                          class="p-2 rounded-md hover:bg-accent text-red-500 hover:text-red-600"
+                          class="p-2 rounded-md hover:bg-accent text-destructive"
                         >
                           <Trash2 class="h-4 w-4" />
                         </button>
@@ -264,7 +264,7 @@
           >
             <template #item="{ element: todo }">
               <div
-                class="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border-l-4"
+                class="flex items-center justify-between p-4 bg-card text-card-foreground rounded-lg shadow-sm border border-border border-l-4"
                 :class="{ 'opacity-60': todo.completed }"
                 :style="{ borderLeftColor: getCategoryColor(todo.categoryId) }"
               >
@@ -273,13 +273,13 @@
                     class="p-2 rounded-md hover:bg-accent drag-handle"
                     title="Drag to reorder"
                   >
-                    <GripVertical class="h-4 w-4 text-gray-400" />
+                    <GripVertical class="h-4 w-4 text-muted-foreground" />
                   </button>
                   
                   <button
                     @click="todoStore.toggleTodo(todo.id)"
                     class="p-2 rounded-md hover:bg-accent"
-                    :class="{ 'bg-green-100 text-green-600': todo.completed }"
+                    :class="{ 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300': todo.completed }"
                   >
                     <Check
                       class="h-5 w-5"
@@ -296,7 +296,7 @@
                     </h3>
                     <p
                       v-if="todo.description"
-                      class="text-sm text-gray-500"
+                      class="text-sm text-muted-foreground"
                     >
                       {{ todo.description }}
                     </p>
@@ -332,10 +332,10 @@
                         <!-- Due Date Badge -->
                         <span
                           v-if="todo.dueDate"
-                          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-50 border border-emerald-100"
+                          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-500/10 border border-emerald-500/20"
                           :class="{
-                            'bg-red-50 border-red-100 text-red-700': isOverdue(todo.dueDate),
-                            'text-emerald-700': !isOverdue(todo.dueDate)
+                            'bg-destructive/10 border-destructive/20 text-destructive': isOverdue(todo.dueDate),
+                            'text-emerald-700 dark:text-emerald-300': !isOverdue(todo.dueDate)
                           }"
                         >
                           <Calendar class="h-3 w-3" />
@@ -345,7 +345,7 @@
                         <!-- Created Date Badge -->
                         <span
                           v-if="todo.createdAt"
-                          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-50 border border-gray-100 text-gray-600"
+                          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted border border-border text-muted-foreground"
                         >
                           <Clock class="h-3 w-3" />
                           {{ formatRelativeTime(todo.createdAt) }}
@@ -364,7 +364,7 @@
                   </button>
                   <button
                     @click="todoStore.deleteTodo(todo.id)"
-                    class="p-2 rounded-md hover:bg-accent text-red-500 hover:text-red-600"
+                    class="p-2 rounded-md hover:bg-accent text-destructive"
                   >
                     <Trash2 class="h-4 w-4" />
                   </button>
@@ -379,7 +379,7 @@
     <!-- Add Category Dialog -->
     <dialog
       ref="categoryDialog"
-      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-md border"
+      class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-md border border-border backdrop:bg-black/55"
     >
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-lg font-semibold">Add Category</h2>
@@ -416,7 +416,7 @@
                 v-for="color in predefinedColors"
                 :key="color"
                 type="button"
-                class="w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                class="w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background"
                 :class="{ 'ring-2 ring-primary ring-offset-2': newCategory.color === color }"
                 :style="{ backgroundColor: color }"
                 @click="newCategory.color = color"
@@ -460,7 +460,7 @@
           </button>
           <button
             type="submit"
-            class="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90"
+            class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
           >
             Create Category
           </button>
@@ -471,7 +471,7 @@
     <!-- Edit Todo Dialog -->
     <dialog
       ref="editDialog"
-      class="p-6 rounded-lg shadow-lg bg-white w-full max-w-lg border"
+      class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-lg border border-border backdrop:bg-black/55"
     >
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-semibold">Edit Task</h2>
@@ -492,7 +492,7 @@
             id="edit-title"
             type="text"
             v-model="editingTodo.title"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
             required
           />
         </div>
@@ -504,7 +504,7 @@
           <textarea
             id="edit-description"
             v-model="editingTodo.description"
-            class="w-full rounded-md border border-input px-3 py-2 min-h-[100px]"
+            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 min-h-[100px]"
           ></textarea>
         </div>
         
@@ -518,7 +518,7 @@
               id="edit-dueDate"
               type="date"
               v-model="editingTodo.dueDate"
-              class="w-full rounded-md border border-input px-3 py-2"
+              class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
             />
           </div>
           
@@ -529,7 +529,7 @@
             <select
               id="edit-priority"
               v-model="editingTodo.priority"
-              class="w-full rounded-md border border-input px-3 py-2"
+              class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -545,7 +545,7 @@
           <select
             id="edit-category"
             v-model="editingTodo.categoryId"
-            class="w-full rounded-md border border-input px-3 py-2"
+            class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
           >
             <option
               v-for="category in todoStore.categories"
@@ -742,8 +742,8 @@ const closeCategoryDialog = () => {
   newCategory.value = { name: '', color: '#3B82F6', icon: 'folder' }
 }
 
-const handleAddCategory = () => {
-  const result = todoStore.addCategory(newCategory.value)
+const handleAddCategory = async () => {
+  const result = await todoStore.addCategory(newCategory.value)
   
   if (result.success) {
     closeCategoryDialog()
@@ -775,10 +775,12 @@ const deleteCategory = async (categoryId: string) => {
   }
 
   if (shouldDelete) {
-    const result = todoStore.deleteCategory(categoryId)
+    const result = await todoStore.deleteCategory(categoryId)
     if (!result.success) {
       alert(result.message || 'Cannot delete the category')
+      return
     }
+
     // Remove the category from selected categories if it was selected
     const index = selectedCategories.value.indexOf(categoryId)
     if (index !== -1) {
@@ -822,3 +824,4 @@ const formatRelativeTime = (date: string) => {
   cursor: grabbing;
 }
 </style>
+

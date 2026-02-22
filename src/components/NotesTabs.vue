@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white p-4 rounded-lg shadow-sm border space-y-4">
+  <div class="bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border space-y-4">
     <div class="border-b">
       <div class="flex gap-4">
         <button
@@ -25,11 +25,11 @@
           @keyup.enter="addQuickNote"
           type="text"
           placeholder="Type a quick note and press Enter..."
-          class="flex-1 rounded-md border border-input px-3 py-2"
+          class="flex-1 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
         />
         <button
           @click="addQuickNote"
-          class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90"
+          class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
         >
           Add
         </button>

@@ -5,10 +5,10 @@
       v-if="!isExpanded"
       key="compact"
       data-teleport="compact"
-      class="bg-white p-6 rounded-lg shadow-sm border relative max-w-lg mx-auto w-full"
+      class="bg-card text-card-foreground p-6 rounded-lg shadow-sm border border-border relative max-w-lg mx-auto w-full"
     >
     <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
-      <h2 class="text-lg font-semibold flex items-center gap-2">
+      <h2 class="text-lg font-semibold flex items-center gap-2 text-foreground">
         <Timer class="h-5 w-5" />
         Pomodoro Timer
       </h2>
@@ -17,10 +17,10 @@
           v-for="mode in modes"
           :key="mode.name"
           @click="setMode(mode)"
-          class="px-3 py-1 text-xs rounded-md transition-colors"
+          class="px-3 py-1 text-xs rounded-md transition-colors text-muted-foreground"
           :class="[
             currentMode.name === mode.name
-              ? 'bg-primary text-white'
+              ? 'bg-primary text-primary-foreground'
               : 'hover:bg-accent'
           ]"
         >
@@ -31,19 +31,19 @@
 
     <div class="flex items-center justify-center py-8">
       <div class="text-center">
-        <div class="text-6xl font-bold tabular-nums tracking-tight">
+        <div class="text-6xl font-bold tabular-nums tracking-tight text-foreground">
           {{ formattedTime }}
         </div>
         <div class="flex justify-center gap-4 mt-4">
           <button
             @click="toggleTimer"
-            class="px-6 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+            class="px-6 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             {{ isRunning ? 'Pause' : 'Start' }}
           </button>
           <button
             @click="resetTimer"
-            class="px-6 py-2 rounded-md border hover:bg-accent transition-colors"
+            class="px-6 py-2 rounded-md border border-input bg-background text-foreground hover:bg-accent transition-colors"
             :disabled="!canReset"
           >
             Reset
@@ -55,10 +55,10 @@
     <!-- Expand Button (bottom-right) -->
     <button
       @click="() => { isExpanded = true; emit('expand') }"
-      class="absolute bottom-6 right-6 p-2 hover:bg-slate-100 rounded-lg transition-all duration-300 hover:scale-110 group"
+      class="absolute bottom-6 right-6 p-2 hover:bg-accent rounded-lg transition-all duration-300 hover:scale-110 group"
       title="Expand to navbar"
     >
-      <svg class="w-6 h-6 text-slate-600 group-hover:text-slate-900 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
       </svg>
     </button>
@@ -69,17 +69,17 @@
       v-else
       key="expanded"
       data-teleport="expanded"
-      class="fixed top-0 left-0 right-0 bg-white border-b border-slate-200 shadow-md z-40"
+      class="fixed top-0 left-0 right-0 bg-card border-b border-border shadow-md z-40"
     >
       <div class="max-w-full px-6 py-3 flex items-center justify-between gap-6">
         <!-- Left: Logo & Timer Display (fixed width) -->
         <div class="flex items-center gap-4 flex-shrink-0">
-          <div class="p-2 bg-slate-100 rounded-lg">
-            <Timer class="h-5 w-5 text-slate-700" />
+          <div class="p-2 bg-muted rounded-lg">
+            <Timer class="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
-            <p class="text-xs text-slate-500 font-medium">Focus Time</p>
-            <p class="text-2xl font-bold text-slate-900 tabular-nums">{{ formattedTime }}</p>
+            <p class="text-xs text-muted-foreground font-medium">Focus Time</p>
+            <p class="text-2xl font-bold text-foreground tabular-nums">{{ formattedTime }}</p>
           </div>
         </div>
 
@@ -92,8 +92,8 @@
             class="px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-200"
             :class="[
               currentMode.name === mode.name
-                ? 'bg-slate-900 text-white hover:bg-slate-800'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'bg-muted text-muted-foreground hover:bg-accent'
             ]"
           >
             {{ mode.name }}
@@ -103,23 +103,23 @@
         <!-- Right: Controls & User (fixed width, stuck right) -->
         <div class="flex items-center gap-3 flex-shrink-0">
           <!-- Timer Controls (Light Container) -->
-          <div class="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-2">
+          <div class="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
             <button
               @click="toggleTimer"
-              class="px-2 py-1 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition-colors text-xs font-medium"
+              class="px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-medium"
             >
               {{ isRunning ? 'Pause' : 'Start' }}
             </button>
             <button
               @click="resetTimer"
-              class="px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors text-xs font-medium"
+              class="px-2 py-1 rounded-md border border-input bg-background text-foreground hover:bg-accent transition-colors text-xs font-medium"
               :disabled="!canReset"
             >
               Reset
             </button>
             <button
               @click="() => { isExpanded = false; emit('collapse') }"
-              class="p-1 hover:bg-slate-200 rounded-lg transition-colors text-slate-600 hover:text-slate-900"
+              class="p-1 hover:bg-accent rounded-lg transition-colors text-muted-foreground hover:text-foreground"
               title="Collapse"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,11 +129,26 @@
           </div>
 
           <!-- User Info (Light Translucent Container) -->
-          <div class="flex items-center gap-3 bg-white/60 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-slate-200/60 hover:bg-white/80 hover:shadow-md transition-all duration-300">
-            <p class="text-sm font-semibold text-slate-800 hidden sm:block">{{ userEmail || 'User' }}</p>
+          <div class="flex items-center gap-4 bg-card/70 backdrop-blur-md px-5 py-2.5 rounded-full shadow-sm border border-border/70 hover:bg-card/90 hover:shadow-md transition-all duration-300">
+            <div class="text-right hidden sm:block cursor-default">
+              <p class="text-sm font-semibold text-foreground">{{ userEmail || 'User' }}</p>
+            </div>
+            <div class="w-px h-5 bg-border hidden sm:block"></div>
+            <button
+              @click="themeStore.toggleTheme"
+              class="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
+              :title="`Switch to ${themeStore.theme === 'light' ? 'dark' : 'light'} mode`"
+            >
+              <svg v-if="themeStore.theme === 'light'" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+              </svg>
+              <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.536l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zm5.657-9.193a1 1 0 00-1.414 0l-.707.707A1 1 0 005.05 6.464l.707-.707a1 1 0 001.414 0zm2.828 9.193a1 1 0 011.414-1.414l.707.707a1 1 0 11-1.414 1.414l-.707-.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
             <button
               @click="emit('logout')"
-              class="text-sm font-medium text-slate-600 hover:text-red-600 transition-colors"
+              class="text-sm font-medium text-muted-foreground hover:text-destructive transition-colors"
               title="Sign out"
             >
               Sign Out
@@ -148,6 +163,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
 import { Timer } from 'lucide-vue-next'
+import { useThemeStore } from '@/stores/theme'
 
 interface Props {
   userEmail?: string
@@ -161,6 +177,7 @@ interface Emits {
 
 defineProps<Props>()
 const emit = defineEmits<Emits>()
+const themeStore = useThemeStore()
 
 const modes = [
   { name: 'Focus', duration: 25 * 60 },
