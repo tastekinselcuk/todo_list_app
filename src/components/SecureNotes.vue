@@ -49,7 +49,7 @@
                     Selected
                   </span>
                 </div>
-                <p class="text-sm text-gray-600">Created: {{ formatDate(session.createdAt) }}</p>
+                <p class="text-sm text-gray-600">Created: {{ formatDate(session.created_at) }}</p>
               </div>
               <div class="flex items-center gap-2">
                 <!-- No buttons in session list - only delete from within session -->
@@ -216,12 +216,12 @@
                     <label class="text-xs font-medium text-gray-500">Password</label>
                     <div class="flex items-center gap-2 mt-1">
                       <input
-                        :value="note.password || ''"
+                        :value="note.password_encrypted || ''"
                         readonly
                         class="flex-1 text-sm bg-gray-50 border border-gray-200 px-2 py-1 rounded"
                       />
                       <button
-                        @click="copyToClipboard(note.password || '')"
+                        @click="copyToClipboard(note.password_encrypted || '')"
                         class="p-1 hover:bg-gray-200 rounded"
                         title="Copy password"
                       >
@@ -273,9 +273,9 @@
           </div>
           
           <div class="flex items-center justify-between text-xs text-gray-500">
-            <span>Created: {{ formatDate(note.createdAt) }}</span>
-            <span v-if="note.updatedAt !== note.createdAt">
-              Updated: {{ formatDate(note.updatedAt) }}
+            <span>Created: {{ formatDate(note.created_at) }}</span>
+            <span v-if="note.updated_at !== note.created_at">
+              Updated: {{ formatDate(note.updated_at) }}
             </span>
           </div>
         </div>
@@ -359,7 +359,7 @@
               <label for="note-password" class="text-sm font-medium">Password</label>
               <input
                 id="note-password"
-                v-model="editingNote.password"
+                v-model="editingNote.password_encrypted"
                 type="text"
                 class="w-full rounded-md border border-input px-3 py-2"
                 placeholder="Password"
@@ -510,7 +510,7 @@
            <div class="relative">
              <input
                id="session-password"
-               v-model="editingSession.password"
+               v-model="editingSession.password_hash"
                :type="showPassword ? 'text' : 'password'"
                class="w-full rounded-md border border-input px-3 py-2 pr-10"
                placeholder="Enter a password for this session"
@@ -556,6 +556,8 @@ import { ref, onMounted, watch } from 'vue'
 import { 
   Lock, Shield, Eye, EyeOff, Plus, Edit, Trash2, X, LogOut, Copy, Loader2 
 } from 'lucide-vue-next'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth'
 
 interface SecureNote {
   id: string
@@ -563,20 +565,20 @@ interface SecureNote {
   description?: string
   type: 'password' | 'note' | 'secret'
   username?: string
-  password?: string
+  password_encrypted?: string
   url?: string
   content?: string
-  createdAt: string
-  updatedAt: string
-  sessionId: string // Hangi oturuma ait olduğunu belirtir
+  created_at: string
+  updated_at: string
+  session_id: string
 }
 
 interface PasswordSession {
   id: string
   name: string
-  password: string
-  createdAt: string
-  updatedAt?: string
+  password_hash: string
+  created_at: string
+  updated_at?: string
 }
 
 const isAuthenticated = ref(false)
@@ -599,64 +601,57 @@ const sessionError = ref('')
 
 const passwordSessions = ref<PasswordSession[]>([])
 const secureNotes = ref<SecureNote[]>([])
-const editingNote = ref<SecureNote>({
-  id: '',
+const editingNote = ref<Partial<SecureNote>>({
   title: '',
   description: '',
   type: 'password',
   username: '',
-  password: '',
+  password_encrypted: '',
   url: '',
   content: '',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  sessionId: '',
 })
-const editingSession = ref<PasswordSession>({
-  id: '',
+const editingSession = ref<Partial<PasswordSession>>({
   name: '',
-  password: '',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  password_hash: '',
 })
 
-// Load password sessions from localStorage
-const loadPasswordSessions = () => {
-  const saved = localStorage.getItem('password-sessions')
-  if (saved) {
-    try {
-      passwordSessions.value = JSON.parse(saved)
-    } catch (e) {
-      console.error('Failed to load password sessions:', e)
-    }
+// Load password sessions from Supabase
+const loadPasswordSessions = async () => {
+  isLoading.value = true
+  try {
+    const { data, error } = await supabase
+      .from('password_sessions')
+      .select('*')
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    passwordSessions.value = data || []
+  } catch (err) {
+    console.error('Failed to load password sessions:', err)
+  } finally {
+    isLoading.value = false
   }
 }
 
-// Save password sessions to localStorage
-const savePasswordSessions = () => {
-  localStorage.setItem('password-sessions', JSON.stringify(passwordSessions.value))
-}
-
-// Load secure notes from localStorage for current session
-const loadSecureNotes = () => {
+// Load secure notes from Supabase for current session
+const loadSecureNotes = async () => {
   if (!currentSession.value) return
   
-  const saved = localStorage.getItem(`secure-notes-${currentSession.value.id}`)
-  if (saved) {
-    try {
-      secureNotes.value = JSON.parse(saved)
-    } catch (e) {
-      console.error('Failed to load secure notes:', e)
-    }
-  } else {
-    secureNotes.value = []
+  isLoading.value = true
+  try {
+    const { data, error } = await supabase
+      .from('secure_notes')
+      .select('*')
+      .eq('session_id', currentSession.value.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    secureNotes.value = data || []
+  } catch (err) {
+    console.error('Failed to load secure notes:', err)
+  } finally {
+    isLoading.value = false
   }
-}
-
-// Save secure notes to localStorage for current session
-const saveSecureNotes = () => {
-  if (!currentSession.value) return
-  localStorage.setItem(`secure-notes-${currentSession.value.id}`, JSON.stringify(secureNotes.value))
 }
 
 // Authentication with session password
@@ -666,21 +661,23 @@ const authenticate = async () => {
   isLoading.value = true
   errorMessage.value = ''
   
-  // Simulate authentication delay
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  // Check if password matches selected session
-  if (selectedSession.value.password === masterPassword.value.trim()) {
-    currentSession.value = selectedSession.value
-    isAuthenticated.value = true
-    masterPassword.value = ''
-    selectedSession.value = null
-    loadSecureNotes()
-  } else {
-    errorMessage.value = 'Invalid password for this session'
+  try {
+    // For now, simple string comparison (in production, use proper hash verification)
+    if (selectedSession.value.password_hash === masterPassword.value.trim()) {
+      currentSession.value = selectedSession.value
+      isAuthenticated.value = true
+      masterPassword.value = ''
+      selectedSession.value = null
+      await loadSecureNotes()
+    } else {
+      errorMessage.value = 'Invalid password for this session'
+    }
+  } catch (err) {
+    errorMessage.value = 'Authentication failed'
+    console.error('Error authenticating:', err)
+  } finally {
+    isLoading.value = false
   }
-  
-  isLoading.value = false
 }
 
 const logout = () => {
@@ -725,64 +722,97 @@ const closeSessionDialog = () => {
   sessionError.value = ''
 }
 
-const saveSession = () => {
-  // Clear previous errors
+const saveSession = async () => {
   sessionError.value = ''
+  isLoading.value = true
   
-  // Check for duplicate names (case-insensitive)
-  const existingSession = passwordSessions.value.find(s => 
-    s.name.toLowerCase().trim() === editingSession.value.name.toLowerCase().trim() &&
-    s.id !== editingSession.value.id // Exclude current session when editing
-  )
-  
-  if (existingSession) {
-    sessionError.value = `A session with the name "${editingSession.value.name}" already exists. Please choose a different name.`
-    return
-  }
-  
-  if (editingSession.value.id) {
-    // Update existing session
-    const index = passwordSessions.value.findIndex(s => s.id === editingSession.value.id)
-    if (index !== -1) {
-      passwordSessions.value[index] = {
-        ...editingSession.value,
-        updatedAt: new Date().toISOString()
+  try {
+    // Check for duplicate names
+    const existing = passwordSessions.value.find(s => 
+      s.name.toLowerCase().trim() === editingSession.value.name?.toLowerCase().trim() &&
+      s.id !== editingSession.value.id
+    )
+    
+    if (existing) {
+      sessionError.value = `A session with the name "${editingSession.value.name}" already exists.`
+      return
+    }
+    
+    if (editingSession.value.id) {
+      // Update existing session
+      const { error } = await supabase
+        .from('password_sessions')
+        .update({
+          name: editingSession.value.name,
+          password_hash: editingSession.value.password_hash
+        })
+        .eq('id', editingSession.value.id)
+      
+      if (error) throw error
+      
+      const index = passwordSessions.value.findIndex(s => s.id === editingSession.value.id)
+      if (index !== -1) {
+        passwordSessions.value[index] = {
+          ...passwordSessions.value[index],
+          ...editingSession.value
+        } as PasswordSession
       }
       
-      // If updating current session, update the reference
       if (currentSession.value?.id === editingSession.value.id) {
-        currentSession.value = { ...editingSession.value, updatedAt: new Date().toISOString() }
+        currentSession.value = passwordSessions.value[index]
+      }
+    } else {
+      // Create new session
+      const authStore = useAuthStore()
+      const userId = authStore.user?.id || null
+      
+      const { data, error } = await supabase
+        .from('password_sessions')
+        .insert([
+          {
+            created_by: userId,
+            name: editingSession.value.name,
+            password_hash: editingSession.value.password_hash
+          }
+        ])
+        .select()
+      
+      if (error) throw error
+      if (data && data[0]) {
+        passwordSessions.value.unshift(data[0])
       }
     }
-  } else {
-    // Create new session
-    const newSession: PasswordSession = {
-      ...editingSession.value,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString()
-    }
-    passwordSessions.value.unshift(newSession)
+    
+    closeSessionDialog()
+  } catch (err) {
+    sessionError.value = (err as Error).message
+  } finally {
+    isLoading.value = false
   }
-  
-  savePasswordSessions()
-  closeSessionDialog()
 }
 
 
 
-const deleteCurrentSession = () => {
+const deleteCurrentSession = async () => {
   if (!currentSession.value) return
   
-  if (confirm(`Are you sure you want to delete "${currentSession.value.name}" session? All notes in this session will also be deleted.`)) {
-    // Delete current session
+  if (!confirm(`Are you sure you want to delete "${currentSession.value.name}" session?`)) return
+  
+  isLoading.value = true
+  try {
+    const { error } = await supabase
+      .from('password_sessions')
+      .delete()
+      .eq('id', currentSession.value.id)
+    
+    if (error) throw error
+    
     passwordSessions.value = passwordSessions.value.filter(s => s.id !== currentSession.value!.id)
-    savePasswordSessions()
-    
-    // Delete associated notes
-    localStorage.removeItem(`secure-notes-${currentSession.value.id}`)
-    
-    // Logout since session is deleted
     logout()
+  } catch (err) {
+    console.error('Error deleting session:', err)
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -804,19 +834,17 @@ const verifyPassword = async () => {
   isVerifyingPassword.value = true
   verificationError.value = ''
   
-  // Simulate verification delay
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  // Check if password matches current session
-  if (verificationPassword.value.trim() === currentSession.value?.password) {
-    showPasswordVerification.value = false
-    showSessionDialog.value = true
-    verificationPassword.value = ''
-  } else {
-    verificationError.value = 'Invalid password. Please try again.'
+  try {
+    if (verificationPassword.value.trim() === currentSession.value?.password_hash) {
+      showPasswordVerification.value = false
+      showSessionDialog.value = true
+      verificationPassword.value = ''
+    } else {
+      verificationError.value = 'Invalid password. Please try again.'
+    }
+  } finally {
+    isVerifyingPassword.value = false
   }
-  
-  isVerifyingPassword.value = false
 }
 
 const closePasswordVerification = () => {
@@ -830,37 +858,83 @@ const closeNoteDialog = () => {
   noteDialog.value?.close()
 }
 
-const saveNote = () => {
-  if (editingNote.value.id) {
-    // Update existing note
-    const index = secureNotes.value.findIndex(n => n.id === editingNote.value.id)
-    if (index !== -1) {
-      secureNotes.value[index] = {
-        ...editingNote.value,
-        sessionId: currentSession.value?.id || '',
-        updatedAt: new Date().toISOString()
+const saveNote = async () => {
+  isLoading.value = true
+  
+  try {
+    if (editingNote.value.id) {
+      // Update existing note
+      const { error } = await supabase
+        .from('secure_notes')
+        .update({
+          title: editingNote.value.title,
+          description: editingNote.value.description,
+          type: editingNote.value.type,
+          username: editingNote.value.username,
+          password_encrypted: editingNote.value.password_encrypted,
+          url: editingNote.value.url,
+          content: editingNote.value.content
+        })
+        .eq('id', editingNote.value.id)
+      
+      if (error) throw error
+      
+      const index = secureNotes.value.findIndex(n => n.id === editingNote.value.id)
+      if (index !== -1) {
+        secureNotes.value[index] = { ...editingNote.value } as SecureNote
+      }
+    } else {
+      // Create new note
+      const authStore = useAuthStore()
+      const userId = authStore.user?.id || null
+      
+      const { data, error } = await supabase
+        .from('secure_notes')
+        .insert([
+          {
+            created_by: userId,
+            title: editingNote.value.title,
+            description: editingNote.value.description,
+            type: editingNote.value.type,
+            username: editingNote.value.username,
+            password_encrypted: editingNote.value.password_encrypted,
+            url: editingNote.value.url,
+            content: editingNote.value.content,
+            session_id: currentSession.value?.id
+          }
+        ])
+        .select()
+      
+      if (error) throw error
+      if (data && data[0]) {
+        secureNotes.value.unshift(data[0])
       }
     }
-  } else {
-    // Create new note
-    const newNote: SecureNote = {
-      ...editingNote.value,
-      id: crypto.randomUUID(),
-      sessionId: currentSession.value?.id || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    secureNotes.value.unshift(newNote)
+    
+    closeNoteDialog()
+  } catch (err) {
+    console.error('Error saving note:', err)
+  } finally {
+    isLoading.value = false
   }
-  
-  saveSecureNotes()
-  closeNoteDialog()
 }
 
-const deleteNote = (id: string) => {
-  if (confirm('Are you sure you want to delete this secure note? This action cannot be undone.')) {
+const deleteNote = async (id: string) => {
+  if (!confirm('Are you sure you want to delete this secure note?')) return
+  
+  isLoading.value = true
+  try {
+    const { error } = await supabase
+      .from('secure_notes')
+      .delete()
+      .eq('id', id)
+    
+    if (error) throw error
     secureNotes.value = secureNotes.value.filter(n => n.id !== id)
-    saveSecureNotes()
+  } catch (err) {
+    console.error('Error deleting note:', err)
+  } finally {
+    isLoading.value = false
   }
 }
 

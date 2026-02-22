@@ -1,9 +1,5 @@
 <template>
   <div class="space-y-6">
-    <div class="max-w-lg mx-auto">
-      <PomodoroTimer />
-    </div>
-    
     <NotesTabs>
       <div class="space-y-4">
         <!-- Filters Section -->
@@ -583,7 +579,6 @@ import { ref, computed, watch } from 'vue'
 import { Check, Trash2, Edit, Filter, GripVertical, Tags, X, Plus, ChevronDown, Calendar, Clock, FolderTree, Folder } from 'lucide-vue-next'
 import { useTodoStore, type Todo } from '@/stores/todo'
 import draggable from 'vuedraggable'
-import PomodoroTimer from './PomodoroTimer.vue'
 import NotesTabs from './NotesTabs.vue'
 import AddTodoDialog from './AddTodoDialog.vue'
 
