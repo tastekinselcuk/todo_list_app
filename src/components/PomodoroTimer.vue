@@ -190,6 +190,9 @@ const timeLeft = ref(currentMode.value.duration)
 const isRunning = ref(false)
 const isExpanded = ref(false)
 const timerInterval = ref<ReturnType<typeof setInterval> | null>(null)
+let endTimestamp: number | null = null
+let visibilityListenerAdded = false
+const originalTitle = typeof document !== 'undefined' ? document.title || 'Pomodoro Timer' : 'Pomodoro Timer'
 
 const formattedTime = computed(() => {
   const minutes = Math.floor(timeLeft.value / 60)
@@ -214,18 +217,45 @@ const toggleTimer = () => {
   }
 }
 
-const startTimer = () => {
-  if (timeLeft.value > 0) {
-    isRunning.value = true
-    timerInterval.value = setInterval(() => {
-      if (timeLeft.value > 0) {
-        timeLeft.value--
-      } else {
-        notifyTimerComplete()
-        pauseTimer()
-      }
-    }, 1000)
+const updatePageTitle = () => {
+  if (isRunning.value) {
+    document.title = `${formattedTime.value} - ${originalTitle}`
+  } else {
+    document.title = originalTitle
   }
+}
+
+const startTimer = () => {
+  if (isRunning.value) return
+  if (timeLeft.value <= 0) return
+
+  endTimestamp = Date.now() + timeLeft.value * 1000
+  isRunning.value = true
+
+  if (!visibilityListenerAdded) {
+    visibilityListenerAdded = true
+    window.addEventListener('visibilitychange', () => {
+      if (isRunning.value && endTimestamp) {
+        timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+      }
+      updatePageTitle()
+    })
+  }
+
+  timerInterval.value = setInterval(() => {
+    if (!endTimestamp) return
+    const secs = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+    timeLeft.value = secs
+    updatePageTitle()
+    if (secs <= 0) {
+      notifyTimerComplete()
+      pauseTimer()
+    }
+  }, 500)
+
+  // immediate update
+  timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+  updatePageTitle()
 }
 
 const pauseTimer = () => {
@@ -233,12 +263,19 @@ const pauseTimer = () => {
     clearInterval(timerInterval.value)
     timerInterval.value = null
   }
+  if (endTimestamp) {
+    timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+  }
+  endTimestamp = null
   isRunning.value = false
+  updatePageTitle()
 }
 
 const resetTimer = () => {
   pauseTimer()
   timeLeft.value = currentMode.value.duration
+  endTimestamp = null
+  updatePageTitle()
 }
 
 const notifyTimerComplete = () => {
@@ -258,6 +295,7 @@ onUnmounted(() => {
   if (timerInterval.value) {
     clearInterval(timerInterval.value)
   }
+  document.title = originalTitle
 })
 </script>
 

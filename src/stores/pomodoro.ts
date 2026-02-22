@@ -17,6 +17,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   const timeLeft = ref(currentMode.value.duration)
   const isRunning = ref(false)
   let timerInterval: ReturnType<typeof setInterval> | null = null
+  let endTimestamp: number | null = null
+  let visibilityListenerAdded = false
+  const originalTitle = typeof document !== 'undefined' ? document.title || 'Pomodoro Models' : 'Pomodoro Models'
 
   const formattedTime = computed(() => {
     const minutes = Math.floor(timeLeft.value / 60)
@@ -26,9 +29,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
 
   const updatePageTitle = () => {
     if (isRunning.value) {
-      document.title = `${formattedTime.value} - Pomodoro Models`
+      document.title = `${formattedTime.value} - ${originalTitle}`
     } else {
-      document.title = 'Pomodoro Models'
+      document.title = originalTitle
     }
   }
 
@@ -38,18 +41,42 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   }
 
   const startTimer = () => {
-    if (timeLeft.value > 0) {
-      isRunning.value = true
-      timerInterval = setInterval(() => {
-        if (timeLeft.value > 0) {
-          timeLeft.value--
-          updatePageTitle()
-        } else {
-          notifyTimerComplete()
-          pauseTimer()
+    if (isRunning.value) return
+    if (timeLeft.value <= 0) return
+
+    // compute end timestamp from remaining seconds
+    endTimestamp = Date.now() + timeLeft.value * 1000
+    isRunning.value = true
+
+    // ensure visibilitychange listener updates time/title when switching tabs
+    if (!visibilityListenerAdded) {
+      visibilityListenerAdded = true
+      window.addEventListener('visibilitychange', () => {
+        if (isRunning.value && endTimestamp) {
+          timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
         }
-      }, 1000)
+        updatePageTitle()
+      })
     }
+
+    // Use a short interval but compute remaining time from timestamp to avoid throttling issues
+    timerInterval = setInterval(() => {
+      if (!endTimestamp) return
+      const secs = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+      timeLeft.value = secs
+      updatePageTitle()
+      if (secs <= 0) {
+        notifyTimerComplete()
+        pauseTimer()
+      }
+    }, 500)
+    updatePageTitle()
+    // update immediately so user sees correct title without waiting for first tick
+    if (endTimestamp) {
+      timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+      updatePageTitle()
+    }
+    return
   }
 
   const pauseTimer = () => {
@@ -57,6 +84,11 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
       clearInterval(timerInterval)
       timerInterval = null
     }
+    // calculate remaining seconds based on timestamp
+    if (endTimestamp) {
+      timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
+    }
+    endTimestamp = null
     isRunning.value = false
     updatePageTitle()
   }
@@ -64,6 +96,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   const resetTimer = () => {
     pauseTimer()
     timeLeft.value = currentMode.value.duration
+    endTimestamp = null
     updatePageTitle()
   }
 
