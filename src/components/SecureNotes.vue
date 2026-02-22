@@ -610,9 +610,10 @@ const editingNote = ref<Partial<SecureNote>>({
   url: '',
   content: '',
 })
-const editingSession = ref<Partial<PasswordSession>>({
+const editingSession = ref<Partial<PasswordSession> & { password?: string }>({
   name: '',
   password_hash: '',
+  password: '',
 })
 
 // Load password sessions from Supabase
@@ -711,7 +712,7 @@ const openAddSessionDialog = () => {
     id: '',
     name: '',
     password: '',
-    createdAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
   }
   showSessionDialog.value = true
 }

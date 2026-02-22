@@ -122,7 +122,7 @@ export const getSession = async () => {
  */
 export const onAuthStateChange = (callback: (user: AuthUser | null) => void) => {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
+    async (_event, session) => {
       const user = session?.user
       if (user) {
         callback({

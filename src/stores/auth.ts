@@ -5,7 +5,6 @@ import {
   signIn,
   signOut,
   getCurrentUser,
-  getSession,
   onAuthStateChange,
   resetPassword,
   updatePassword,
@@ -64,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
         error.value = result.error || 'Login failed'
         return { success: false, message: error.value }
       }
-      user.value = result.user
+      user.value = result.user ?? null
       return { success: true }
     } finally {
       isLoading.value = false
