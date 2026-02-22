@@ -16,7 +16,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   const currentMode = ref(modes[0])
   const timeLeft = ref(currentMode.value.duration)
   const isRunning = ref(false)
-  let timerInterval: number | null = null
+  let timerInterval: ReturnType<typeof setInterval> | null = null
 
   const formattedTime = computed(() => {
     const minutes = Math.floor(timeLeft.value / 60)
