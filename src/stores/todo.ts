@@ -27,7 +27,7 @@ export interface Todo {
   title: string;
   description: string;
   completed: boolean;
-  categoryId: string;
+  categoryId: string | null;
   priority: 'low' | 'medium' | 'high';
   dueDate: string | null;
   createdAt: string;
@@ -263,6 +263,65 @@ export const useTodoStore = defineStore('todo', () => {
     error.value = null
     try {
       const userId = await getCurrentUserId()
+      if (!userId) {
+        throw new Error('User not authenticated')
+      }
+
+      // Ensure categories exist - fetch or create
+      if (categories.value.length === 0) {
+        await fetchCategories()
+      }
+
+      // If still no categories after fetch, create defaults
+      if (categories.value.length === 0) {
+        for (const cat of defaultCategories) {
+          try {
+            const { data: catData, error: catErr } = await supabase
+              .from('categories')
+              .insert([{
+                created_by: userId,
+                name: cat.name,
+                color: cat.color,
+                icon: cat.icon
+              }])
+              .select()
+            
+            if (catErr) {
+              console.warn('Error creating default category:', catErr)
+              continue
+            }
+            
+            if (catData && catData[0]) {
+              categories.value.push({
+                id: catData[0].id,
+                name: catData[0].name,
+                color: catData[0].color,
+                icon: catData[0].icon
+              })
+            }
+          } catch (catErr) {
+            console.warn('Exception creating default category:', catErr)
+          }
+        }
+      }
+
+      // Get valid categoryId - must exist
+      let categoryId = String(todo.categoryId || '').trim()
+      if (!categoryId || !categories.value.find(c => c.id === categoryId)) {
+        // Use first available category
+        categoryId = categories.value[0]?.id || ''
+        if (!categoryId) {
+          error.value = 'No categories available. Please create a category first.'
+          return
+        }
+      }
+      
+      // Final validation - categoryId must not be empty
+      if (!categoryId) {
+        error.value = 'Invalid category ID'
+        return
+      }
+
       const { data, error: err } = await supabase
         .from('todos')
         .insert([
@@ -271,7 +330,7 @@ export const useTodoStore = defineStore('todo', () => {
             title: todo.title,
             description: todo.description,
             completed: todo.completed,
-            category_id: todo.categoryId,
+            category_id: categoryId,
             priority: todo.priority,
             due_date: todo.dueDate
           }

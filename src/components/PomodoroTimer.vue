@@ -17,6 +17,8 @@
           v-for="mode in modes"
           :key="mode.name"
           @click="setMode(mode)"
+          @context-menu.prevent="openCustomizeDialog"
+          :title="'Right-click to open modern duration setup'"
           class="px-3 py-1 text-xs rounded-md transition-colors text-muted-foreground"
           :class="[
             currentMode.name === mode.name
@@ -31,7 +33,11 @@
 
     <div class="flex items-center justify-center py-8">
       <div class="text-center">
-        <div class="text-6xl font-bold tabular-nums tracking-tight text-foreground">
+        <div
+          class="text-6xl font-bold tabular-nums tracking-tight text-foreground cursor-pointer select-none"
+          @click="clickTimerCustomize"
+          :title="'Click to open modern duration setup'"
+        >
           {{ formattedTime }}
         </div>
         <div class="flex justify-center gap-4 mt-4">
@@ -89,6 +95,8 @@
             v-for="mode in modes"
             :key="mode.name"
             @click="setMode(mode)"
+            @context-menu.prevent="openCustomizeDialog"
+            :title="'Right-click to open modern duration setup'"
             class="px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-200"
             :class="[
               currentMode.name === mode.name
@@ -157,12 +165,127 @@
         </div>
       </div>
     </div>
+
+    <!-- Customization Dialog -->
   </transition>
+
+    <dialog
+      ref="customizeDialog"
+      class="pomodoro-dialog w-[92vw] max-w-md rounded-xl border border-border bg-card text-card-foreground shadow-xl backdrop:bg-black/60"
+    >
+      <div class="p-4 sm:p-5 bg-card space-y-3.5">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-semibold tracking-tight text-foreground">Timer Presets</h2>
+          <button
+            @click="customizeDialog?.close()"
+            class="p-1 rounded-md hover:bg-accent/70 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="space-y-1.5">
+          <button
+            v-for="preset in presetCards"
+            :key="preset.id"
+            type="button"
+            @click="selectDraftPreset(preset.id)"
+            class="w-full text-left rounded-lg border px-3 py-2.5 transition-all duration-150 flex items-center gap-2"
+            :class="
+              draftPreset === preset.id
+                ? 'border-primary bg-primary/10'
+                : 'border-border bg-card hover:border-primary/40'
+            "
+          >
+            <span class="preset-radio" :data-selected="draftPreset === preset.id ? 'true' : 'false'"></span>
+            <span class="flex-1 flex items-center justify-between gap-2">
+              <span class="text-sm font-medium text-foreground">{{ preset.name }}</span>
+              <span class="text-xs text-muted-foreground tabular-nums">{{ preset.summary }}</span>
+            </span>
+          </button>
+        </div>
+
+        <transition name="customPanel">
+          <div
+            v-if="draftPreset === 'custom'"
+            class="rounded-lg border border-border/70 bg-muted/35 p-3 space-y-2.5"
+          >
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-muted-foreground">Pomodoro</span>
+                <span class="font-semibold text-foreground tabular-nums">{{ draftCustomDurations.focus }}m</span>
+              </div>
+              <input
+                id="custom-focus"
+                v-model.number="draftCustomDurations.focus"
+                type="range"
+                min="10"
+                max="90"
+                step="1"
+                aria-label="Custom pomodoro duration"
+                class="modern-range"
+              />
+            </div>
+
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-muted-foreground">Rest</span>
+                <span class="font-semibold text-foreground tabular-nums">{{ draftCustomDurations.shortBreak }}m</span>
+              </div>
+              <input
+                id="custom-short-break"
+                v-model.number="draftCustomDurations.shortBreak"
+                type="range"
+                min="3"
+                max="30"
+                step="1"
+                aria-label="Custom short rest duration"
+                class="modern-range"
+              />
+            </div>
+
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-muted-foreground">Long Rest</span>
+                <span class="font-semibold text-foreground tabular-nums">{{ draftCustomDurations.longBreak }}m</span>
+              </div>
+              <input
+                id="custom-long-break"
+                v-model.number="draftCustomDurations.longBreak"
+                type="range"
+                min="5"
+                max="45"
+                step="1"
+                aria-label="Custom long rest duration"
+                class="modern-range"
+              />
+            </div>
+          </div>
+        </transition>
+
+        <div class="flex items-center justify-end gap-2 pt-1.5">
+          <div class="flex items-center gap-2">
+            <button
+              @click="customizeDialog?.close()"
+              class="px-3 py-1.5 rounded-md text-xs hover:bg-accent transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              @click="saveTimerConfiguration"
+              class="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs hover:bg-primary/90 transition-colors"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
-import { Timer } from 'lucide-vue-next'
+import { Timer, X } from 'lucide-vue-next'
 import { useThemeStore } from '@/stores/theme'
 
 interface Props {
@@ -175,24 +298,125 @@ interface Emits {
   collapse: []
 }
 
+interface TimerMode {
+  key: 'focus' | 'shortBreak' | 'longBreak'
+  name: string
+  label: string
+  duration: number
+}
+
+interface TimerDurations {
+  focus: number
+  shortBreak: number
+  longBreak: number
+}
+
+type TimerPresetId = 'baby-step' | 'popular' | 'medium' | 'extended' | 'custom'
+
+interface TimerPreset {
+  id: Exclude<TimerPresetId, 'custom'>
+  name: string
+  focus: number
+  shortBreak: number
+  longBreak: number
+}
+
 defineProps<Props>()
 const emit = defineEmits<Emits>()
 const themeStore = useThemeStore()
 
-const modes = [
-  { name: 'Focus', duration: 25 * 60 },
-  { name: 'Short Break', duration: 5 * 60 },
-  { name: 'Long Break', duration: 15 * 60 },
+const timerPresets: TimerPreset[] = [
+  { id: 'baby-step', name: 'Baby Step', focus: 10, shortBreak: 5, longBreak: 10 },
+  { id: 'popular', name: 'Popular', focus: 25, shortBreak: 5, longBreak: 15 },
+  { id: 'medium', name: 'Medium', focus: 40, shortBreak: 8, longBreak: 20 },
+  { id: 'extended', name: 'Extended', focus: 60, shortBreak: 10, longBreak: 25 },
 ]
 
-const currentMode = ref(modes[0])
+const defaultCustomDurations: TimerDurations = {
+  focus: 31,
+  shortBreak: 8,
+  longBreak: 10,
+}
+
+const modes = ref<TimerMode[]>([
+  { key: 'focus', name: 'Focus', label: 'Pomodoro', duration: 25 * 60 },
+  { key: 'shortBreak', name: 'Short Break', label: 'Rest', duration: 5 * 60 },
+  { key: 'longBreak', name: 'Long Break', label: 'Long Rest', duration: 15 * 60 },
+])
+
+const currentMode = ref(modes.value[0])
 const timeLeft = ref(currentMode.value.duration)
 const isRunning = ref(false)
 const isExpanded = ref(false)
+const customizeDialog = ref<HTMLDialogElement | null>(null)
+const customDurations = ref<TimerDurations>({ ...defaultCustomDurations })
+const draftCustomDurations = ref<TimerDurations>({ ...defaultCustomDurations })
+const draftPreset = ref<TimerPresetId>('popular')
 const timerInterval = ref<ReturnType<typeof setInterval> | null>(null)
 let endTimestamp: number | null = null
 let visibilityListenerAdded = false
 const originalTitle = typeof document !== 'undefined' ? document.title || 'Pomodoro Timer' : 'Pomodoro Timer'
+
+const clamp = (value: number, min: number, max: number) => {
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+const normalizeDurations = (durations: TimerDurations): TimerDurations => {
+  return {
+    focus: clamp(durations.focus, 10, 90),
+    shortBreak: clamp(durations.shortBreak, 3, 30),
+    longBreak: clamp(durations.longBreak, 5, 45),
+  }
+}
+
+const getCurrentDurations = (): TimerDurations => {
+  return {
+    focus: Math.round(modes.value[0].duration / 60),
+    shortBreak: Math.round(modes.value[1].duration / 60),
+    longBreak: Math.round(modes.value[2].duration / 60),
+  }
+}
+
+const findPresetId = (durations: TimerDurations): TimerPresetId => {
+  const matchedPreset = timerPresets.find((preset) => {
+    return (
+      preset.focus === durations.focus
+      && preset.shortBreak === durations.shortBreak
+      && preset.longBreak === durations.longBreak
+    )
+  })
+
+  return matchedPreset?.id ?? 'custom'
+}
+
+const formatDurationTriplet = (durations: TimerDurations) => {
+  return `${durations.focus}m / ${durations.shortBreak}m / ${durations.longBreak}m`
+}
+
+const customPreviewDurations = computed(() => {
+  return draftPreset.value === 'custom'
+    ? normalizeDurations(draftCustomDurations.value)
+    : customDurations.value
+})
+
+const presetCards = computed(() => {
+  return [
+    ...timerPresets.map((preset) => ({
+      id: preset.id as TimerPresetId,
+      name: preset.name,
+      summary: formatDurationTriplet({
+        focus: preset.focus,
+        shortBreak: preset.shortBreak,
+        longBreak: preset.longBreak,
+      }),
+    })),
+    {
+      id: 'custom' as TimerPresetId,
+      name: 'Custom',
+      summary: formatDurationTriplet(customPreviewDurations.value),
+    },
+  ]
+})
 
 const formattedTime = computed(() => {
   const minutes = Math.floor(timeLeft.value / 60)
@@ -204,9 +428,81 @@ const canReset = computed(() => {
   return timeLeft.value !== currentMode.value.duration || isRunning.value
 })
 
-const setMode = (mode: typeof modes[0]) => {
+const setMode = (mode: (typeof modes.value)[0]) => {
   currentMode.value = mode
   resetTimer()
+}
+
+const applyDurationsToModes = (durations: TimerDurations) => {
+  const normalized = normalizeDurations(durations)
+  modes.value[0].duration = normalized.focus * 60
+  modes.value[1].duration = normalized.shortBreak * 60
+  modes.value[2].duration = normalized.longBreak * 60
+  resetTimer()
+}
+
+const openCustomizeDialog = () => {
+  const liveDurations = getCurrentDurations()
+  const detectedPreset = findPresetId(liveDurations)
+
+  if (detectedPreset === 'custom') {
+    customDurations.value = { ...liveDurations }
+  }
+
+  draftPreset.value = detectedPreset
+  draftCustomDurations.value = detectedPreset === 'custom'
+    ? { ...customDurations.value }
+    : { ...liveDurations }
+
+  customizeDialog.value?.showModal()
+}
+
+const selectDraftPreset = (presetId: TimerPresetId) => {
+  if (presetId === 'custom') {
+    draftPreset.value = 'custom'
+    draftCustomDurations.value = { ...customDurations.value }
+    return
+  }
+
+  const selectedPreset = timerPresets.find((preset) => preset.id === presetId)
+  if (!selectedPreset) {
+    return
+  }
+
+  draftPreset.value = presetId
+  draftCustomDurations.value = {
+    focus: selectedPreset.focus,
+    shortBreak: selectedPreset.shortBreak,
+    longBreak: selectedPreset.longBreak,
+  }
+}
+
+const saveTimerConfiguration = () => {
+  if (draftPreset.value === 'custom') {
+    const normalizedCustomDurations = normalizeDurations(draftCustomDurations.value)
+    customDurations.value = { ...normalizedCustomDurations }
+    applyDurationsToModes(normalizedCustomDurations)
+    customizeDialog.value?.close()
+    return
+  }
+
+  const selectedPreset = timerPresets.find((preset) => preset.id === draftPreset.value)
+  if (!selectedPreset) {
+    customizeDialog.value?.close()
+    return
+  }
+
+  applyDurationsToModes({
+    focus: selectedPreset.focus,
+    shortBreak: selectedPreset.shortBreak,
+    longBreak: selectedPreset.longBreak,
+  })
+
+  customizeDialog.value?.close()
+}
+
+const clickTimerCustomize = () => {
+  openCustomizeDialog()
 }
 
 const toggleTimer = () => {
@@ -390,6 +686,116 @@ onUnmounted(() => {
     transform: translateY(0) scale(1);
     filter: blur(0);
   }
+}
+
+.pomodoro-dialog {
+  overflow: hidden;
+}
+
+.pomodoro-dialog::backdrop {
+  background: rgb(2 6 23 / 0.58);
+  backdrop-filter: blur(2px);
+}
+
+.preset-radio {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  border: 1.25px solid hsl(var(--border));
+  background: hsl(var(--card));
+  position: relative;
+  flex-shrink: 0;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.preset-radio::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: hsl(var(--primary));
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.preset-radio[data-selected='true'] {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.16);
+}
+
+.preset-radio[data-selected='true']::after {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.modern-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: hsl(var(--muted));
+  cursor: pointer;
+}
+
+.modern-range::-webkit-slider-runnable-track {
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--primary) / 0.78) 0%,
+    hsl(var(--primary) / 0.52) 35%,
+    hsl(var(--muted)) 100%
+  );
+}
+
+.modern-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.92rem;
+  height: 0.92rem;
+  margin-top: -0.28rem;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  border: 1.5px solid hsl(var(--card));
+  box-shadow: 0 4px 10px -7px hsl(var(--primary) / 0.85);
+}
+
+.modern-range::-moz-range-track {
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: hsl(var(--muted));
+}
+
+.modern-range::-moz-range-progress {
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--primary) / 0.78) 0%,
+    hsl(var(--primary) / 0.52) 100%
+  );
+}
+
+.modern-range::-moz-range-thumb {
+  width: 0.92rem;
+  height: 0.92rem;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  border: 1.5px solid hsl(var(--card));
+  box-shadow: 0 4px 10px -7px hsl(var(--primary) / 0.85);
+}
+
+.customPanel-enter-active,
+.customPanel-leave-active {
+  transition: opacity 200ms ease, transform 220ms ease;
+}
+
+.customPanel-enter-from,
+.customPanel-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 /* Smooth hover effects */

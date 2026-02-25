@@ -591,7 +591,7 @@ const isGrouped = ref(false)
 
 const filteredTodos = computed(() => {
   return todoStore.todos.filter((todo) => {
-    const categoryMatch = selectedCategories.value.length === 0 || selectedCategories.value.includes(todo.categoryId)
+    const categoryMatch = selectedCategories.value.length === 0 || (todo.categoryId !== null && selectedCategories.value.includes(todo.categoryId))
     const priorityMatch = selectedPriority.value === 'all' || todo.priority === selectedPriority.value
     const completionMatch = showCompleted.value || !todo.completed
     return categoryMatch && priorityMatch && completionMatch

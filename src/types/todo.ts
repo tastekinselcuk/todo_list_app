@@ -3,7 +3,7 @@ export interface Todo {
   title: string;
   description: string;
   completed: boolean;
-  categoryId: string;
+  categoryId: string | null;
   priority: 'low' | 'medium' | 'high';
   dueDate: string | null;
   createdAt: string;

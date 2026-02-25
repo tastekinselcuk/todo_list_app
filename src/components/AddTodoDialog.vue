@@ -130,12 +130,20 @@ const priority = ref<'low' | 'medium' | 'high'>('medium')
 const categoryId = ref(todoStore.categories[0]?.id || '')
 
 const handleSubmit = () => {
+  // Ensure categoryId is never null
+  const selectedCategoryId = categoryId.value || todoStore.categories[0]?.id || ''
+  
+  if (!selectedCategoryId) {
+    alert('Please select a category or create one first')
+    return
+  }
+
   todoStore.addTodo({
     title: title.value,
     description: description.value,
-    dueDate: dueDate.value || null, // Convert to string or null
+    dueDate: dueDate.value || null, 
     priority: priority.value,
-    categoryId: categoryId.value,
+    categoryId: selectedCategoryId,
     completed: false,
   })
 
