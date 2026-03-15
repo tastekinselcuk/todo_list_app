@@ -28,12 +28,13 @@
             />
 
             <div class="flex items-center gap-1">
-              <CustomSelect
-                v-model="quickTodoCategoryId"
-                :options="categoryOptions"
-                placeholder="Kategori Seç"
-                variant="ghost"
-              />
+            <CustomSelect
+              :modelValue="quickTodoCategoryId ?? ''"
+              @update:modelValue="quickTodoCategoryId = $event || ''"
+              :options="categoryOptions"
+              placeholder="Kategori Seç"
+              variant="ghost"
+            />
               
               <button
                 @click="showCategoryDialog = true"
@@ -272,7 +273,8 @@
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('todo.category') }}</label>
           <CustomSelect
-            v-model="editingTodo.categoryId"
+            :modelValue="editingTodo.categoryId ?? ''"
+            @update:modelValue="editingTodo.categoryId = $event || ''"
             :options="categoryOptions"
           />
         </div>
@@ -295,9 +297,9 @@ import draggable from 'vuedraggable'
 import NotesTabs from './NotesTabs.vue'
 import CustomSelect from './ui/CustomSelect.vue'
 
-const props = defineProps({
-  initialTab: { type: String, default: 'detailed' }
-})
+defineProps<{
+  initialTab?: string
+}>()
 
 const todoStore = useTodoStore()
 const uiStore = useUIStore() // YENİ EKLENDİ

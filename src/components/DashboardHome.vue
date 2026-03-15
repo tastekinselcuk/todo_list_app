@@ -142,7 +142,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Calendar, CheckSquare, Zap, Shield, Target, Layers, Dumbbell, ArrowRight, LayoutGrid, Lock, Sparkles } from 'lucide-vue-next'
+import { CheckSquare, Zap, Shield, Target, Layers, Dumbbell, ArrowRight, LayoutGrid, Lock, Sparkles } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useTodoStore } from '@/stores/todo'

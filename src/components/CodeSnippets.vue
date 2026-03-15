@@ -206,10 +206,6 @@ import 'highlight.js/styles/github-dark.css'
 import { useTodoStore, type CodeSnippet } from '@/stores/todo'
 import CustomSelect from './ui/CustomSelect.vue'
 
-const props = defineProps({
-  initialTab: { type: String, default: 'detailed' }
-})
-
 const todoStore = useTodoStore()
 const uiStore = useUIStore() 
 const { t } = useI18n()

@@ -17,7 +17,11 @@
         
         <div class="flex items-center gap-2">
           <div class="relative w-10 h-10 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm shadow-sm overflow-hidden cursor-pointer hover:border-primary/40 transition-colors">
-            <input v-model="newDeckColor" type="color" class="absolute -top-2 -left-2 w-14 h-14 cursor-pointer" />
+            <input 
+              v-model="newDeckColor" 
+              type="color" 
+              class="absolute -top-2 -left-2 w-14 h-14 cursor-pointer" 
+            />
           </div>
           
           <button
@@ -38,30 +42,34 @@
           class="group flex flex-col p-5 rounded-[1.5rem] border transition-all duration-300 cursor-pointer overflow-hidden relative bg-card/40 backdrop-blur-xl hover:bg-card hover:border-primary/30 hover:shadow-md hover:-translate-y-1"
           :style="{ borderColor: `${deck.color}40` }"
         >
+          <div class="absolute left-0 top-0 bottom-0 w-1 opacity-60" :style="{ backgroundColor: deck.color }"></div>
           <div class="absolute top-0 right-0 w-24 h-24 blur-[40px] -mr-8 -mt-8 pointer-events-none opacity-0 transition-opacity duration-500 group-hover:opacity-20" :style="{ backgroundColor: deck.color }"></div>
 
-          <div class="flex items-start justify-between relative z-10 mb-3">
-            <div class="p-2.5 rounded-xl shadow-inner transition-colors" :style="{ backgroundColor: `${deck.color}15`, color: deck.color }">
-              <Layers class="w-4 h-4" />
+          <div class="flex items-start justify-between relative z-10 mb-2">
+            <div class="flex items-center gap-2">
+              <Layers class="w-4 h-4 opacity-70" :style="{ color: deck.color }" />
+              <h3 class="font-bold text-sm text-foreground tracking-tight line-clamp-1 group-hover:text-primary transition-colors">{{ deck.title }}</h3>
             </div>
-            <button @click.stop="handleDeleteDeck(deck.id)" class="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all">
-              <Trash2 class="w-4 h-4" />
+            <button @click.stop="handleDeleteDeck(deck.id)" class="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-500 transition-all">
+              <Trash2 class="w-3.5 h-3.5" />
             </button>
           </div>
           
-          <div class="mt-auto space-y-1 relative z-10">
-            <h3 class="font-bold text-base text-foreground tracking-tight group-hover:text-primary transition-colors truncate">{{ deck.title }}</h3>
-            <p class="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">{{ $t('flashcards.cardsInDeck', { count: deck.cards.length }) }}</p>
+          <div class="mt-auto relative z-10 pl-6">
+            <p class="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">
+              {{ $t('flashcards.cardsInDeck', { count: deck.cards.length }) }}
+            </p>
           </div>
         </div>
       </div>
 
-      <div v-else class="text-center py-16 flex flex-col items-center justify-center border border-dashed border-border/40 rounded-2xl bg-muted/5 w-full max-w-5xl">
+      <div v-else class="text-center py-12 flex flex-col items-center justify-center border border-dashed border-border/40 rounded-[2rem] bg-muted/5 w-full max-w-5xl">
         <div class="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
           <Layers class="w-4 h-4 text-muted-foreground/40" />
         </div>
         <p class="text-xs font-semibold text-muted-foreground/80">Henüz hiç deste eklemedin.</p>
       </div>
+
     </div>
 
     <div v-else-if="currentView === 'study' && activeDeck" class="w-full max-w-5xl space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -71,10 +79,10 @@
           <button @click="currentView = 'decks'" class="p-2 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border/50">
             <ArrowLeft class="w-4 h-4" />
           </button>
-          <div class="flex flex-col min-w-0">
-            <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{{ $t('flashcards.title') }}</span>
-            <h2 class="text-sm font-bold tracking-tight text-foreground truncate">{{ activeDeck.title }}</h2>
+          <div class="p-2 rounded-xl shadow-inner border" :style="{ backgroundColor: `${activeDeck.color}15`, color: activeDeck.color, borderColor: `${activeDeck.color}30` }">
+            <Layers class="w-3.5 h-3.5" />
           </div>
+          <h2 class="text-sm font-bold tracking-tight text-foreground">{{ activeDeck.title }}</h2>
         </div>
 
         <div v-if="activeDeck.cards.length > 0" class="flex items-center gap-2 w-full sm:w-auto">
@@ -152,7 +160,7 @@
       </div>
 
       <div class="space-y-3">
-        <div v-for="(card, index) in activeDeck.cards" :key="card.id" class="p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden" :class="getCardStatusClass(card.id)">
+        <div v-for="card in activeDeck.cards" :key="card.id" class="p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden" :class="getCardStatusClass(card.id)">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
             <span class="text-sm font-semibold w-1/3 text-foreground">{{ card.front }}</span>
             
@@ -276,7 +284,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Layers, Plus, Trash2, ArrowLeft, Play, Check, Award, CheckSquare } from 'lucide-vue-next'
-import { useFlashcardStore, type Deck, type Flashcard } from '@/stores/flashcards'
+// HATA 2 BURADAYDI ÇÖZÜLDÜ: type Flashcard importu silindi çünkü kod içinde kullanılmıyordu.
+import { useFlashcardStore, type Deck } from '@/stores/flashcards'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 
@@ -284,7 +293,7 @@ const store = useFlashcardStore()
 const uiStore = useUIStore()
 const { t } = useI18n()
 
-// Base State (Orijinal yapıyı koruduk, "game" seçeneği eklendi)
+// Base State
 const currentView = ref<'decks' | 'study' | 'test' | 'game' | 'results'>('decks')
 const activeDeck = ref<Deck | null>(null)
 const newDeckTitle = ref('')
@@ -294,11 +303,9 @@ const newCardBack = ref('')
 
 const flippedCards = ref<string[]>([]) 
 
-// Eski TEST (Sınav) Modu State'leri
 const testInputs = ref<Record<string, string>>({})
 const testResults = ref<{cardId: string, isCorrect: boolean}[]>([])
 
-// YENİ HAFIZA OYUNU State'leri
 interface MemoryCard {
   uniqueId: string
   cardId: string
@@ -318,15 +325,15 @@ onMounted(async () => {
   await store.fetchDecks()
 })
 
-// Decks Logic
+// HATA 3 BURADAYDI ÇÖZÜLDÜ: result.success void hatası vermemesi için try-catch eklendi
 const handleAddDeck = async () => {
   if (!newDeckTitle.value.trim()) return
-  const result = await store.addDeck(newDeckTitle.value.trim(), newDeckColor.value)
-  if (result.success) {
+  try {
+    await store.addDeck(newDeckTitle.value.trim(), newDeckColor.value)
     uiStore.addToast('Deste eklendi', 'success')
     newDeckTitle.value = ''
-  } else {
-    uiStore.addToast(result.message || 'Hata', 'error')
+  } catch (error) {
+    uiStore.addToast('Hata', 'error')
   }
 }
 
@@ -349,7 +356,6 @@ const focusBackInput = () => {
   if (el) el.focus()
 }
 
-// Cards Logic
 const handleAddCard = () => {
   if (!activeDeck.value || !newCardFront.value.trim() || !newCardBack.value.trim()) return
   store.addCard(activeDeck.value.id, newCardFront.value.trim(), newCardBack.value.trim())
@@ -374,11 +380,9 @@ const toggleCard = (cardId: string) => {
   else flippedCards.value.splice(index, 1)
 }
 
-// --- ESKİ TEST MANTIĞI ---
 const startTest = () => {
   testInputs.value = {}
   testResults.value = []
-  // Oyun verilerini temizle ki sonuç ekranı karışmasın
   gameScore.value = 0
   gameErrors.value = 0
   currentView.value = 'test'
@@ -411,7 +415,6 @@ const correctCount = computed(() => testResults.value.filter(r => r.isCorrect).l
 const scorePercentage = computed(() => activeDeck.value ? Math.round((correctCount.value / activeDeck.value.cards.length) * 100) : 0)
 
 
-// --- YENİ HAFIZA OYUNU MANTIĞI ---
 const startMemoryGame = () => {
   if (!activeDeck.value) return
   
@@ -420,9 +423,7 @@ const startMemoryGame = () => {
     return
   }
 
-  // Test verilerini temizle ki sonuç ekranı karışmasın
   testResults.value = []
-  
   gameScore.value = 0
   gameErrors.value = 0
   flippedMemoryCards.value = []
@@ -444,7 +445,7 @@ const flipMemoryCard = (card: MemoryCard) => {
   if (isChecking.value || card.isMatched || flippedMemoryCards.value.includes(card.uniqueId)) return
 
   flippedMemoryCards.value.push(card.uniqueId)
-  playWarmTick() // Kart çevirme sesi
+  playWarmTick()
 
   if (flippedMemoryCards.value.length === 2) {
     isChecking.value = true
@@ -460,7 +461,6 @@ const checkMatch = () => {
   const card2 = gameCards.value.find(c => c.uniqueId === id2)!
 
   if (card1.cardId === card2.cardId && card1.type !== card2.type) {
-    // DOĞRU
     setTimeout(() => {
       playSuccessSound()
       card1.isMatched = true
@@ -473,7 +473,6 @@ const checkMatch = () => {
     }, 400)
   } 
   else {
-    // YANLIŞ
     gameErrors.value += 1
     gameScore.value -= 1 
     card1.isError = true
@@ -493,7 +492,6 @@ const finishTest = () => {
   currentView.value = 'results'
 }
 
-// SICAK VE OYUNU HİSSETTİREN SESLER
 const playWarmTick = () => {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -519,9 +517,8 @@ const playSuccessSound = () => {
     osc.connect(gain)
     gain.connect(ctx.destination)
     osc.type = 'sine'
-    // Yumuşak, neşeli bir ton
-    osc.frequency.setValueAtTime(440, ctx.currentTime) // A4
-    osc.frequency.setValueAtTime(554.37, ctx.currentTime + 0.1) // C#5
+    osc.frequency.setValueAtTime(440, ctx.currentTime) 
+    osc.frequency.setValueAtTime(554.37, ctx.currentTime + 0.1) 
     gain.gain.setValueAtTime(0, ctx.currentTime)
     gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05)
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4)
@@ -538,11 +535,10 @@ const playErrorSound = () => {
     osc.connect(gain)
     gain.connect(ctx.destination)
     osc.type = 'triangle'
-    // Tok ve kısa bir hata sesi
     osc.frequency.setValueAtTime(200, ctx.currentTime) 
     osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.15) 
     gain.gain.setValueAtTime(0, ctx.currentTime)
-    gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.02)
+    gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.05)
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
     osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.2)

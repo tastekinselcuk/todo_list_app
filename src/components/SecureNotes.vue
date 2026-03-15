@@ -274,7 +274,7 @@
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.type') }}</label>
             <CustomSelect
               :modelValue="editingNote.type"
-              @update:modelValue="editingNote.type = $event as 'password'|'secret'"
+              @update:modelValue="editingNote.type = $event as 'password' | 'secret'"
               :options="noteTypeOptions"
             />
           </div>
@@ -400,10 +400,6 @@ import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from './ui/CustomSelect.vue'
 
-const props = defineProps({
-  initialTab: { type: String, default: 'detailed' }
-})
-
 interface SecureNote {
   id: string
   title: string
@@ -472,7 +468,20 @@ const verificationPassword = ref('')
 const isVerifyingPassword = ref(false)
 const verificationError = ref('')
 
-const editingNote = ref<Partial<SecureNote>>({ title: '', description: '', type: 'password', username: '', password_encrypted: '', url: '', content: '' })
+const editingNote = ref<{
+  id?: string
+  title: string
+  description?: string
+  type: 'password' | 'secret'
+  username?: string
+  password_encrypted?: string
+  url?: string
+  content?: string
+}>({
+  title: '',
+  type: 'password',           // varsayılan değer koyuyoruz
+  // diğer alanlar opsiyonel kalabilir
+})
 const editingSession = ref<Partial<PasswordSession> & { password?: string }>({ name: '', password_hash: '', password: '' })
 
 // Şifreyi Göster/Gizle Toggle Fonksiyonu
