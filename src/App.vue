@@ -1,98 +1,220 @@
 <template>
   <div v-if="authStore.isLoading" class="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center">
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      <p class="text-muted-foreground mt-4 font-medium">Loading...</p>
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <p class="text-muted-foreground mt-4 font-medium">{{ $t('app.loading') }}</p>
     </div>
   </div>
 
   <LoginSignup v-else-if="!authStore.isAuthenticated" />
 
-  <div v-else class="min-h-screen bg-gradient-to-br from-background to-muted relative">
+  <div v-else class="min-h-screen bg-gradient-to-br from-background to-muted relative selection:bg-primary/30">
     
     <div
       v-if="!isNavbarExpanded"
-      class="fixed top-6 right-6 z-40 flex items-center gap-4 bg-card/70 backdrop-blur-md px-5 py-2.5 rounded-full shadow-sm border border-border/70 hover:bg-card/90 hover:shadow-md transition-all duration-300"
+      :class="[
+        'fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 bg-card/60 backdrop-blur-2xl px-2 py-2 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white/20 dark:border-white/10 transition-all duration-500 ease-out',
+        isNavbarVisible ? 'translate-y-0 opacity-100 scale-100' : '-translate-y-24 opacity-0 scale-95 pointer-events-none'
+      ]"
     >
-      <div class="text-right hidden sm:block cursor-default">
-        <p class="text-sm font-semibold text-foreground">{{ userEmail }}</p>
+      <div class="flex items-center gap-1 bg-muted/40 p-1 rounded-full border border-border/50">
+        <button
+          @click="currentView = 'dashboard'"
+          class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300"
+          :class="currentView === 'dashboard' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+        >
+          <LayoutDashboard class="w-4 h-4" /> <span class="hidden sm:inline">Home</span>
+        </button>
+        <button
+          @click="currentView = 'workspace'"
+          class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300"
+          :class="currentView === 'workspace' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+        >
+          <Briefcase class="w-4 h-4" /> <span class="hidden sm:inline">Workspace</span>
+        </button>
+        <button
+          @click="currentView = 'settings'"
+          class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300"
+          :class="currentView === 'settings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+        >
+          <Settings2 class="w-4 h-4" /> <span class="hidden sm:inline">Settings</span>
+        </button>
       </div>
-      
-      <div class="w-px h-5 bg-border hidden sm:block"></div>
 
-      <!-- Theme Toggle Button -->
+      <div class="w-px h-6 bg-border mx-2"></div>
+
       <button
         @click="themeStore.toggleTheme"
-        class="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
-        :title="`Switch to ${themeStore.theme === 'light' ? 'dark' : 'light'} mode`"
+        class="p-2.5 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
       >
-        <svg v-if="themeStore.theme === 'light'" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-        </svg>
-        <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.536l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zm5.657-9.193a1 1 0 00-1.414 0l-.707.707A1 1 0 005.05 6.464l.707-.707a1 1 0 001.414 0zm2.828 9.193a1 1 0 011.414-1.414l.707.707a1 1 0 11-1.414 1.414l-.707-.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" clip-rule="evenodd"></path>
-        </svg>
+        <svg v-if="themeStore.theme === 'light'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+        <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.536l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zm5.657-9.193a1 1 0 00-1.414 0l-.707.707A1 1 0 005.05 6.464l.707-.707a1 1 0 001.414 0zm2.828 9.193a1 1 0 011.414-1.414l.707.707a1 1 0 11-1.414 1.414l-.707-.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" clip-rule="evenodd"></path></svg>
       </button>
       
       <button
         @click="handleLogout"
-        class="text-sm font-medium text-muted-foreground hover:text-destructive transition-colors duration-200"
-        title="Sign out"
+        class="p-2.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+        :title="$t('app.signOut')"
       >
-        Sign Out
+        <LogOut class="w-4 h-4" />
       </button>
     </div>
 
-    <div :class="['pb-8 px-6 transition-all duration-300', isNavbarExpanded ? 'pt-24' : 'pt-6']">
-      <div class="max-w-4xl mx-auto space-y-8">
-        <PomodoroTimer 
-          :userEmail="userEmail"
-          @logout="handleLogout"
-          @expand="isNavbarExpanded = true"
-          @collapse="isNavbarExpanded = false"
-        />
-        <TodoList />
+    <div :class="['pb-8 px-4 sm:px-6 transition-all duration-300', isNavbarExpanded ? 'pt-24' : 'pt-28']">
+      
+      <transition name="fade-slide" mode="out-in">
         
-        <AddTodoDialog
-          v-model:open="showAddTodoDialog"
+        <DashboardHome 
+          v-if="currentView === 'dashboard'" 
+          @enter-workspace="goToWorkspace" 
         />
-      </div>
+
+        <div v-else-if="currentView === 'settings'" class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <WorkspaceCustomizer />
+        </div>
+
+        <div 
+          v-else-if="currentView === 'workspace'" 
+          :class="[
+            'mx-auto animate-in fade-in slide-in-from-bottom-4 transition-all duration-700 ease-out',
+            settingsStore.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl'
+          ]"
+        >
+          <div class="space-y-8">
+            <PomodoroTimer 
+              v-if="settingsStore.isModuleActive('pomodoro')"
+              :userEmail="userEmail"
+              @logout="handleLogout"
+              @expand="isNavbarExpanded = true"
+              @collapse="isNavbarExpanded = false"
+            />
+            
+            <TodoList :initialTab="targetWorkspaceTab" />
+            <AddTodoDialog v-model:open="showAddTodoDialog" />
+          </div>
+        </div>
+
+      </transition>
     </div>
+
+    <ToastContainer />
+    <ConfirmModal />
+    
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue' 
+import { Settings2, LayoutDashboard, Briefcase, LogOut } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { useSettingsStore } from '@/stores/settings'
+import { useUIStore } from '@/stores/ui' // YENİ: Çıkış yaparken onay istemek için eklenebilir
+import { useI18n } from 'vue-i18n'
+
+import DashboardHome from '@/components/DashboardHome.vue'
 import TodoList from '@/components/TodoList.vue'
 import AddTodoDialog from '@/components/AddTodoDialog.vue'
 import LoginSignup from '@/components/LoginSignup.vue'
 import PomodoroTimer from '@/components/PomodoroTimer.vue'
+import WorkspaceCustomizer from '@/components/WorkspaceCustomizer.vue'
+
+// YENİ: UI Bileşenleri
+import ToastContainer from '@/components/ToastContainer.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const settingsStore = useSettingsStore()
+const uiStore = useUIStore() // YENİ
+const { t } = useI18n()
+
 const showAddTodoDialog = ref(false)
 const isNavbarExpanded = ref(false)
 
-// Extract just email local part for display (user@example.com -> user)
+const currentView = ref<'dashboard' | 'workspace' | 'settings'>('dashboard')
+const targetWorkspaceTab = ref('detailed')
+
+const isNavbarVisible = ref(true)
+let lastScrollPosition = 0
+
+const handleScroll = () => {
+  const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop
+  if (currentScrollPosition < 0) return
+  if (Math.abs(currentScrollPosition - lastScrollPosition) < 15) return
+
+  if (currentScrollPosition > lastScrollPosition && currentScrollPosition > 50) {
+    isNavbarVisible.value = false
+  } else {
+    isNavbarVisible.value = true
+  }
+  lastScrollPosition = currentScrollPosition
+}
+
 const userEmail = computed(() => {
   const email = authStore.user?.email || ''
   return email.split('@')[0] || email
 })
 
+const goToWorkspace = (moduleId: string) => {
+  targetWorkspaceTab.value = moduleId
+  currentView.value = 'workspace'
+}
+
 onMounted(async () => {
-  // Initialize theme from localStorage and system preference
   themeStore.initializeTheme()
-  
-  // Initialize auth state
   await authStore.initializeAuth()
-  // Setup auth listener for session changes
   authStore.setupAuthListener()
+  if (authStore.isAuthenticated) {
+    await settingsStore.loadSettings()
+  }
+  window.addEventListener('scroll', handleScroll, { passive: true })
 })
 
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+})
+
+watch(() => authStore.isAuthenticated, async (isAuth) => {
+  if (isAuth) {
+    await settingsStore.loadSettings()
+  }
+})
+
+// GÜNCELLENDİ: Çıkış yaparken çirkin confirm yerine bizim modern Confirm Modal'ı kullanıyoruz
 const handleLogout = async () => {
-  await authStore.logout()
-  // Auth state change will trigger app to show LoginSignup component
+  const isConfirmed = await uiStore.showConfirm(
+    t('app.signOut'), // Başlık (Emin misiniz vb.)
+    t('app.signOutConfirmDesc', 'Hesabınızdan çıkış yapmak istediğinize emin misiniz?'), // Açıklama
+    t('app.signOut', 'Çıkış Yap'), // Onay Butonu
+    t('todo.cancel', 'İptal') // İptal Butonu
+  )
+
+  if (isConfirmed) {
+    await authStore.logout()
+    settingsStore.activeModules = ['detailed', 'quick', 'secure', 'code', 'pomodoro']
+    settingsStore.isFullScreen = false
+    currentView.value = 'dashboard'
+    isNavbarVisible.value = true 
+    
+    // YENİ: Çıkış başarılı toast'ı
+    uiStore.addToast('Başarıyla çıkış yapıldı.', 'success')
+  }
 }
 </script>
+
+<style>
+/* Görünüm geçişleri için animasyon */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.98);
+}
+</style>

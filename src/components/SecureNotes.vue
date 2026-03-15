@@ -1,569 +1,414 @@
 <template>
-  <div class="space-y-6">
-         <!-- Password Entry Section -->
-     <div v-if="!isAuthenticated" class="max-w-2xl mx-auto space-y-6">
-               <!-- Sessions Management -->
-        <div class="bg-card text-card-foreground p-6 rounded-lg shadow-sm border border-border space-y-4">
-          <div class="relative">
-            <div class="text-center space-y-2">
-              <Shield class="h-12 w-12 mx-auto text-primary" />
-              <h2 class="text-xl font-semibold">Password Sessions</h2>
-              <p class="text-sm text-muted-foreground">Manage your secure note sessions</p>
+  <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
+    
+    <div v-if="!isAuthenticated" class="w-full max-w-6xl mx-auto space-y-6">
+      
+      <div class="flex flex-col md:flex-row gap-2.5 w-full relative z-[60]" style="overflow: visible;">
+        <div class="relative flex-1 group">
+          <Shield class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+          <input
+            v-model="inlineSessionName"
+            type="text"
+            :placeholder="$t('secure.sessionNamePlaceholder')"
+            class="w-full h-10 pl-10 pr-3 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-medium"
+            @keyup.enter="handleInlineAddSession"
+          />
+        </div>
+
+        <div class="relative flex-1 group">
+          <Lock class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+          <input
+            v-model="inlineSessionPassword"
+            :type="showInlinePassword ? 'text' : 'password'"
+            :placeholder="$t('secure.sessionPasswordPlaceholder')"
+            class="w-full h-10 pl-10 pr-10 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-mono"
+            @keyup.enter="handleInlineAddSession"
+          />
+          <button
+            type="button"
+            @click="showInlinePassword = !showInlinePassword"
+            class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+          >
+            <Eye v-if="showInlinePassword" class="h-3.5 w-3.5" />
+            <EyeOff v-else class="h-3.5 w-3.5" />
+          </button>
+        </div>
+        
+        <button
+          @click="handleInlineAddSession"
+          class="h-10 px-6 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm hover:shadow-lg transition-all disabled:opacity-50 text-xs flex items-center justify-center gap-1.5 shrink-0"
+          :disabled="!inlineSessionName.trim() || !inlineSessionPassword.trim() || isLoading"
+        >
+          <Loader2 v-if="isLoading" class="w-3.5 h-3.5 animate-spin" />
+          <Plus v-else class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">{{ $t('secure.newSession') }}</span>
+          <span class="sm:hidden">Ekle</span>
+        </button>
+      </div>
+
+      <div v-if="passwordSessions.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full">
+        <div
+          v-for="session in passwordSessions"
+          :key="session.id"
+          @click="promptSessionUnlock(session)"
+          class="group flex flex-col p-5 rounded-2xl border border-border/40 bg-card/40 backdrop-blur-xl hover:bg-card hover:border-primary/30 hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden"
+        >
+          <div class="flex items-start justify-between relative z-10">
+            <div class="w-10 h-10 rounded-xl bg-muted/50 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+              <Lock class="w-4 h-4" />
             </div>
-            <button
-              @click="openAddSessionDialog"
-              class="absolute top-0 right-0 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
-            >
-              <Plus class="h-4 w-4" />
-              New Session
-            </button>
           </div>
-         
-                   <!-- Sessions List -->
-          <div v-if="passwordSessions.length > 0" class="space-y-3">
-            <div
-              v-for="session in passwordSessions"
-              :key="session.id"
-              :class="[
-                'flex items-center justify-between p-4 border rounded-lg transition-all duration-200',
-                selectedSession?.id === session.id
-                  ? 'border-primary bg-primary/5 shadow-md'
-                  : 'hover:bg-accent border-border'
-              ]"
-            >
-              <div 
-                :class="[
-                  'flex-1 cursor-pointer transition-colors',
-                  selectedSession?.id === session.id
-                    ? 'text-primary'
-                    : 'hover:text-primary'
-                ]"
-                @click="selectSession(session)"
-              >
-                <div class="flex items-center gap-2">
-                  <h3 class="font-medium">{{ session.name }}</h3>
-                  <span 
-                    v-if="selectedSession?.id === session.id"
-                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground"
-                  >
-                    Selected
-                  </span>
-                </div>
-                <p class="text-sm text-muted-foreground">Created: {{ formatDate(session.created_at) }}</p>
-              </div>
+          <div class="mt-4 space-y-1 relative z-10">
+            <h3 class="font-bold text-base text-foreground tracking-tight group-hover:text-primary transition-colors truncate">
+              {{ session.name }}
+            </h3>
+            <p class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+              {{ formatDate(session.created_at) }}
+            </p>
+          </div>
+        </div>
+      </div>
+        
+      <div v-else class="text-center py-16 bg-card/20 backdrop-blur-sm border border-dashed border-border/50 rounded-[2rem]">
+        <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+          <Shield class="w-5 h-5 text-muted-foreground/40" />
+        </div>
+        <p class="text-sm font-semibold text-muted-foreground/80">{{ $t('secure.noSessions') }}</p>
+      </div>
+    </div>
+
+    <div v-else class="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-500">
+      
+      <div class="flex flex-col sm:flex-row items-center justify-between bg-card/40 backdrop-blur-2xl p-4 sm:p-5 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/10 dark:border-white/5 gap-4 relative overflow-hidden">
+        <div class="absolute -left-10 -top-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-[40px] pointer-events-none"></div>
+
+        <div class="flex items-center gap-4 relative z-10 w-full sm:w-auto justify-center sm:justify-start">
+          <div class="w-12 h-12 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-500/20 shadow-inner shrink-0">
+            <Shield class="h-6 w-6" />
+          </div>
+          <div class="text-center sm:text-left">
+            <h2 class="text-lg font-bold tracking-tight text-foreground">{{ currentSession?.name }}</h2>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center justify-center sm:justify-start gap-1 mt-0.5">
+              <Lock class="w-3 h-3" /> AÇIK KASA
+            </p>
+          </div>
+        </div>
+        
+        <div class="flex flex-wrap items-center justify-center gap-2 relative z-10">
+          <button @click="openAddNoteDialog" class="h-9 px-4 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors">
+            <Plus class="h-4 w-4" /> {{ $t('secure.addNote') }}
+          </button>
+          
+          <div class="w-px h-6 bg-border/50 mx-1 hidden sm:block"></div>
+
+          <button @click="editSession(currentSession!)" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-muted text-foreground border border-border/50 transition-colors" :title="$t('secure.editSession')">
+            <Edit class="h-4 w-4" />
+          </button>
+          <button @click="deleteCurrentSession" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 border border-border/50 hover:border-rose-500/20 transition-colors" :title="$t('secure.deleteSession')">
+            <Trash2 class="h-4 w-4" />
+          </button>
+          <button @click="logout" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50 transition-colors" :title="$t('secure.logout')">
+            <LogOut class="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          v-for="note in secureNotes"
+          :key="note.id"
+          class="group bg-card/40 backdrop-blur-md text-card-foreground p-5 rounded-[1.5rem] shadow-sm border border-border/50 hover:border-primary/30 transition-all duration-300 flex flex-col"
+        >
+          <div class="flex items-start justify-between mb-4">
+            <div class="space-y-1.5 pr-4">
               <div class="flex items-center gap-2">
-                <!-- No buttons in session list - only delete from within session -->
+                <span
+                  class="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border"
+                  :class="{
+                    'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20': note.type === 'password',
+                    'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20': note.type === 'secret'
+                  }"
+                >
+                  {{ note.type === 'password' ? $t('secure.typePassword') : $t('secure.typeSecret') }}
+                </span>
               </div>
+              <h3 class="font-bold text-base tracking-tight text-foreground line-clamp-1">{{ note.title }}</h3>
+              <p v-if="note.description" class="text-xs font-medium text-muted-foreground/80 line-clamp-2">
+                {{ note.description }}
+              </p>
             </div>
-          </div>
-         
-         <div v-else class="text-center py-8 text-muted-foreground">
-           <Shield class="h-12 w-12 mx-auto mb-3 opacity-50" />
-           <p>No password sessions yet. Create your first session to get started!</p>
-         </div>
-       </div>
-       
-        <!-- Login Section -->
-        <div id="password-input-section" v-if="selectedSession" class="bg-card text-card-foreground p-6 rounded-lg shadow-sm border border-border space-y-4">
-          <div class="text-center space-y-2">
-            <Lock class="h-12 w-12 mx-auto text-primary" />
-            <h2 class="text-xl font-semibold">Access {{ selectedSession.name }}</h2>
-            <p class="text-sm text-muted-foreground">Enter password for {{ selectedSession.name }} session</p>
+            
+            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <button @click="editNote(note)" class="p-1.5 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors" :title="$t('secure.editNoteTitle')">
+                <Edit class="h-3.5 w-3.5" />
+              </button>
+              <button @click="deleteNote(note.id)" class="p-1.5 hover:bg-rose-500/10 rounded-xl text-muted-foreground hover:text-rose-500 transition-colors" :title="$t('secure.deleteNoteTitle')">
+                <Trash2 class="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
           
-          <form @submit.prevent="authenticate" class="space-y-4">
-            <div class="space-y-2">
-              <label for="master-password" class="text-sm font-medium">Session Password</label>
-              <div class="relative">
-                <input
-                  id="master-password"
-                  v-model="masterPassword"
-                  :type="showPassword ? 'text' : 'password'"
-                  class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 pr-10 text-sm"
-                  :placeholder="`Enter password for ${selectedSession.name}`"
-                  required
-                />
-
-                <button
-                  type="button"
-                  @click="showPassword = !showPassword"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
-                >
-                  <Eye v-if="showPassword" class="h-4 w-4" />
-                  <EyeOff v-else class="h-4 w-4" />
+          <div class="mt-auto pt-2 mb-2">
+            <div v-if="note.type === 'password'" class="space-y-2">
+              <div class="flex items-center justify-between bg-muted/30 p-2.5 rounded-xl border border-border/40 hover:border-primary/20 transition-colors group/copy">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-widest">{{ $t('secure.username') }}</span>
+                  <span class="text-xs font-semibold text-foreground truncate mt-0.5">{{ note.username || '-' }}</span>
+                </div>
+                <button @click="copyToClipboard(note.username || '', 'Kullanıcı adı')" class="w-7 h-7 flex items-center justify-center bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-lg text-muted-foreground transition-colors shrink-0">
+                  <Copy class="h-3 w-3" />
+                </button>
+              </div>
+              
+              <div class="flex items-center justify-between bg-muted/30 p-2.5 rounded-xl border border-border/40 hover:border-primary/20 transition-colors group/copy">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-widest">{{ $t('secure.password') }}</span>
+                  <span class="text-xs font-mono text-foreground tracking-widest mt-0.5">
+                    {{ visiblePasswords[note.id] ? note.password_encrypted : '••••••••' }}
+                  </span> 
+                </div>
+                <div class="flex gap-1 shrink-0">
+                  <button @click="togglePasswordVisibility(note.id)" class="w-7 h-7 flex items-center justify-center bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-lg text-muted-foreground transition-colors">
+                    <Eye v-if="visiblePasswords[note.id]" class="h-3 w-3" />
+                    <EyeOff v-else class="h-3 w-3" />
+                  </button>
+                  <button @click="copyToClipboard(note.password_encrypted || '', 'Şifre')" class="w-7 h-7 flex items-center justify-center bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-lg text-muted-foreground transition-colors">
+                    <Copy class="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div v-else class="bg-muted/30 p-3 rounded-xl border border-border/40 relative group/copy">
+              <p class="text-xs font-mono transition-all duration-300 pr-8 line-clamp-3" :class="visiblePasswords[note.id] ? 'blur-none' : 'blur-sm'">
+                {{ note.content }}
+              </p>
+              <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/copy:opacity-100 transition-all">
+                <button @click="togglePasswordVisibility(note.id)" class="w-7 h-7 flex items-center justify-center rounded-lg bg-card border border-border/50 shadow-sm hover:text-primary transition-all">
+                  <Eye v-if="visiblePasswords[note.id]" class="h-3.5 w-3.5" />
+                  <EyeOff v-else class="h-3.5 w-3.5" />
+                </button>
+                <button @click="copyToClipboard(note.content || '', 'Gizli içerik')" class="w-7 h-7 flex items-center justify-center rounded-lg bg-card border border-border/50 shadow-sm hover:text-primary transition-all">
+                  <Copy class="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
             
-            <div class="flex gap-2">
-              <button
-                type="button"
-                @click="selectedSession = null"
-                class="flex-1 px-4 py-2 rounded-md border border-input bg-background text-foreground hover:bg-accent transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
-                :disabled="isLoading"
-              >
-                <Loader2 v-if="isLoading" class="h-4 w-4 mx-auto animate-spin" />
-                <span v-else>Access Session</span>
-              </button>
+            <div v-if="note.url" class="pt-3">
+              <a :href="note.url" target="_blank" class="inline-flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 px-2 py-1 rounded-md border border-primary/10">
+                <Globe class="w-3 h-3" /> {{ note.url.replace(/^https?:\/\//, '') }}
+              </a>
             </div>
-          </form>
-          
-          <div v-if="errorMessage" class="text-destructive text-sm text-center">
-            {{ errorMessage }}
-          </div>
-        </div>
-     </div>
 
-    <!-- Secure Notes Content -->
-    <div v-else class="space-y-4">
-             <!-- Header with Logout -->
-       <div class="flex items-center justify-between bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border">
-         <div class="flex items-center gap-3">
-           <Shield class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-           <div>
-             <h2 class="text-lg font-semibold">Secure Notes</h2>
-             <p class="text-sm text-muted-foreground">{{ currentSession?.name }} - Your private notes and passwords</p>
-           </div>
-         </div>
-         
-         <div class="flex items-center gap-2">
-           <button
-             @click="editSession(currentSession!)"
-             class="px-3 h-8 rounded-md text-xs border border-primary/30 text-primary hover:bg-primary/10 flex items-center gap-1"
-           >
-             <Edit class="h-3 w-3" />
-             Edit Session
-           </button>
-           <button
-             @click="deleteCurrentSession"
-             class="px-3 h-8 rounded-md text-xs border border-destructive/30 text-destructive hover:bg-destructive/10 flex items-center gap-1"
-           >
-             <Trash2 class="h-3 w-3" />
-             Delete Session
-           </button>
-           <button
-             @click="showAddNoteDialog = true"
-             class="px-3 h-8 rounded-md text-xs bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1"
-           >
-             <Plus class="h-3 w-3" />
-             Add Note
-           </button>
-           <button
-             @click="logout"
-             class="px-3 h-8 rounded-md text-xs border border-input text-muted-foreground hover:bg-accent flex items-center gap-1"
-           >
-             <LogOut class="h-3 w-3" />
-             Logout
-           </button>
-         </div>
-       </div>
-
-      <!-- Notes List -->
-      <div class="space-y-3">
-        <div
-          v-for="note in secureNotes"
-          :key="note.id"
-          class="bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border space-y-3"
-        >
-          <div class="flex items-start justify-between">
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-2">
-                <h3 class="font-medium">{{ note.title }}</h3>
-                <span
-                  class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                  :class="{
-                    'bg-blue-500/15 text-blue-700 dark:text-blue-300': note.type === 'password',
-                    'bg-violet-500/15 text-violet-700 dark:text-violet-300': note.type === 'note',
-                    'bg-amber-500/15 text-amber-700 dark:text-amber-300': note.type === 'secret'
-                  }"
-                >
-                  {{ note.type }}
-                </span>
-              </div>
-              
-              <p v-if="note.description" class="text-sm text-muted-foreground mb-3">
-                {{ note.description }}
-              </p>
-              
-              <!-- Password Fields (if type is password) -->
-              <div v-if="note.type === 'password'" class="space-y-2">
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="text-xs font-medium text-muted-foreground">Username</label>
-                    <div class="flex items-center gap-2 mt-1">
-                      <input
-                        :value="note.username || ''"
-                        readonly
-                        class="flex-1 text-sm bg-muted border border-border text-foreground px-2 py-1 rounded"
-                      />
-                      <button
-                        @click="copyToClipboard(note.username || '')"
-                        class="p-1 hover:bg-accent rounded"
-                        title="Copy username"
-                      >
-                        <Copy class="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label class="text-xs font-medium text-muted-foreground">Password</label>
-                    <div class="flex items-center gap-2 mt-1">
-                      <input
-                        :value="note.password_encrypted || ''"
-                        readonly
-                        class="flex-1 text-sm bg-muted border border-border text-foreground px-2 py-1 rounded"
-                      />
-                      <button
-                        @click="copyToClipboard(note.password_encrypted || '')"
-                        class="p-1 hover:bg-accent rounded"
-                        title="Copy password"
-                      >
-                        <Copy class="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div v-if="note.url" class="flex items-center gap-2">
-                  <label class="text-xs font-medium text-muted-foreground">URL:</label>
-                  <a
-                    :href="note.url"
-                    target="_blank"
-                    class="text-sm text-primary hover:underline"
-                  >
-                    {{ note.url }}
-                  </a>
-                </div>
-              </div>
-              
-              <!-- Regular Note Content -->
-              <div v-else-if="note.type === 'note'" class="bg-muted p-3 rounded border border-border">
-                <p class="text-sm whitespace-pre-wrap">{{ note.content }}</p>
-              </div>
-              
-              <!-- Secret Content -->
-              <div v-else-if="note.type === 'secret'" class="bg-muted p-3 rounded border border-border">
-                <p class="text-sm font-mono">{{ note.content }}</p>
-              </div>
-            </div>
-            
-            <div class="flex items-center gap-1">
-              <button
-                @click="editNote(note)"
-                class="p-2 hover:bg-accent rounded"
-                title="Edit note"
-              >
-                <Edit class="h-4 w-4" />
-              </button>
-              <button
-                @click="deleteNote(note.id)"
-                class="p-2 hover:bg-accent text-destructive rounded"
-                title="Delete note"
-              >
-                <Trash2 class="h-4 w-4" />
-              </button>
-            </div>
           </div>
           
-          <div class="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Created: {{ formatDate(note.created_at) }}</span>
-            <span v-if="note.updated_at !== note.created_at">
-              Updated: {{ formatDate(note.updated_at) }}
-            </span>
+          <div class="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50 pt-3 border-t border-border/30">
+            <span>{{ formatDate(note.created_at) }}</span>
           </div>
         </div>
-        
-        <div v-if="secureNotes.length === 0" class="text-center py-8 text-muted-foreground">
-          <Shield class="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>No secure notes yet. Create your first private note!</p>
+
+        <div v-if="secureNotes.length === 0" class="col-span-full text-center py-16 bg-card/20 backdrop-blur-sm border border-dashed border-border/50 rounded-[2rem]">
+          <Shield class="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
+          <p class="text-sm font-semibold text-muted-foreground/80">{{ $t('secure.noNotes') }}</p>
         </div>
       </div>
     </div>
 
-    <!-- Add/Edit Note Dialog -->
     <dialog
-      ref="noteDialog"
-      class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-lg border border-border backdrop:bg-black/55"
+      ref="unlockDialog"
+      class="w-[90vw] max-w-sm rounded-[2rem] border border-white/10 dark:border-white/5 bg-card/90 backdrop-blur-2xl text-card-foreground shadow-2xl p-6 sm:p-8 space-y-6"
     >
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-lg font-semibold">
-          {{ editingNote.id ? 'Edit' : 'Add' }} Secure Note
-        </h2>
-        <button
-          @click="closeNoteDialog"
-          class="p-1 hover:bg-accent rounded"
-        >
-          <X class="h-4 w-4" />
-        </button>
+      <div class="text-center space-y-2 mb-2">
+        <div class="w-12 h-12 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-3 border border-primary/20">
+          <Lock class="h-5 w-5" />
+        </div>
+        <h2 class="text-xl font-bold tracking-tight text-foreground">{{ $t('secure.accessSessionTitle', { name: selectedSessionForUnlock?.name }) }}</h2>
+        <p class="text-xs font-medium text-muted-foreground/80">{{ $t('secure.accessSessionSubtitle', { name: selectedSessionForUnlock?.name }) }}</p>
+      </div>
+      
+      <form @submit.prevent="authenticate" class="space-y-5">
+        <div class="space-y-1.5">
+          <div class="relative group">
+            <input
+              v-model="unlockPassword"
+              :type="showUnlockPassword ? 'text' : 'password'"
+              class="w-full h-11 rounded-xl border border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all font-mono"
+              :placeholder="$t('secure.enterPasswordPlaceholder', { name: selectedSessionForUnlock?.name })"
+              required
+              autofocus
+            />
+            <button
+              type="button"
+              @click="showUnlockPassword = !showUnlockPassword"
+              class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors"
+            >
+              <Eye v-if="showUnlockPassword" class="h-4 w-4" />
+              <EyeOff v-else class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        
+        <div class="flex gap-2">
+          <button type="button" @click="closeUnlockDialog" class="flex-1 h-10 rounded-xl bg-muted/50 hover:bg-muted font-semibold text-xs transition-colors">{{ $t('secure.cancel') }}</button>
+          <button type="submit" class="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-sm hover:bg-primary/90 flex items-center justify-center gap-2 transition-all" :disabled="isLoading || !unlockPassword">
+            <Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin" />
+            <span v-else>{{ $t('secure.accessSessionBtn') }}</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog ref="noteDialog" class="w-[90vw] max-w-lg rounded-[2rem] border border-white/10 dark:border-white/5 bg-card/90 backdrop-blur-2xl text-card-foreground shadow-2xl p-6 sm:p-8 space-y-6">
+      <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
+        <h2 class="text-lg font-bold tracking-tight">{{ editingNote.id ? $t('secure.editSecureNote') : $t('secure.addSecureNote') }}</h2>
+        <button @click="closeNoteDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
       </div>
 
-      <form @submit.prevent="saveNote" class="space-y-4">
-        <div class="space-y-2">
-          <label for="note-title" class="text-sm font-medium">Title</label>
-          <input
-            id="note-title"
-            v-model="editingNote.title"
-            type="text"
-            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-            required
-          />
-        </div>
-        
-        <div class="space-y-2">
-          <label for="note-type" class="text-sm font-medium">Type</label>
-          <select
-            id="note-type"
-            v-model="editingNote.type"
-            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-            required
-          >
-            <option value="password">Password</option>
-            <option value="note">Note</option>
-            <option value="secret">Secret</option>
-          </select>
-        </div>
-        
-        <div class="space-y-2">
-          <label for="note-description" class="text-sm font-medium">Description (Optional)</label>
-          <input
-            id="note-description"
-            v-model="editingNote.description"
-            type="text"
-            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-            placeholder="Brief description of this note"
-          />
-        </div>
-        
-        <!-- Password Fields -->
-        <div v-if="editingNote.type === 'password'" class="space-y-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-2">
-              <label for="note-username" class="text-sm font-medium">Username</label>
-              <input
-                id="note-username"
-                v-model="editingNote.username"
-                type="text"
-                class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-                placeholder="Username or email"
-              />
-            </div>
-            
-            <div class="space-y-2">
-              <label for="note-password" class="text-sm font-medium">Password</label>
-              <input
-                id="note-password"
-                v-model="editingNote.password_encrypted"
-                type="text"
-                class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-                placeholder="Password"
-              />
-            </div>
+      <form @submit.prevent="saveNote" class="space-y-5">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5 col-span-2 sm:col-span-1">
+            <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.title') }}</label>
+            <input v-model="editingNote.title" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
           </div>
-          
-          <div class="space-y-2">
-            <label for="note-url" class="text-sm font-medium">URL (Optional)</label>
-            <input
-              id="note-url"
-              v-model="editingNote.url"
-              type="url"
-              class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-              placeholder="https://example.com"
+          <div class="space-y-1.5 col-span-2 sm:col-span-1">
+            <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.type') }}</label>
+            <CustomSelect
+              :modelValue="editingNote.type"
+              @update:modelValue="editingNote.type = $event as 'password'|'secret'"
+              :options="noteTypeOptions"
             />
           </div>
         </div>
         
-        <!-- Note/Secret Content -->
-        <div v-else class="space-y-2">
-          <label for="note-content" class="text-sm font-medium">Content</label>
-          <textarea
-            id="note-content"
-            v-model="editingNote.content"
-            class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 min-h-[100px]"
-            :placeholder="editingNote.type === 'secret' ? 'Enter your secret content...' : 'Enter your note content...'"
-            required
-          ></textarea>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.descriptionOptional') }}</label>
+          <input v-model="editingNote.description" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.descPlaceholder')" />
         </div>
         
-        <div class="flex justify-end gap-2 pt-4 border-t">
-          <button
-            type="button"
-            @click="closeNoteDialog"
-            class="px-4 py-2 rounded-md text-sm hover:bg-accent"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
-          >
-            {{ editingNote.id ? 'Update' : 'Create' }} Note
+        <div v-if="editingNote.type === 'password'" class="space-y-4 p-5 rounded-2xl bg-muted/30 border border-border/40">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.username') }}</label>
+              <input v-model="editingNote.username" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.usernamePlaceholder')" />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.password') }}</label>
+              <div class="relative">
+                <input v-model="editingNote.password_encrypted" :type="showDialogPassword ? 'text' : 'password'" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.password')" />
+                <button type="button" @click="showDialogPassword = !showDialogPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+                  <Eye v-if="showDialogPassword" class="h-3.5 w-3.5" />
+                  <EyeOff v-else class="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.urlOptional') }}</label>
+            <input v-model="editingNote.url" type="url" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" placeholder="https://example.com" />
+          </div>
+        </div>
+        
+        <div v-else class="space-y-1.5">
+          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.content') }}</label>
+          <textarea v-model="editingNote.content" class="w-full rounded-xl border border-border/50 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-none" :placeholder="$t('secure.contentSecretPlaceholder')" required></textarea>
+        </div>
+        
+        <div class="flex justify-end gap-3 pt-4">
+          <button type="button" @click="closeNoteDialog" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted transition-colors">{{ $t('secure.cancel') }}</button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
+            <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
+            <span v-else>{{ editingNote.id ? $t('secure.updateNote') : $t('secure.createNote') }}</span>
           </button>
         </div>
       </form>
-         </dialog>
-     
-     <!-- Password Verification Dialog -->
-     <dialog
-       ref="passwordVerificationDialog"
-       class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-md border border-border backdrop:bg-black/55"
-     >
-       <div class="flex justify-between items-center mb-4">
-         <h2 class="text-lg font-semibold">Verify Password</h2>
-         <button
-           @click="closePasswordVerification"
-           class="p-1 hover:bg-accent rounded"
-         >
-           <X class="h-4 w-4" />
-         </button>
-       </div>
+    </dialog>
 
-       <div class="space-y-4">
-         <p class="text-sm text-muted-foreground">
-           Please enter your current password to edit this session.
-         </p>
-         
-         <div class="space-y-2">
-           <label for="verification-password" class="text-sm font-medium">Current Password</label>
-           <div class="relative">
-             <input
-               id="verification-password"
-               v-model="verificationPassword"
-               :type="showPassword ? 'text' : 'password'"
-               class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 pr-10"
-               placeholder="Enter your current password"
-               required
-             />
-             <button
-               type="button"
-               @click="showPassword = !showPassword"
-               class="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
-             >
-               <Eye v-if="showPassword" class="h-4 w-4" />
-               <EyeOff v-else class="h-4 w-4" />
-             </button>
-           </div>
-         </div>
-         
-         <div v-if="verificationError" class="text-destructive text-sm text-center">
-           {{ verificationError }}
-         </div>
-         
-         <div class="flex justify-end gap-2 pt-4 border-t">
-           <button
-             type="button"
-             @click="closePasswordVerification"
-             class="px-4 py-2 rounded-md text-sm hover:bg-accent"
-           >
-             Cancel
-           </button>
-           <button
-             @click="verifyPassword"
-             class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
-             :disabled="isVerifyingPassword"
-           >
-             <Loader2 v-if="isVerifyingPassword" class="h-4 w-4 animate-spin" />
-             <span v-else>Verify Password</span>
-           </button>
-         </div>
-       </div>
-     </dialog>
-     
-     <!-- Add/Edit Session Dialog -->
-     <dialog
-       ref="sessionDialog"
-       class="p-6 rounded-lg shadow-lg bg-card text-card-foreground w-full max-w-md border border-border backdrop:bg-black/55"
-     >
-       <div class="flex justify-between items-center mb-4">
-         <h2 class="text-lg font-semibold">
-           {{ editingSession.id ? 'Edit' : 'Add' }} Password Session
-         </h2>
-         <button
-           @click="closeSessionDialog"
-           class="p-1 hover:bg-accent rounded"
-         >
-           <X class="h-4 w-4" />
-         </button>
-       </div>
+    <dialog ref="passwordVerificationDialog" class="w-[90vw] max-w-sm rounded-[2rem] border border-white/10 dark:border-white/5 bg-card/90 backdrop-blur-2xl text-card-foreground shadow-2xl p-6 sm:p-8 space-y-6">
+      <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
+        <h2 class="text-lg font-bold tracking-tight">{{ $t('secure.verifyPasswordTitle') }}</h2>
+        <button @click="closePasswordVerification" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
+      </div>
 
-       <form @submit.prevent="saveSession" class="space-y-4">
-         <div class="space-y-2">
-           <label for="session-name" class="text-sm font-medium">Session Name</label>
-           <input
-             id="session-name"
-             v-model="editingSession.name"
-             type="text"
-             class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-             placeholder="e.g., Work, Personal, Banking"
-             required
-           />
-         </div>
-         
-         <div class="space-y-2">
-           <label for="session-password" class="text-sm font-medium">Session Password</label>
-           <div class="relative">
-             <input
-               id="session-password"
-               v-model="editingSession.password_hash"
-               :type="showPassword ? 'text' : 'password'"
-               class="w-full rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2 pr-10"
-               placeholder="Enter a password for this session"
-               required
-             />
-             <button
-               type="button"
-               @click="showPassword = !showPassword"
-               class="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
-             >
-               <Eye v-if="showPassword" class="h-4 w-4" />
-               <EyeOff v-else class="h-4 w-4" />
-             </button>
-           </div>
-         </div>
-         
-         <div v-if="sessionError" class="text-destructive text-sm text-center bg-destructive/10 p-3 rounded border border-destructive/20">
-           {{ sessionError }}
-         </div>
-         
-         <div class="flex justify-end gap-2 pt-4 border-t">
-           <button
-             type="button"
-             @click="closeSessionDialog"
-             class="px-4 py-2 rounded-md text-sm hover:bg-accent"
-           >
-             Cancel
-           </button>
-           <button
-             type="submit"
-             class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
-           >
-             {{ editingSession.id ? 'Update' : 'Create' }} Session
-           </button>
-         </div>
-       </form>
-     </dialog>
-   </div>
- </template>
+      <div class="space-y-5">
+        <p class="text-sm font-medium text-muted-foreground/80 leading-relaxed">{{ $t('secure.verifyPasswordDesc') }}</p>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.currentPassword') }}</label>
+          <div class="relative">
+            <input
+              v-model="verificationPassword"
+              :type="showVerificationPassword ? 'text' : 'password'"
+              class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono transition-all"
+              :placeholder="$t('secure.currentPasswordPlaceholder')"
+              @keyup.enter="verifyPassword"
+              required
+            />
+            <button type="button" @click="showVerificationPassword = !showVerificationPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors">
+              <Eye v-if="showVerificationPassword" class="h-4 w-4" />
+              <EyeOff v-else class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button type="button" @click="closePasswordVerification" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
+          <button @click="verifyPassword" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isVerifyingPassword">
+            <Loader2 v-if="isVerifyingPassword" class="w-4 h-4 animate-spin" />
+            <span v-else>{{ $t('secure.verifyPasswordBtn') }}</span>
+          </button>
+        </div>
+      </div>
+    </dialog>
+      
+    <dialog ref="sessionDialog" class="w-[90vw] max-w-sm rounded-[2rem] border border-white/10 dark:border-white/5 bg-card/90 backdrop-blur-2xl text-card-foreground shadow-2xl p-6 sm:p-8 space-y-6">
+      <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
+        <h2 class="text-lg font-bold tracking-tight">{{ $t('secure.editSessionTitle') }}</h2>
+        <button @click="closeSessionDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
+      </div>
+
+      <form @submit.prevent="saveSession" class="space-y-5">
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionName') }}</label>
+          <input v-model="editingSession.name" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.sessionNamePlaceholder')" required />
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionPasswordLabel') }}</label>
+          <div class="relative">
+            <input v-model="editingSession.password_hash" :type="showEditSessionPassword ? 'text' : 'password'" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono transition-all" :placeholder="$t('secure.sessionPasswordPlaceholder')" required />
+            <button type="button" @click="showEditSessionPassword = !showEditSessionPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors">
+              <Eye v-if="showEditSessionPassword" class="h-4 w-4" />
+              <EyeOff v-else class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button type="button" @click="closeSessionDialog" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
+            <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
+            <span v-else>{{ $t('secure.updateSessionBtn') }}</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+</template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { 
-  Lock, Shield, Eye, EyeOff, Plus, Edit, Trash2, X, LogOut, Copy, Loader2 
-} from 'lucide-vue-next'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Lock, Shield, Eye, EyeOff, Plus, Edit, Trash2, X, LogOut, Copy, Loader2, Globe } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
+import { useUIStore } from '@/stores/ui'
+import { useI18n } from 'vue-i18n'
+import CustomSelect from './ui/CustomSelect.vue'
+
+const props = defineProps({
+  initialTab: { type: String, default: 'detailed' }
+})
 
 interface SecureNote {
   id: string
   title: string
   description?: string
-  type: 'password' | 'note' | 'secret'
+  type: 'password' | 'secret'
   username?: string
   password_encrypted?: string
   url?: string
@@ -581,50 +426,64 @@ interface PasswordSession {
   updated_at?: string
 }
 
+const { t } = useI18n() 
+const authStore = useAuthStore()
+const uiStore = useUIStore()
+
+const noteTypeOptions = computed(() => [
+  { value: 'password', label: t('secure.typePassword') },
+  { value: 'secret', label: t('secure.typeSecret') }
+])
+
 const isAuthenticated = ref(false)
 const currentSession = ref<PasswordSession | null>(null)
-const selectedSession = ref<PasswordSession | null>(null)
-const masterPassword = ref('')
-const showPassword = ref(false)
+const passwordSessions = ref<PasswordSession[]>([])
+const secureNotes = ref<SecureNote[]>([])
+
+// Görünürlük State'leri (Eye / EyeOff Icons)
+const showInlinePassword = ref(false)
+const showUnlockPassword = ref(false)
+const showDialogPassword = ref(false)
+const showVerificationPassword = ref(false)
+const showEditSessionPassword = ref(false)
+
+// Her bir not için şifre görünürlüğünü takip eden reaktif obje
+const visiblePasswords = ref<Record<string, boolean>>({})
+
+// Inline Ekleme (Yeni Kasa)
+const inlineSessionName = ref('')
+const inlineSessionPassword = ref('')
+
+// Unlock Dialog (Kasa Seçim Sonrası Popup)
+const unlockDialog = ref<HTMLDialogElement | null>(null)
+const selectedSessionForUnlock = ref<PasswordSession | null>(null)
+const unlockPassword = ref('')
+
+// Diğer state'ler
 const isLoading = ref(false)
-const errorMessage = ref('')
 const showAddNoteDialog = ref(false)
 const noteDialog = ref<HTMLDialogElement | null>(null)
 const showSessionDialog = ref(false)
 const sessionDialog = ref<HTMLDialogElement | null>(null)
 const passwordVerificationDialog = ref<HTMLDialogElement | null>(null)
 const showPasswordVerification = ref(false)
+
 const verificationPassword = ref('')
 const isVerifyingPassword = ref(false)
 const verificationError = ref('')
-const sessionError = ref('')
 
-const passwordSessions = ref<PasswordSession[]>([])
-const secureNotes = ref<SecureNote[]>([])
-const editingNote = ref<Partial<SecureNote>>({
-  title: '',
-  description: '',
-  type: 'password',
-  username: '',
-  password_encrypted: '',
-  url: '',
-  content: '',
-})
-const editingSession = ref<Partial<PasswordSession> & { password?: string }>({
-  name: '',
-  password_hash: '',
-  password: '',
-})
+const editingNote = ref<Partial<SecureNote>>({ title: '', description: '', type: 'password', username: '', password_encrypted: '', url: '', content: '' })
+const editingSession = ref<Partial<PasswordSession> & { password?: string }>({ name: '', password_hash: '', password: '' })
 
-// Load password sessions from Supabase
+// Şifreyi Göster/Gizle Toggle Fonksiyonu
+const togglePasswordVisibility = (id: string) => {
+  visiblePasswords.value[id] = !visiblePasswords.value[id]
+}
+
 const loadPasswordSessions = async () => {
   isLoading.value = true
   try {
-    const { data, error } = await supabase
-      .from('password_sessions')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
+    const { data, error } = await supabase.from('password_sessions').select('*').order('created_at', { ascending: false })
     if (error) throw error
     passwordSessions.value = data || []
   } catch (err) {
@@ -634,18 +493,11 @@ const loadPasswordSessions = async () => {
   }
 }
 
-// Load secure notes from Supabase for current session
 const loadSecureNotes = async () => {
   if (!currentSession.value) return
-  
   isLoading.value = true
   try {
-    const { data, error } = await supabase
-      .from('secure_notes')
-      .select('*')
-      .eq('session_id', currentSession.value.id)
-      .order('created_at', { ascending: false })
-    
+    const { data, error } = await supabase.from('secure_notes').select('*').eq('session_id', currentSession.value.id).order('created_at', { ascending: false })
     if (error) throw error
     secureNotes.value = data || []
   } catch (err) {
@@ -655,27 +507,66 @@ const loadSecureNotes = async () => {
   }
 }
 
-// Authentication with session password
-const authenticate = async () => {
-  if (!masterPassword.value.trim() || !selectedSession.value) return
-  
+const handleInlineAddSession = async () => {
+  if (!inlineSessionName.value.trim() || !inlineSessionPassword.value.trim()) return
   isLoading.value = true
-  errorMessage.value = ''
   
   try {
-    // For now, simple string comparison (in production, use proper hash verification)
-    if (selectedSession.value.password_hash === masterPassword.value.trim()) {
-      currentSession.value = selectedSession.value
-      isAuthenticated.value = true
-      masterPassword.value = ''
-      selectedSession.value = null
-      await loadSecureNotes()
-    } else {
-      errorMessage.value = 'Invalid password for this session'
+    const existing = passwordSessions.value.find(s => s.name.toLowerCase().trim() === inlineSessionName.value.toLowerCase().trim())
+    if (existing) {
+      uiStore.addToast(t('secure.sessionExists', { name: inlineSessionName.value }), 'error')
+      return
+    }
+    
+    const userId = authStore.user?.id || null
+    const { data, error } = await supabase.from('password_sessions')
+      .insert([{ created_by: userId, name: inlineSessionName.value, password_hash: inlineSessionPassword.value }])
+      .select()
+    
+    if (error) throw error
+    if (data && data[0]) {
+      passwordSessions.value.unshift(data[0])
+      uiStore.addToast('Kasa başarıyla oluşturuldu.', 'success')
+      inlineSessionName.value = ''
+      inlineSessionPassword.value = ''
+      showInlinePassword.value = false
     }
   } catch (err) {
-    errorMessage.value = 'Authentication failed'
-    console.error('Error authenticating:', err)
+    uiStore.addToast('Kasa oluşturulurken hata oluştu.', 'error')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const promptSessionUnlock = (session: PasswordSession) => {
+  selectedSessionForUnlock.value = session
+  unlockPassword.value = ''
+  showUnlockPassword.value = false // Modal açılırken gizli başlasın
+  unlockDialog.value?.showModal()
+}
+
+const closeUnlockDialog = () => {
+  selectedSessionForUnlock.value = null
+  unlockPassword.value = ''
+  unlockDialog.value?.close()
+}
+
+const authenticate = async () => {
+  if (!unlockPassword.value.trim() || !selectedSessionForUnlock.value) return
+  
+  isLoading.value = true
+  try {
+    if (selectedSessionForUnlock.value.password_hash === unlockPassword.value.trim()) {
+      currentSession.value = selectedSessionForUnlock.value
+      isAuthenticated.value = true
+      await loadSecureNotes()
+      uiStore.addToast(t('secure.accessSessionTitle', { name: currentSession.value.name }) + ' açıldı', 'success')
+      closeUnlockDialog()
+    } else {
+      uiStore.addToast(t('secure.invalidPassword'), 'error')
+    }
+  } catch (err) {
+    uiStore.addToast(t('secure.authFailed'), 'error')
   } finally {
     isLoading.value = false
   }
@@ -684,134 +575,56 @@ const authenticate = async () => {
 const logout = () => {
   isAuthenticated.value = false
   currentSession.value = null
-  selectedSession.value = null
   secureNotes.value = []
+  // Tüm visible password state'lerini temizle
+  visiblePasswords.value = {}
+  uiStore.addToast(t('secure.logout') + ' yapıldı', 'info')
 }
 
-const selectSession = (session: PasswordSession) => {
-  selectedSession.value = session
-  masterPassword.value = ''
-  errorMessage.value = ''
-  
-  // Scroll to password input section after a short delay to ensure DOM is updated
-  setTimeout(() => {
-    const passwordSection = document.getElementById('password-input-section')
-    if (passwordSection) {
-      passwordSection.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center' 
-      })
-    }
-  }, 100)
-}
-
-
-
-const openAddSessionDialog = () => {
-  editingSession.value = {
-    id: '',
-    name: '',
-    password: '',
-    created_at: new Date().toISOString(),
-  }
-  showSessionDialog.value = true
+const openAddNoteDialog = () => {
+  editingNote.value = { id: '', title: '', description: '', type: 'password', username: '', password_encrypted: '', url: '', content: '' }
+  showDialogPassword.value = false // Form açılırken şifre gizli başlasın
+  showAddNoteDialog.value = true
 }
 
 const closeSessionDialog = () => {
   showSessionDialog.value = false
   sessionDialog.value?.close()
-  sessionError.value = ''
 }
 
 const saveSession = async () => {
-  sessionError.value = ''
   isLoading.value = true
-  
   try {
-    // Check for duplicate names
-    const existing = passwordSessions.value.find(s => 
-      s.name.toLowerCase().trim() === editingSession.value.name?.toLowerCase().trim() &&
-      s.id !== editingSession.value.id
-    )
-    
-    if (existing) {
-      sessionError.value = `A session with the name "${editingSession.value.name}" already exists.`
-      return
-    }
-    
     if (editingSession.value.id) {
-      // Update existing session
-      const { error } = await supabase
-        .from('password_sessions')
-        .update({
-          name: editingSession.value.name,
-          password_hash: editingSession.value.password_hash
-        })
-        .eq('id', editingSession.value.id)
-      
+      const { error } = await supabase.from('password_sessions').update({ name: editingSession.value.name, password_hash: editingSession.value.password_hash }).eq('id', editingSession.value.id)
       if (error) throw error
-      
       const index = passwordSessions.value.findIndex(s => s.id === editingSession.value.id)
-      if (index !== -1) {
-        passwordSessions.value[index] = {
-          ...passwordSessions.value[index],
-          ...editingSession.value
-        } as PasswordSession
-      }
-      
-      if (currentSession.value?.id === editingSession.value.id) {
-        currentSession.value = passwordSessions.value[index]
-      }
-    } else {
-      // Create new session
-      const authStore = useAuthStore()
-      const userId = authStore.user?.id || null
-      
-      const { data, error } = await supabase
-        .from('password_sessions')
-        .insert([
-          {
-            created_by: userId,
-            name: editingSession.value.name,
-            password_hash: editingSession.value.password_hash
-          }
-        ])
-        .select()
-      
-      if (error) throw error
-      if (data && data[0]) {
-        passwordSessions.value.unshift(data[0])
-      }
+      if (index !== -1) passwordSessions.value[index] = { ...passwordSessions.value[index], ...editingSession.value } as PasswordSession
+      if (currentSession.value?.id === editingSession.value.id) currentSession.value = passwordSessions.value[index]
+      uiStore.addToast('Kasa güncellendi', 'success')
     }
-    
     closeSessionDialog()
   } catch (err) {
-    sessionError.value = (err as Error).message
+    uiStore.addToast((err as Error).message, 'error')
   } finally {
     isLoading.value = false
   }
 }
 
-
-
 const deleteCurrentSession = async () => {
   if (!currentSession.value) return
-  
-  if (!confirm(`Are you sure you want to delete "${currentSession.value.name}" session?`)) return
+  const isConfirmed = await uiStore.showConfirm(t('secure.deleteSession'), t('secure.deleteSessionConfirm', { name: currentSession.value.name }), 'Kasayı Sil', t('secure.cancel'))
+  if (!isConfirmed) return 
   
   isLoading.value = true
   try {
-    const { error } = await supabase
-      .from('password_sessions')
-      .delete()
-      .eq('id', currentSession.value.id)
-    
+    const { error } = await supabase.from('password_sessions').delete().eq('id', currentSession.value.id)
     if (error) throw error
-    
     passwordSessions.value = passwordSessions.value.filter(s => s.id !== currentSession.value!.id)
     logout()
+    uiStore.addToast('Kasa başarıyla silindi', 'info')
   } catch (err) {
-    console.error('Error deleting session:', err)
+    uiStore.addToast('Kasa silinirken hata oluştu', 'error')
   } finally {
     isLoading.value = false
   }
@@ -819,29 +632,27 @@ const deleteCurrentSession = async () => {
 
 const editNote = (note: SecureNote) => {
   editingNote.value = { ...note }
+  showDialogPassword.value = false // Form açılırken gizli başlasın
   showAddNoteDialog.value = true
 }
 
 const editSession = (session: PasswordSession) => {
-  // This function is now only called from within the session
-  // so we can assume the user is logged in
   editingSession.value = { ...session }
+  showEditSessionPassword.value = false
   showPasswordVerification.value = true
 }
 
 const verifyPassword = async () => {
   if (!verificationPassword.value.trim()) return
-  
   isVerifyingPassword.value = true
   verificationError.value = ''
-  
   try {
     if (verificationPassword.value.trim() === currentSession.value?.password_hash) {
       showPasswordVerification.value = false
       showSessionDialog.value = true
       verificationPassword.value = ''
     } else {
-      verificationError.value = 'Invalid password. Please try again.'
+      verificationError.value = t('secure.invalidVerification')
     }
   } finally {
     isVerifyingPassword.value = false
@@ -861,128 +672,76 @@ const closeNoteDialog = () => {
 
 const saveNote = async () => {
   isLoading.value = true
-  
   try {
     if (editingNote.value.id) {
-      // Update existing note
-      const { error } = await supabase
-        .from('secure_notes')
-        .update({
-          title: editingNote.value.title,
-          description: editingNote.value.description,
-          type: editingNote.value.type,
-          username: editingNote.value.username,
-          password_encrypted: editingNote.value.password_encrypted,
-          url: editingNote.value.url,
-          content: editingNote.value.content
-        })
-        .eq('id', editingNote.value.id)
+      const { error } = await supabase.from('secure_notes').update({
+        title: editingNote.value.title, description: editingNote.value.description, type: editingNote.value.type,
+        username: editingNote.value.username, password_encrypted: editingNote.value.password_encrypted,
+        url: editingNote.value.url, content: editingNote.value.content
+      }).eq('id', editingNote.value.id)
       
       if (error) throw error
-      
       const index = secureNotes.value.findIndex(n => n.id === editingNote.value.id)
-      if (index !== -1) {
-        secureNotes.value[index] = { ...editingNote.value } as SecureNote
-      }
+      if (index !== -1) secureNotes.value[index] = { ...editingNote.value } as SecureNote
+      uiStore.addToast('Kayıt güncellendi', 'success')
     } else {
-      // Create new note
-      const authStore = useAuthStore()
       const userId = authStore.user?.id || null
-      
-      const { data, error } = await supabase
-        .from('secure_notes')
-        .insert([
-          {
-            created_by: userId,
-            title: editingNote.value.title,
-            description: editingNote.value.description,
-            type: editingNote.value.type,
-            username: editingNote.value.username,
-            password_encrypted: editingNote.value.password_encrypted,
-            url: editingNote.value.url,
-            content: editingNote.value.content,
-            session_id: currentSession.value?.id
-          }
-        ])
-        .select()
+      const { data, error } = await supabase.from('secure_notes').insert([{
+        created_by: userId, title: editingNote.value.title, description: editingNote.value.description, type: editingNote.value.type,
+        username: editingNote.value.username, password_encrypted: editingNote.value.password_encrypted, url: editingNote.value.url,
+        content: editingNote.value.content, session_id: currentSession.value?.id
+      }]).select()
       
       if (error) throw error
-      if (data && data[0]) {
-        secureNotes.value.unshift(data[0])
-      }
+      if (data && data[0]) secureNotes.value.unshift(data[0])
+      uiStore.addToast('Kayıt eklendi', 'success')
     }
-    
     closeNoteDialog()
   } catch (err) {
-    console.error('Error saving note:', err)
+    uiStore.addToast('Kayıt sırasında hata oluştu', 'error')
   } finally {
     isLoading.value = false
   }
 }
 
 const deleteNote = async (id: string) => {
-  if (!confirm('Are you sure you want to delete this secure note?')) return
+  const isConfirmed = await uiStore.showConfirm('Kaydı Sil', t('secure.deleteNoteConfirm'), 'Sil', t('secure.cancel'))
+  if (!isConfirmed) return 
   
   isLoading.value = true
   try {
-    const { error } = await supabase
-      .from('secure_notes')
-      .delete()
-      .eq('id', id)
-    
+    const { error } = await supabase.from('secure_notes').delete().eq('id', id)
     if (error) throw error
     secureNotes.value = secureNotes.value.filter(n => n.id !== id)
+    uiStore.addToast('Kayıt başarıyla silindi', 'info')
   } catch (err) {
-    console.error('Error deleting note:', err)
+    uiStore.addToast('Silinirken bir hata oluştu', 'error')
   } finally {
     isLoading.value = false
   }
 }
 
-const copyToClipboard = async (text: string) => {
+const copyToClipboard = async (text: string, type: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    // You could add a toast notification here
+    uiStore.addToast(`${type} kopyalandı!`, 'success')
   } catch (e) {
-    console.error('Failed to copy to clipboard:', e)
+    uiStore.addToast('Kopyalama başarısız', 'error')
   }
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString()
+  const currentLang = t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US'
+  return new Date(date).toLocaleDateString(currentLang, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-// Watch for dialog changes
-watch(showAddNoteDialog, (show) => {
-  if (show) {
-    noteDialog.value?.showModal()
-  } else {
-    noteDialog.value?.close()
-  }
-})
+watch(showAddNoteDialog, (show) => { if (show) noteDialog.value?.showModal(); else noteDialog.value?.close() })
+watch(showSessionDialog, (show) => { if (show) sessionDialog.value?.showModal(); else sessionDialog.value?.close() })
+watch(showPasswordVerification, (show) => { if (show) passwordVerificationDialog.value?.showModal(); else passwordVerificationDialog.value?.close() })
 
-watch(showSessionDialog, (show) => {
-  if (show) {
-    sessionDialog.value?.showModal()
-  } else {
-    sessionDialog.value?.close()
-  }
-})
-
-watch(showPasswordVerification, (show) => {
-  if (show) {
-    passwordVerificationDialog.value?.showModal()
-  } else {
-    passwordVerificationDialog.value?.close()
-  }
-})
-
-onMounted(() => {
-  loadPasswordSessions()
-})
+onMounted(() => { loadPasswordSessions() })
 </script>
 
 <style scoped>
-/* Add any custom styles here */
+/* Modal vs içindeki gereksiz titremeler veya z-index hatalarını gidermek için standart bir stil */
 </style>
-

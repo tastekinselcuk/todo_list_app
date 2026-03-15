@@ -48,6 +48,15 @@ export interface QuickNote {
   completed: boolean;
 }
 
+export interface CodeSnippet {
+  id: string;
+  title: string;
+  language: string;
+  code: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const defaultCategories: Category[] = [
   { id: '1', name: 'Work', color: '#EF4444', icon: 'briefcase' },
   { id: '2', name: 'Personal', color: '#3B82F6', icon: 'user' },
@@ -62,23 +71,27 @@ export const useTodoStore = defineStore('todo', () => {
   const savedData = localStorage.getItem(STORAGE_KEY)
   const initialData = savedData ? JSON.parse(savedData) : {
     todos: [],
-    categories: defaultCategories
+    categories: defaultCategories,
+    quickNotes: [],
+    codeSnippets: [],
   }
 
   const todos = ref<Todo[]>(initialData.todos)
   const categories = ref<Category[]>(initialData.categories)
   const quickNotes = ref<QuickNote[]>(initialData.quickNotes || [])
+  const codeSnippets = ref<CodeSnippet[]>(initialData.codeSnippets || [])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
   // Watch for changes and save to localStorage (fallback)
   watch(
-    [todos, categories, quickNotes],
+    [todos, categories, quickNotes, codeSnippets],
     () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         todos: todos.value,
         categories: categories.value,
-        quickNotes: quickNotes.value
+        quickNotes: quickNotes.value,
+        codeSnippets: codeSnippets.value,
       }))
     },
     { deep: true }
@@ -544,15 +557,148 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
+  // ===== CODE SNIPPETS OPERATIONS =====
+  const fetchCodeSnippets = async () => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { data, error: err } = await supabase
+        .from('code_snippets')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (err) throw err
+      codeSnippets.value = (data || []).map(snippet => ({
+        id: snippet.id,
+        title: snippet.title || 'Untitled snippet',
+        language: snippet.language || 'plaintext',
+        code: snippet.code || '',
+        createdAt: snippet.created_at,
+        updatedAt: snippet.updated_at
+      }))
+    } catch (err) {
+      error.value = (err as Error).message
+      console.error('Error fetching code snippets:', err)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const addCodeSnippet = async (snippet: Omit<CodeSnippet, 'id' | 'createdAt' | 'updatedAt'>) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const userId = await getCurrentUserId()
+      const { data, error: err } = await supabase
+        .from('code_snippets')
+        .insert([
+          {
+            created_by: userId,
+            title: snippet.title,
+            language: snippet.language,
+            code: snippet.code
+          }
+        ])
+        .select()
+
+      if (err) throw err
+
+      if (data && data[0]) {
+        codeSnippets.value.unshift({
+          id: data[0].id,
+          title: data[0].title || 'Untitled snippet',
+          language: data[0].language || 'plaintext',
+          code: data[0].code || '',
+          createdAt: data[0].created_at,
+          updatedAt: data[0].updated_at
+        })
+      }
+
+      return { success: true }
+    } catch (err) {
+      error.value = (err as Error).message
+      console.error('Error adding code snippet:', err)
+      return { success: false, message: error.value || 'Failed to add code snippet' }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const updateCodeSnippet = async (
+    id: string,
+    updates: Partial<Pick<CodeSnippet, 'title' | 'language' | 'code'>>
+  ) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { data, error: err } = await supabase
+        .from('code_snippets')
+        .update({
+          title: updates.title,
+          language: updates.language,
+          code: updates.code,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (err) throw err
+
+      const index = codeSnippets.value.findIndex(snippet => snippet.id === id)
+      if (index !== -1) {
+        codeSnippets.value[index] = {
+          id: data.id,
+          title: data.title || 'Untitled snippet',
+          language: data.language || 'plaintext',
+          code: data.code || '',
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        }
+      }
+
+      return { success: true }
+    } catch (err) {
+      error.value = (err as Error).message
+      console.error('Error updating code snippet:', err)
+      return { success: false, message: error.value || 'Failed to update code snippet' }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const deleteCodeSnippet = async (id: string) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { error: err } = await supabase
+        .from('code_snippets')
+        .delete()
+        .eq('id', id)
+
+      if (err) throw err
+      codeSnippets.value = codeSnippets.value.filter(snippet => snippet.id !== id)
+      return { success: true }
+    } catch (err) {
+      error.value = (err as Error).message
+      console.error('Error deleting code snippet:', err)
+      return { success: false, message: error.value || 'Failed to delete code snippet' }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     todos,
     categories,
     quickNotes,
+    codeSnippets,
     isLoading,
     error,
     fetchCategories,
     fetchTodos,
     fetchQuickNotes,
+    fetchCodeSnippets,
     addTodo,
     toggleTodo,
     deleteTodo,
@@ -566,5 +712,8 @@ export const useTodoStore = defineStore('todo', () => {
     addQuickNote,
     deleteQuickNote,
     toggleQuickNote,
+    addCodeSnippet,
+    updateCodeSnippet,
+    deleteCodeSnippet,
   }
 })

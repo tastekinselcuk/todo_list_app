@@ -1,163 +1,110 @@
 <template>
-  <div class="bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-border space-y-4">
-    <div class="border-b">
-      <div class="flex gap-4">
+  <div class="bg-card/60 backdrop-blur-3xl text-card-foreground px-5 pb-5 pt-4 sm:px-8 sm:pb-8 sm:pt-6 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/10 dark:border-white/5 space-y-6 relative overflow-hidden">
+    
+    <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="relative z-10 flex justify-center w-full">
+      <div class="inline-flex items-center gap-1 p-1 bg-muted/50 backdrop-blur-md rounded-2xl border border-border/50 overflow-x-auto hide-scrollbar max-w-full">
         <button
           v-for="tab in tabs"
           :key="tab.id"
           @click="activeTab = tab.id"
-          class="px-4 py-2 -mb-px font-medium text-sm transition-colors"
+          class="relative px-5 py-2 text-sm font-medium rounded-xl transition-all duration-300 whitespace-nowrap"
           :class="[
             activeTab === tab.id
-              ? 'border-b-2 border-primary text-primary'
-              : 'text-muted-foreground hover:text-foreground'
+              ? 'text-foreground shadow-sm ring-1 ring-border/50'
+              : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
           ]"
         >
-          {{ tab.name }}
+          <div 
+            v-if="activeTab === tab.id" 
+            class="absolute inset-0 bg-background rounded-xl -z-10 transition-all duration-300 shadow-sm"
+          ></div>
+          <span class="relative z-10">{{ $t(`workspace.modules.${tab.id}Name`) }}</span>
         </button>
       </div>
     </div>
 
-    <div v-if="activeTab === 'quick'" class="space-y-4">
-      <div class="flex gap-2">
-        <input
-          v-model="quickNote"
-          @keyup.enter="addQuickNote"
-          type="text"
-          placeholder="Type a quick note and press Enter..."
-          class="flex-1 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground px-3 py-2"
-        />
-        <button
-          @click="addQuickNote"
-          class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          Add
-        </button>
+    <div class="relative z-10">
+      <div v-if="activeTab === 'quick'">
+        <QuickNotes />
+      </div>
+      <div v-else-if="activeTab === 'secure'" class="animate-in fade-in zoom-in-95 duration-500">
+        <SecureNotes />
+      </div>
+      <div v-else-if="activeTab === 'code'" class="animate-in fade-in zoom-in-95 duration-500">
+        <CodeSnippets />
+      </div>
+      <div v-else-if="activeTab === 'learning'" class="animate-in fade-in zoom-in-95 duration-500">
+        <LearningTracker />
+      </div>
+      <div v-else-if="activeTab === 'flashcards'" class="animate-in fade-in zoom-in-95 duration-500">
+        <Flashcards />
+      </div>
+      <div v-else-if="activeTab === 'workout'" class="animate-in fade-in zoom-in-95 duration-500">
+        <WorkoutTracker />
       </div>
       
-      <div class="space-y-3">
-        <template v-for="(group, dateKey) in groupedNotes" :key="dateKey">
-          <!-- Date Header -->
-          <div class="flex items-center gap-2 pt-2 first:pt-0">
-            <div :class="['h-px flex-1', group.dividerColor]"></div>
-            <span :class="['text-xs font-medium px-2', group.headerColor]">
-              {{ formatDateHeader(dateKey) }}
-            </span>
-            <div :class="['h-px flex-1', group.dividerColor]"></div>
-          </div>
-          
-          <!-- Notes for this date -->
-          <div
-            v-for="note in group.notes"
-            :key="note.id"
-            @click="todoStore.toggleQuickNote(note.id)"
-            :class="[
-              'flex items-center justify-between p-3 rounded-md border transition-all cursor-pointer group',
-              group.bgColor,
-              'border-muted hover:opacity-90',
-              note.completed && 'opacity-60'
-            ]"
-          >
-            <span :class="[note.completed && 'line-through text-muted-foreground']">
-              {{ note.content }}
-            </span>
-            <button
-              @click.stop="todoStore.deleteQuickNote(note.id)"
-              class="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 hover:text-destructive ml-2"
-            >
-              <Trash2 class="h-4 w-4" />
-            </button>
-          </div>
-        </template>
-        
-        <div v-if="todoStore.quickNotes.length === 0" class="text-center py-8 text-muted-foreground">
-          <p>No quick notes yet. Add one above!</p>
-        </div>
+      <div v-else class="animate-in fade-in zoom-in-95 duration-500">
+        <slot />
       </div>
     </div>
-
-    <div v-else-if="activeTab === 'secure'">
-      <SecureNotes />
-    </div>
-    <div v-else>
-      <slot />
-    </div>
+    
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Trash2 } from 'lucide-vue-next'
-import { useTodoStore } from '@/stores/todo'
+import { ref, computed, defineAsyncComponent, watch } from 'vue'
+import { useSettingsStore } from '@/stores/settings'
+
+// Modülleri içe aktarma
+import QuickNotes from './QuickNotes.vue'
 import SecureNotes from './SecureNotes.vue'
+const LearningTracker = defineAsyncComponent(() => import('./LearningTracker.vue'))
+const CodeSnippets = defineAsyncComponent(() => import('./CodeSnippets.vue'))
+const Flashcards = defineAsyncComponent(() => import('./Flashcards.vue'))
+const WorkoutTracker = defineAsyncComponent(() => import('./WorkoutTracker.vue'))
 
-const todoStore = useTodoStore()
-const activeTab = ref('detailed')
-const quickNote = ref('')
+const settingsStore = useSettingsStore()
 
-const tabs = [
-  { id: 'detailed', name: 'Detailed Notes' },
-  { id: 'quick', name: 'Quick Notes' },
-  { id: 'secure', name: 'Secure Notes' },
-]
-
-const getTodayKey = () => {
-  const today = new Date()
-  return today.toISOString().split('T')[0]
-}
-
-const getDateKey = (isoDate: string) => {
-  return isoDate.split('T')[0]
-}
-
-const formatDateHeader = (dateKey: string) => {
-  const date = new Date(dateKey + 'T00:00:00')
-  const today = new Date(getTodayKey() + 'T00:00:00')
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
-
-  if (dateKey === getTodayKey()) {
-    return 'Today'
-  } else if (dateKey === yesterday.toISOString().split('T')[0]) {
-    return 'Yesterday'
-  } else {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined })
+const props = defineProps({
+  initialTab: {
+    type: String,
+    default: 'detailed'
   }
-}
-
-const groupedNotes = computed(() => {
-  const groups: Record<string, { notes: typeof todoStore.quickNotes; bgColor: string; headerColor: string; dividerColor: string }> = {}
-  
-  // Group notes by date
-  todoStore.quickNotes.forEach(note => {
-    const dateKey = getDateKey(note.createdAt)
-    if (!groups[dateKey]) {
-      groups[dateKey] = { notes: [], bgColor: '', headerColor: '', dividerColor: '' }
-    }
-    groups[dateKey].notes.push(note)
-  })
-  
-  // Sort by date descending (newest first) with uniform styling
-  const sortedGroups: typeof groups = {}
-  const sortedKeys = Object.keys(groups)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-  
-  sortedKeys.forEach((key) => {
-    sortedGroups[key] = {
-      notes: groups[key].notes,
-      bgColor: 'bg-muted/40',
-      headerColor: 'text-muted-foreground',
-      dividerColor: 'bg-border'
-    }
-  })
-  
-  return sortedGroups
 })
 
-const addQuickNote = () => {
-  if (quickNote.value.trim()) {
-    todoStore.addQuickNote(quickNote.value)
-    quickNote.value = ''
+const activeTab = ref(props.initialTab)
+
+const allTabs = [
+  { id: 'detailed' },
+  { id: 'quick' },
+  { id: 'secure' },
+  { id: 'code' },
+  { id: 'learning' },
+  { id: 'flashcards' },
+  { id: 'workout' }
+]
+
+const tabs = computed(() => {
+  return allTabs.filter(tab => settingsStore.isModuleActive(tab.id))
+})
+
+watch(() => props.initialTab, (newVal) => {
+  if (tabs.value.find(t => t.id === newVal)) {
+    activeTab.value = newVal
   }
-}
+})
+
+watch(tabs, (newTabs) => {
+  const isCurrentTabStillActive = newTabs.find(t => t.id === activeTab.value)
+  if (!isCurrentTabStillActive && newTabs.length > 0) {
+    activeTab.value = newTabs[0].id
+  }
+})
 </script>
+
+<style scoped>
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>

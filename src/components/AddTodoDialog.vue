@@ -11,7 +11,7 @@
       class="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-card text-card-foreground p-6 shadow-lg sm:rounded-lg"
     >
       <div class="flex justify-between items-center">
-        <h2 class="text-lg font-semibold">Add New Task</h2>
+        <h2 class="text-lg font-semibold">{{ $t('todo.addNewTask') }}</h2>
         <button
           @click="$emit('update:open', false)"
           class="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -23,7 +23,7 @@
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div class="space-y-2">
           <label for="title" class="text-sm font-medium">
-            Title
+            {{ $t('todo.title') }}
           </label>
           <input
             id="title"
@@ -36,7 +36,7 @@
         
         <div class="space-y-2">
           <label for="description" class="text-sm font-medium">
-            Description
+            {{ $t('todo.description') }}
           </label>
           <textarea
             id="description"
@@ -49,7 +49,7 @@
           <div class="space-y-2">
             <label for="dueDate" class="text-sm font-medium flex items-center gap-2">
               <Calendar class="h-4 w-4" />
-              Due Date
+              {{ $t('todo.dueDate') }}
             </label>
             <input
               id="dueDate"
@@ -61,37 +61,24 @@
           
           <div class="space-y-2">
             <label for="priority" class="text-sm font-medium">
-              Priority
+              {{ $t('todo.priority') }}
             </label>
-            <select
-              id="priority"
-              v-model="priority"
-              class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
+            <CustomSelect
+              :modelValue="priority"
+              @update:modelValue="priority = $event as 'low'|'medium'|'high'"
+              :options="priorityOptions"
+            />
           </div>
         </div>
         
         <div class="space-y-2">
           <label for="category" class="text-sm font-medium">
-            Category
+            {{ $t('todo.category') }}
           </label>
-          <select
-            id="category"
+          <CustomSelect
             v-model="categoryId"
-            class="w-full rounded-md border border-input bg-background text-foreground px-3 py-2"
-          >
-            <option
-              v-for="category in todoStore.categories"
-              :key="category.id"
-              :value="category.id"
-            >
-              {{ category.name }}
-            </option>
-          </select>
+            :options="categoryOptions"
+          />
         </div>
         
         <div class="flex justify-end">
@@ -99,7 +86,7 @@
             type="submit"
             class="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2"
           >
-            Add Task
+            {{ $t('todo.addTask') }}
           </button>
         </div>
       </form>
@@ -108,9 +95,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Calendar, X } from 'lucide-vue-next'
 import { useTodoStore } from '@/stores/todo'
+import { useI18n } from 'vue-i18n'
+import CustomSelect from './ui/CustomSelect.vue'
 
 // Add prop definition for open
 defineProps<{
@@ -122,6 +111,17 @@ const emit = defineEmits<{
 }>()
 
 const todoStore = useTodoStore()
+const { t } = useI18n()
+
+const priorityOptions = computed(() => [
+  { value: 'low', label: t('todo.low') },
+  { value: 'medium', label: t('todo.medium') },
+  { value: 'high', label: t('todo.high') }
+])
+
+const categoryOptions = computed(() =>
+  todoStore.categories.map(cat => ({ value: cat.id, label: cat.name }))
+)
 
 const title = ref('')
 const description = ref('')
@@ -134,7 +134,7 @@ const handleSubmit = () => {
   const selectedCategoryId = categoryId.value || todoStore.categories[0]?.id || ''
   
   if (!selectedCategoryId) {
-    alert('Please select a category or create one first')
+    alert(t('todo.categoryRequired')) // <-- ÇEVİRİ EKLENDİ
     return
   }
 
