@@ -23,21 +23,23 @@
           class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300"
           :class="currentView === 'dashboard' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
         >
-          <LayoutDashboard class="w-4 h-4" /> <span class="hidden sm:inline">Home</span>
+          <LayoutDashboard class="w-4 h-4" /> <span class="hidden sm:inline">{{ $t('app.home') }}</span>
         </button>
+        
         <button
           @click="currentView = 'workspace'"
           class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300"
           :class="currentView === 'workspace' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
         >
-          <Briefcase class="w-4 h-4" /> <span class="hidden sm:inline">Workspace</span>
+          <Briefcase class="w-4 h-4" /> <span class="hidden sm:inline">{{ $t('app.workspace') }}</span>
         </button>
+        
         <button
           @click="currentView = 'settings'"
           class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300"
           :class="currentView === 'settings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
         >
-          <Settings2 class="w-4 h-4" /> <span class="hidden sm:inline">Settings</span>
+          <Settings2 class="w-4 h-4" /> <span class="hidden sm:inline">{{ $t('app.settings') }}</span>
         </button>
       </div>
 
@@ -89,8 +91,8 @@
               @collapse="isNavbarExpanded = false"
             />
             
-            <TodoList :initialTab="targetWorkspaceTab" />
-            <AddTodoDialog v-model:open="showAddTodoDialog" />
+            <WorkspaceTabs :initialTab="targetWorkspaceTab" />
+            
           </div>
         </div>
 
@@ -109,32 +111,26 @@ import { Settings2, LayoutDashboard, Briefcase, LogOut } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useSettingsStore } from '@/stores/settings'
-import { useUIStore } from '@/stores/ui' // YENİ: Çıkış yaparken onay istemek için eklenebilir
+import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 
-import DashboardHome from '@/components/DashboardHome.vue'
-import TodoList from '@/components/TodoList.vue'
-import AddTodoDialog from '@/components/AddTodoDialog.vue'
-import LoginSignup from '@/components/LoginSignup.vue'
-import PomodoroTimer from '@/components/PomodoroTimer.vue'
-import WorkspaceCustomizer from '@/components/WorkspaceCustomizer.vue'
-
-// YENİ: UI Bileşenleri
-import ToastContainer from '@/components/ToastContainer.vue'
-import ConfirmModal from '@/components/ConfirmModal.vue'
+import DashboardHome from '@/views/DashboardHome.vue'
+import WorkspaceTabs from '@/views/WorkspaceTabs.vue'
+import LoginSignup from '@/views/LoginSignup.vue'
+import PomodoroTimer from "@/features/pomodoro/components/PomodoroTimer.vue"
+import WorkspaceCustomizer from '@/views/WorkspaceCustomizer.vue'
+import ToastContainer from '@/components/ui/ToastContainer.vue'
+import ConfirmModal from '@/components/ui/ConfirmModal.vue'
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const settingsStore = useSettingsStore()
-const uiStore = useUIStore() // YENİ
+const uiStore = useUIStore()
 const { t } = useI18n()
 
-const showAddTodoDialog = ref(false)
 const isNavbarExpanded = ref(false)
-
 const currentView = ref<'dashboard' | 'workspace' | 'settings'>('dashboard')
 const targetWorkspaceTab = ref('detailed')
-
 const isNavbarVisible = ref(true)
 let lastScrollPosition = 0
 
@@ -181,13 +177,12 @@ watch(() => authStore.isAuthenticated, async (isAuth) => {
   }
 })
 
-// GÜNCELLENDİ: Çıkış yaparken çirkin confirm yerine bizim modern Confirm Modal'ı kullanıyoruz
 const handleLogout = async () => {
   const isConfirmed = await uiStore.showConfirm(
-    t('app.signOut'), // Başlık (Emin misiniz vb.)
-    t('app.signOutConfirmDesc', 'Hesabınızdan çıkış yapmak istediğinize emin misiniz?'), // Açıklama
-    t('app.signOut', 'Çıkış Yap'), // Onay Butonu
-    t('todo.cancel', 'İptal') // İptal Butonu
+    t('app.signOut'),
+    t('app.signOutConfirmDesc'),
+    t('app.signOut'),
+    t('common.cancel')
   )
 
   if (isConfirmed) {
@@ -197,14 +192,12 @@ const handleLogout = async () => {
     currentView.value = 'dashboard'
     isNavbarVisible.value = true 
     
-    // YENİ: Çıkış başarılı toast'ı
-    uiStore.addToast('Başarıyla çıkış yapıldı.', 'success')
+    uiStore.addToast(t('app.signOutSuccess'), 'success')
   }
 }
 </script>
 
 <style>
-/* Görünüm geçişleri için animasyon */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);

@@ -1,9 +1,57 @@
 export default {
-  app: {
+app: {
     loading: 'Yükleniyor...',
     signOut: 'Çıkış Yap',
     customizeWorkspace: 'Çalışma Alanını Özelleştir',
-    backToWorkspace: 'Çalışma Alanına Dön'
+    backToWorkspace: 'Çalışma Alanına Dön',
+    signOutConfirmDesc: 'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
+    signOutSuccess: 'Başarıyla çıkış yapıldı.',
+    home: 'Ana Sayfa',
+    workspace: 'Çalışma Alanı',
+    settings: 'Ayarlar',
+  },
+  common: {
+    delete: 'Sil',
+    cancel: 'İptal',
+    save: 'Kaydet',
+    edit: 'Düzenle',
+    confirm: 'Onayla',
+    success: 'Başarılı',
+    error: 'Hata',
+    warning: 'Uyarı',
+    info: 'Bilgi'
+  },
+  auth: {
+    title: 'TodoFlow',
+    subtitle: 'Notlarınızı yönetin, notlarınızı güvene alın',
+    signIn: 'Giriş Yap',
+    signUp: 'Kayıt Ol',
+    email: 'E-posta Adresi',
+    emailPlaceholder: 'siz{\'@\'}ornek.com',
+    password: 'Şifre',
+    passwordPlaceholder: '••••••••',
+    confirmPassword: 'Şifre (Tekrar)',
+    forgotPassword: 'Şifrenizi mi unuttunuz?',
+    resetPasswordTitle: 'Şifreyi Sıfırla',
+    resetPasswordDesc: "Şifrenizi sıfırlamanız için size bir bağlantı göndereceğiz.",
+    sendResetLink: 'Sıfırlama Linki Gönder',
+    termsIntro: 'Kayıt olarak şunları kabul etmiş olursunuz:',
+    termsOfService: 'Kullanım Koşulları',
+    and: 've',
+    privacyPolicy: 'Gizlilik Politikası',
+    errors: {
+      fillFields: 'Lütfen tüm alanları doldurun',
+      passwordsNotMatch: 'Şifreler eşleşmiyor',
+      passwordLength: 'Şifre en az 6 karakter olmalıdır',
+      loginFailed: 'Giriş başarısız',
+      signupFailed: 'Kayıt başarısız',
+      emailRequired: 'Lütfen e-posta adresinizi girin',
+      resetFailed: 'Sıfırlama e-postası gönderilemedi'
+    },
+    success: {
+      signup: 'Kayıt başarılı! Lütfen e-postanızı kontrol edin.',
+      resetLinkSent: 'Şifre sıfırlama bağlantısı için e-postanızı kontrol edin'
+    }
   },
   workspace: {
     title: 'Çalışma Alanı Ayarları',
@@ -19,8 +67,8 @@ export default {
     inactive: 'Pasif',
     modules: {
       dashboardName: 'Ana Pano',
-      detailedName: 'Görev Yöneticisi',
-      detailedDesc: 'Kategoriler, öncelikler, bitiş tarihleri ve sürükle-bırak sıralaması ile gelişmiş görev yönetimi.',
+      detailedName: 'Detaylı Notlar',
+      detailedDesc: 'Kategoriler, öncelikler, bitiş tarihleri ve sürükle-bırak sıralaması ile gelişmiş not yönetimi.',
       quickName: 'Hızlı Notlar',
       quickDesc: 'Tarihe göre gruplandırılmış şimşek hızında günlük notlar. Anlık düşünceler ve günlük kayıtlar için mükemmel.',
       secureName: 'Güvenli Kasa',
@@ -34,25 +82,24 @@ export default {
       flashcardsName: 'Bilgi Kartları',
       flashcardsDesc: 'Desteler oluşturun, 3D çevirmeli kartlar ve otomatik testlerle kelimeleri veya kavramları ezberleyin.',
       workoutName: 'Antrenman Takipçisi',
-      workoutDesc: 'Antrenman rutinleri oluşturun, görsel kütüphaneden egzersizler seçin ve günlük fitness ilerlemenizi takip edin.'
+      workoutDesc: 'Antrenman rutinleri oluşturun, görsel kütüphaneden egzersizler seçin ve günlük fitness ilerlemenizi takip edin.',
+      periodicName: 'Periyodik Görevler',
+      periodicDesc: 'Günlük ve haftalık periyodik görevleri planlayın, takip edin ve tamamlayın. Düzenli rutinler ve alışkanlıklar için ideal.'
     }
   },
-  // YENİ EKLENEN KISIM:
   todo: {
     filters: 'Filtreler',
-    addTodo: 'Görev Ekle',
+    addTodo: 'Not Ekle',
     addCategory: 'Kategori Ekle',
-    allPriorities: 'Tüm Öncelikler',
+    allPriorities: 'Tümü',
     lowPriority: 'Düşük Öncelik',
     mediumPriority: 'Orta Öncelik',
     highPriority: 'Yüksek Öncelik',
-    showCompleted: 'Tamamlananları Göster',
-    hideCompleted: 'Tamamlananları Gizle',
-    groupNotes: 'Notları Grupla',
-    ungroupNotes: 'Gruplamayı Kaldır',
+    showCompleted: 'Tamamlananlar',
+    groupNotes: 'Grupla',
     clearFilters: 'Filtreleri Temizle',
     dragToReorder: 'Sıralamak için sürükle',
-    editTask: 'Görevi Düzenle',
+    editTask: 'Notu Düzenle',
     title: 'Başlık',
     description: 'Açıklama',
     dueDate: 'Bitiş Tarihi',
@@ -77,16 +124,36 @@ export default {
     yesterday: 'Dün',
     daysAgo: '{days}g önce',
     weeksAgo: '{weeks}h önce',
-    addNewTask: 'Yeni Görev Ekle',
-    addTask: 'Görev Ekle',
+    addNewTask: 'Yeni Not Ekle',
+    addTask: 'Not Ekle',
     categoryRequired: 'Lütfen bir kategori seçin veya önce bir tane oluşturun',
+    selectCategory: 'Kategori Seç',
+    addNewCategory: 'Yeni Kategori Ekle',
+    drafting: 'Detay giriliyor...',
+    descriptionPlaceholder: 'Not detayı girin... (Opsiyonel)',
+    save: 'Kaydet',
+    all: 'Tümü',
+    noTasks: 'Not bulunamadı',
+    taskAdded: 'Not eklendi',
+    taskUpdated: 'Not güncellendi',
+    categoryAdded: 'Kategori eklendi',
+    deleteCategory: 'Kategoriyi Sil',
+    delete: 'Sil',
+    categoryDeleted: 'Kategori silindi',
+    deleteTask: 'Notu Sil',
+    deleteTaskConfirm: 'Bu notu kalıcı olarak silmek istediğinize emin misiniz?',
+    taskDeleted: 'Not silindi'
   },
   quickNotes: {
     placeholder: 'Hızlı bir not yazın ve Enter\'a basın...',
     add: 'Ekle',
-    noNotes: 'Henüz hızlı not yok. Yukarıdan bir tane ekleyin!'
+    noNotes: 'Henüz hızlı not yok. Yukarıdan bir tane ekleyin!',
+    deleteConfirmTitle: 'Notu Sil',
+    deleteConfirmDesc: 'Bu hızlı notu silmek istediğinize emin misiniz?',
+    noteAdded: 'Not başarıyla eklendi',
+    noteDeleted: 'Not silindi'
   },
-pomodoro: {
+  pomodoro: {
     title: 'Odak Zamanlayıcı',
     focus: 'Odak',
     shortBreak: 'Kısa Mola',
@@ -176,7 +243,7 @@ pomodoro: {
     invalidVerification: 'Geçersiz şifre. Lütfen tekrar deneyin.',
     deleteNoteConfirm: 'Bu güvenli notu silmek istediğinize emin misiniz?',
     copySuccess: 'Panoya kopyalandı!'
-},
+  },
   code: {
     title: 'Kod Kütüphanesi',
     savedSnippets: '{count} kayıtlı parça',
@@ -221,7 +288,7 @@ pomodoro: {
     scoreDesc: '{total} sorudan {correct} tanesini doğru bildiniz',
     backToStudyMode: 'Çalışma Moduna Dön',
     deleteDeckConfirm: 'Bu desteyi ve içindeki tüm kartları silmek istiyor musunuz?'
-},
+  },
   learning: {
     title: 'Öğrenme Takipçisi',
     subtitle: 'Müfredatınızı takip edin ve konularda uzmanlaşın',
@@ -242,7 +309,7 @@ pomodoro: {
     addTopicPlaceholder: 'Yeni konu/ünite ekle ve Enter\'a bas...',
     deleteSubject: 'Dersi Sil',
     deleteConfirm: 'Bu dersi ve içindeki tüm konuları silmek istediğinize emin misiniz?'
-},
+  },
   workout: {
     title: 'Antrenman Takipçisi',
     subtitle: 'Rutinler oluşturun, ilerlemeyi izleyin, formda kalın',
@@ -280,14 +347,43 @@ pomodoro: {
     deleteRoutineConfirm: 'Bu rutini silmek istediğinize emin misiniz?',
     apiError: 'Hareketler çekilirken bir hata oluştu. Lütfen API limitinizi veya ağ bağlantınızı kontrol edin.'
   },
-  dashboard: {
+periodicTasks: {
+    title: 'Periyodik Görevler',
+    subtitle: 'Tekrarlayan rutinlerinizi planlayın ve takip edin',
+    placeholder: 'Örn: Haftalık raporları kontrol et...',
+    add: 'Rutin Ekle',
+    daily: 'Her Gün',
+    weekly: 'Belirli Günler',
+    todayTasks: 'Bugünün Rutinleri',
+    weeklyPlanner: 'Haftalık Planlayıcı',
+    backToToday: 'Bugüne Dön',
+    viewAll: 'Tümünü Gör / Düzenle',
+    noTasksToday: 'Bugün için planlanmış bir rutin yok!',
+    weeklyOn: 'Haftalık:',
+    deleteConfirmTitle: 'Rutini Sil',
+    deleteConfirmDesc: 'Bu rutini kalıcı olarak silmek istediğinize emin misiniz? (Haftalık planlayıcıdan da tamamen silinecektir)',
+    added: 'Rutin başarıyla eklendi',
+    deleted: 'Rutin silindi',
+    taskToggled: 'Rutin durumu güncellendi'
+  },
+  days: {
+    sun: 'Pz',
+    mon: 'Pzt',
+    tue: 'Sal',
+    wed: 'Çrş',
+    thu: 'Prş',
+    fri: 'Cum',
+    sat: 'Cmt'
+  },
+dashboard: {
     goodMorning: 'Günaydın',
+    welcome:'Hoş geldin',
     goodAfternoon: 'Tünaydın',
     goodEvening: 'İyi akşamlar',
     overviewSubtitle: 'İşte bugünkü çalışma alanı özetiniz.',
     goToModule: 'Detayları Gör',
     tasks: {
-      pending: 'Bekleyen Görev',
+      pending: 'Bekleyen Not',
       dueToday: 'bugün bitmesi gereken'
     },
     quickNotes: {
@@ -298,7 +394,7 @@ pomodoro: {
       activeSessions: 'Aktif Oturum',
       locked: 'kasa kilitli'
     },
-    codeLibrary: {
+    code: {
       snippets: 'Kod Parçacığı',
       reusable: 'yeniden kullanılabilir'
     },

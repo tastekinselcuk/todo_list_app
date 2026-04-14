@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { useAuthStore } from './auth'
+import { i18n } from '@/i18n'
 import { supabase } from '@/lib/supabase'
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -21,7 +22,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   watch(language, (newVal) => {
     localStorage.setItem('ui_language', newVal)
-    // İleride vue-i18n eklersen dil değiştirme tetikleyicisini buraya koyabilirsin
+    // Vue-i18n locale'i güncelle
+    if (i18n.global) {
+      i18n.global.locale.value = newVal
+    }
   })
 
 
@@ -38,7 +42,8 @@ export const useSettingsStore = defineStore('settings', () => {
     'pomodoro', 
     'learning', 
     'flashcards', 
-    'workout'
+    'workout',
+    'periodic'
   ]
   const activeModules = ref<string[]>([...defaultModules])
   const isSettingsLoaded = ref(false)

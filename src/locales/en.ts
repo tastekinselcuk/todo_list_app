@@ -1,9 +1,57 @@
 export default {
-  app: {
+app: {
     loading: 'Loading...',
     signOut: 'Sign Out',
     customizeWorkspace: 'Customize Workspace',
-    backToWorkspace: 'Back to Workspace'
+    backToWorkspace: 'Back to Workspace',
+    signOutConfirmDesc: 'Are you sure you want to sign out?',
+    signOutSuccess: 'Successfully signed out.',
+    home: 'Home',
+    workspace: 'Workspace',
+    settings: 'Settings',
+  },
+  common: {
+    delete: 'Delete',
+    cancel: 'Cancel',
+    save: 'Save',
+    edit: 'Edit',
+    confirm: 'Confirm',
+    success: 'Success',
+    error: 'Error',
+    warning: 'Warning',
+    info: 'Info'
+  },
+  auth: {
+    title: 'TodoFlow',
+    subtitle: 'Manage your notes, secure your information',
+    signIn: 'Sign In',
+    signUp: 'Sign Up',
+    email: 'Email Address',
+    emailPlaceholder: 'you{\'@\'}example.com',
+    password: 'Password',
+    passwordPlaceholder: '••••••••',
+    confirmPassword: 'Confirm Password',
+    forgotPassword: 'Forgot your password?',
+    resetPasswordTitle: 'Reset Password',
+    resetPasswordDesc: "We'll send you an email with a link to reset your password.",
+    sendResetLink: 'Send Reset Link',
+    termsIntro: 'By signing up, you agree to our',
+    termsOfService: 'Terms of Service',
+    and: 'and',
+    privacyPolicy: 'Privacy Policy',
+    errors: {
+      fillFields: 'Please fill in all fields',
+      passwordsNotMatch: 'Passwords do not match',
+      passwordLength: 'Password must be at least 6 characters',
+      loginFailed: 'Login failed',
+      signupFailed: 'Signup failed',
+      emailRequired: 'Please enter your email address',
+      resetFailed: 'Failed to send reset email'
+    },
+    success: {
+      signup: 'Signup successful! Please check your email.',
+      resetLinkSent: 'Check your email for password reset link'
+    }
   },
   workspace: {
     title: 'Workspace Settings',
@@ -19,8 +67,8 @@ export default {
     inactive: 'Inactive',
     modules: {
       dashboardName: 'Dashboard',
-      detailedName: 'Task Manager',
-      detailedDesc: 'Advanced task management with categories, priorities, due dates, and drag-and-drop ordering.',
+      detailedName: 'Detailed Notes',
+      detailedDesc: 'Advanced note management with categories, priorities, due dates, and drag-and-drop ordering.',
       quickName: 'Quick Notes',
       quickDesc: 'Lightning-fast daily notes grouped by date. Perfect for fleeting thoughts and daily logs.',
       secureName: 'Secure Vault',
@@ -34,24 +82,24 @@ export default {
       flashcardsName: 'Flashcards',
       flashcardsDesc: 'Create decks, memorize vocabulary or concepts with 3D flip cards and automated testing.',
       workoutName: 'Workout Tracker',
-      workoutDesc: 'Create workout routines, choose exercises from the visual library, and track your daily fitness progress.'
+      workoutDesc: 'Create workout routines, choose exercises from the visual library, and track your daily fitness progress.',
+      periodicName: 'Periodic Tasks',
+      periodicDesc: 'Plan and track daily and weekly recurring tasks. Ideal for habits, routines, and regular check-ins.'
     }
   },
   todo: {
     filters: 'Filters',
-    addTodo: 'Add Todo',
+    addTodo: 'Add Note',
     addCategory: 'Add Category',
-    allPriorities: 'All Priorities',
+    allPriorities: 'All',
     lowPriority: 'Low Priority',
     mediumPriority: 'Medium Priority',
     highPriority: 'High Priority',
-    showCompleted: 'Show Completed',
-    hideCompleted: 'Hide Completed',
-    groupNotes: 'Group Notes',
-    ungroupNotes: 'Ungroup Notes',
+    showCompleted: 'Completed',
+    groupNotes: 'Group',
     clearFilters: 'Clear Filters',
     dragToReorder: 'Drag to reorder',
-    editTask: 'Edit Task',
+    editTask: 'Edit Note',
     title: 'Title',
     description: 'Description',
     dueDate: 'Due Date',
@@ -76,16 +124,36 @@ export default {
     yesterday: 'Yesterday',
     daysAgo: '{days}d ago',
     weeksAgo: '{weeks}w ago',
-    addNewTask: 'Add New Task',
-    addTask: 'Add Task',
+    addNewTask: 'Add New Note',
+    addTask: 'Add Note',
     categoryRequired: 'Please select a category or create one first',
+    selectCategory: 'Select Category',
+    addNewCategory: 'Add New Category',
+    drafting: 'Drafting...',
+    descriptionPlaceholder: 'Enter note details... (Optional)',
+    save: 'Save',
+    all: 'All',
+    noTasks: 'No notes found',
+    taskAdded: 'Note added',
+    taskUpdated: 'Note updated',
+    categoryAdded: 'Category added',
+    deleteCategory: 'Delete Category',
+    delete: 'Delete',
+    categoryDeleted: 'Category deleted',
+    deleteTask: 'Delete Note',
+    deleteTaskConfirm: 'Are you sure you want to permanently delete this note?',
+    taskDeleted: 'Note deleted'
   },
   quickNotes: {
     placeholder: 'Type a quick note and press Enter...',
     add: 'Add',
-    noNotes: 'No quick notes yet. Add one above!'
+    noNotes: 'No quick notes yet. Add one above!',
+    deleteConfirmTitle: 'Delete Note',
+    deleteConfirmDesc: 'Are you sure you want to delete this quick note?',
+    noteAdded: 'Note added successfully',
+    noteDeleted: 'Note deleted'
   },
-pomodoro: {
+  pomodoro: {
     title: 'Pomodoro Timer',
     focus: 'Focus',
     shortBreak: 'Short Break',
@@ -241,7 +309,7 @@ pomodoro: {
     addTopicPlaceholder: 'Add new topic/unit and press Enter...',
     deleteSubject: 'Delete Subject',
     deleteConfirm: 'Are you sure you want to delete this entire subject and all its topics?'
-},
+  },
   workout: {
     title: 'Workout Tracker',
     subtitle: 'Build routines, track progress, stay fit',
@@ -279,14 +347,43 @@ pomodoro: {
     deleteRoutineConfirm: 'Are you sure you want to delete this routine?',
     apiError: 'Error fetching exercises. Please check your API limit or network connection.'
   },
-  dashboard: {
+periodicTasks: {
+    title: 'Periodic Tasks',
+    subtitle: 'Plan and track your recurring routines',
+    placeholder: 'e.g., Check weekly reports...',
+    add: 'Add Routine',
+    daily: 'Every Day',
+    weekly: 'Specific Days',
+    todayTasks: 'Today\'s Routines',
+    weeklyPlanner: 'Weekly Planner',
+    backToToday: 'Back to Today',
+    viewAll: 'View All / Edit',
+    noTasksToday: 'No routines scheduled for today!',
+    weeklyOn: 'Weekly on',
+    deleteConfirmTitle: 'Delete Routine',
+    deleteConfirmDesc: 'Are you sure you want to permanently delete this routine? (It will be removed from the weekly planner as well)',
+    added: 'Routine added successfully',
+    deleted: 'Routine deleted',
+    taskToggled: 'Routine status updated'
+  },
+  days: {
+    sun: 'Sun',
+    mon: 'Mon',
+    tue: 'Tue',
+    wed: 'Wed',
+    thu: 'Thu',
+    fri: 'Fri',
+    sat: 'Sat'
+  },
+dashboard: {
     goodMorning: 'Good morning',
+    welcome:'Welcome',
     goodAfternoon: 'Good afternoon',
     goodEvening: 'Good evening',
     overviewSubtitle: 'Here is your workspace overview for today.',
     goToModule: 'View Details',
     tasks: {
-      pending: 'Pending Tasks',
+      pending: 'Pending Notes',
       dueToday: 'due today'
     },
     quickNotes: {
@@ -297,7 +394,7 @@ pomodoro: {
       activeSessions: 'Active Sessions',
       locked: 'vault is locked'
     },
-    codeLibrary: {
+    code: {
       snippets: 'Code Snippets',
       reusable: 'reusable blocks'
     },

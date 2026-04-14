@@ -1,15 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import {
-  signUp,
-  signIn,
-  signOut,
-  getCurrentUser,
-  onAuthStateChange,
-  resetPassword,
-  updatePassword,
-  type AuthUser
-} from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
+
+export interface AuthUser {
+  id: string
+  email: string
+  createdAt: string
+}
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<AuthUser | null>(null)
@@ -21,8 +18,12 @@ export const useAuthStore = defineStore('auth', () => {
   const initializeAuth = async () => {
     isLoading.value = true
     try {
-      const currentUser = await getCurrentUser()
-      user.value = currentUser
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser()
+      if (supabaseUser) {
+        user.value = { id: supabaseUser.id, email: supabaseUser.email || '', createdAt: supabaseUser.created_at }
+      } else {
+        user.value = null
+      }
     } catch (err) {
       console.error('Error initializing auth:', err)
     } finally {
@@ -32,8 +33,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Subscribe to auth state changes
   const setupAuthListener = () => {
-    onAuthStateChange((authUser) => {
-      user.value = authUser
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      const supabaseUser = session?.user
+      if (supabaseUser) {
+        user.value = { id: supabaseUser.id, email: supabaseUser.email || '', createdAt: supabaseUser.created_at }
+      } else {
+        user.value = null
+      }
     })
   }
 
@@ -42,12 +48,13 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const result = await signUp(email, password)
-      if (!result.success) {
-        error.value = result.error || 'Signup failed'
-        return { success: false, message: error.value }
-      }
-      return { success: true, message: result.message }
+      const { error: supabaseError } = await supabase.auth.signUp({ email, password })
+      if (supabaseError) throw supabaseError
+      
+      return { success: true, message: 'Signup successful! Check your email for confirmation.' }
+    } catch (err) {
+      error.value = (err as Error).message
+      return { success: false, message: error.value }
     } finally {
       isLoading.value = false
     }
@@ -58,13 +65,14 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const result = await signIn(email, password)
-      if (!result.success) {
-        error.value = result.error || 'Login failed'
-        return { success: false, message: error.value }
-      }
-      user.value = result.user ?? null
+      const { data, error: supabaseError } = await supabase.auth.signInWithPassword({ email, password })
+      if (supabaseError) throw supabaseError
+      
+      user.value = data.user ? { id: data.user.id, email: data.user.email || '', createdAt: data.user.created_at } : null
       return { success: true }
+    } catch (err) {
+      error.value = (err as Error).message
+      return { success: false, message: error.value }
     } finally {
       isLoading.value = false
     }
@@ -75,13 +83,13 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const result = await signOut()
-      if (!result.success) {
-        error.value = result.error || 'Logout failed'
-        return { success: false }
-      }
+      const { error: supabaseError } = await supabase.auth.signOut()
+      if (supabaseError) throw supabaseError
       user.value = null
       return { success: true }
+    } catch (err) {
+      error.value = (err as Error).message
+      return { success: false }
     } finally {
       isLoading.value = false
     }
@@ -92,12 +100,14 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const result = await resetPassword(email)
-      if (!result.success) {
-        error.value = result.error || 'Failed to send reset email'
-        return { success: false, message: error.value }
-      }
-      return { success: true, message: result.message }
+      const { error: supabaseError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      })
+      if (supabaseError) throw supabaseError
+      return { success: true, message: 'Password reset email sent. Check your email.' }
+    } catch (err) {
+      error.value = (err as Error).message
+      return { success: false, message: error.value }
     } finally {
       isLoading.value = false
     }
@@ -108,28 +118,19 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const result = await updatePassword(newPassword)
-      if (!result.success) {
-        error.value = result.error || 'Failed to update password'
-        return { success: false, message: error.value }
-      }
-      return { success: true, message: result.message }
+      const { error: supabaseError } = await supabase.auth.updateUser({ password: newPassword })
+      if (supabaseError) throw supabaseError
+      return { success: true, message: 'Password updated successfully!' }
+    } catch (err) {
+      error.value = (err as Error).message
+      return { success: false, message: error.value }
     } finally {
       isLoading.value = false
     }
   }
 
   return {
-    user,
-    isLoading,
-    error,
-    isAuthenticated,
-    initializeAuth,
-    setupAuthListener,
-    signup,
-    login,
-    logout,
-    sendPasswordReset,
-    changePassword
+    user, isLoading, error, isAuthenticated,
+    initializeAuth, setupAuthListener, signup, login, logout, sendPasswordReset, changePassword
   }
 })
