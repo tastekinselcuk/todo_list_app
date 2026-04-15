@@ -24,7 +24,7 @@ export const useSettingsStore = defineStore('settings', () => {
     localStorage.setItem('ui_language', newVal)
     // Vue-i18n locale'i güncelle
     if (i18n.global) {
-      i18n.global.locale.value = newVal
+      i18n.global.locale.value = newVal as "en" | "tr"
     }
   })
 

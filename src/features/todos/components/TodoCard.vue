@@ -160,7 +160,7 @@ const props = defineProps<{
   categoryName: string
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   toggle: []
   delete: []
 }>()

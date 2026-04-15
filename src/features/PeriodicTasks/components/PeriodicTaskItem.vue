@@ -38,7 +38,7 @@
     <button
       @click.stop="$emit('delete', task.id)"
       class="opacity-0 group-hover/task:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all flex-shrink-0 ml-2"
-      title="Delete Routine"
+      title="Rutini Sil"
     >
       <Trash2 class="w-3.5 h-3.5" />
     </button>
@@ -49,19 +49,14 @@
 import { computed } from 'vue'
 import { Trash2, Repeat } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { usePeriodicTasksStore } from '../stores/periodicTasks';
+import { usePeriodicTasksStore, type PeriodicTask } from '../stores/periodicTasks';
 
 const { t } = useI18n()
 const taskStore = usePeriodicTasksStore()
 
+// Props tipini doğrudan Store'daki ana tip ile eşitledik
 const props = defineProps<{
-  task: {
-    id: string
-    title: string
-    frequency: 'daily' | 'weekly'
-    days_of_week?: number[] // Supabase'den gelen snake_case hali
-    completed_date?: string // Supabase'den gelen snake_case hali
-  }
+  task: PeriodicTask
 }>()
 
 defineEmits<{
@@ -74,7 +69,7 @@ const isCompletedToday = computed(() => {
   return props.task.completed_date === taskStore.getTodayDateString()
 })
 
-const getRecurrenceLabel = (task: any) => {
+const getRecurrenceLabel = (task: PeriodicTask) => {
   if (task.frequency === 'daily') return t('periodicTasks.daily') || 'Daily'
   
   if (task.frequency === 'weekly' && task.days_of_week) {

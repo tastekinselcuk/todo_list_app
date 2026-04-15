@@ -40,7 +40,6 @@ export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
 
   // Filter tasks that should appear today
   const todaysTasks = computed(() => {
-    const today = getTodayDateString()
     const dayOfWeek = getTodayDayOfWeek()
 
     return tasks.value.filter((task) => {
