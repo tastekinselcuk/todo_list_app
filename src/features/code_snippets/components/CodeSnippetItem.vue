@@ -1,6 +1,6 @@
 <template>
   <article
-    class="group rounded-xl border transition-all duration-300 bg-card/40 dark:bg-muted/5 relative z-10"
+    class="group rounded-xl border transition-all duration-300 bg-card/40 dark:bg-muted/5 relative z-10 select-custom"
     :class="[
       isExpanded 
         ? 'border-primary/30 shadow-md bg-card/70' 
@@ -76,15 +76,18 @@
         </div>
 
         <div v-else class="relative group/code">
-          <div class="absolute top-2 right-3 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity">
-            <button
-              @click.stop="copySnippet"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/20 text-[10px] font-bold tracking-widest uppercase backdrop-blur-md transition-all shadow-sm"
-            >
-              <Copy class="w-3 h-3" />
-              {{ $t('code.copy') }}
-            </button>
+          <div class="absolute top-0 right-0 left-0 bottom-0 pointer-events-none z-30">
+            <div class="sticky top-0 flex justify-end p-3 overflow-hidden">
+              <button
+                @click.stop="copySnippet"
+                class="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/10 text-zinc-300 hover:text-white hover:bg-primary/80 text-[10px] font-bold tracking-widest uppercase backdrop-blur-md transition-all shadow-lg opacity-0 group-hover/code:opacity-100"
+              >
+                <Copy class="w-3 h-3" />
+                {{ $t('code.copy') }}
+              </button>
+            </div>
           </div>
+          
           <pre class="m-0 p-5 text-[13px] leading-relaxed overflow-x-auto font-mono"><code class="hljs" v-html="highlightedCode"></code></pre>
         </div>
 
@@ -187,6 +190,12 @@ const copySnippet = () => emit('copy', props.snippet.code)
 </script>
 
 <style scoped>
+/* METİN SEÇİCİ RENGİ REVİZESİ */
+.select-custom ::selection {
+  background-color: rgba(59, 130, 246, 0.3); /* Primary renginin şeffaf hali */
+  color: #fff;
+}
+
 .slide-fade-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .slide-fade-leave-active { transition: all 0.2s cubic-bezier(0.4, 0, 1, 1); }
 .slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }

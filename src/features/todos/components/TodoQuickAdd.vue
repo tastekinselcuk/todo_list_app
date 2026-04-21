@@ -77,8 +77,8 @@
       </transition>
     </div>
 
-    <button
-      @click="$emit('open-category-dialog')"
+<button
+      @click.stop="$emit('open-category-dialog')"
       class="shrink-0 w-[44px] h-[44px] flex items-center justify-center rounded-xl bg-card/40 backdrop-blur-xl border border-border/50 hover:bg-primary/10 hover:border-primary/30 text-muted-foreground hover:text-primary shadow-sm transition-all group/add"
       :title="$t('todo.addNewCategory')"
     >
