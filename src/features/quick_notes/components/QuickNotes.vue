@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
     
-    <div class="flex gap-2.5 max-w-5xl w-full">
+    <div class="flex gap-2.5 workspace-content">
       <div class="relative flex-1 group">
         <input
           v-model="quickNote"
@@ -20,7 +20,7 @@
       </button>
     </div>
     
-    <div class="space-y-6 pt-2 max-w-5xl w-full">
+    <div class="space-y-6 pt-2 workspace-content">
       
       <template v-for="(group, dateKey) in groupedNotes" :key="dateKey">
         <div class="space-y-3 w-full">

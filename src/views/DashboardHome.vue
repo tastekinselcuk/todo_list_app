@@ -24,6 +24,8 @@
         <p class="text-sm text-muted-foreground mt-1 max-w-sm">{{ $t('dashboard.welcomeModule.desc') }}</p>
       </div>
 
+      <button v-if="settingsStore.isModuleActive('plans')" @click="$emit('enter-workspace', 'plans')" class="col-span-full flex items-center justify-between gap-4 rounded-2xl border border-border/50 bg-background/50 p-6 text-left hover:bg-muted/40 transition-colors"><div><h3 class="text-base font-semibold">{{ $t('workspace.modules.plansName') }}</h3><p class="mt-2 text-xs text-muted-foreground">{{ $t('workspace.modules.plansDesc') }}</p></div><ArrowRight class="w-5 h-5 shrink-0 text-muted-foreground" /></button>
+
       <div 
         v-if="settingsStore.isModuleActive('detailed')" 
         @click="$emit('enter-workspace', 'detailed')" 
@@ -170,21 +172,42 @@
         </div>
       </div>
 
+      <div 
+        v-if="settingsStore.isModuleActive('activities')" 
+        @click="$emit('enter-workspace', 'activities')" 
+        class="col-span-1 group relative overflow-hidden bg-background/50 backdrop-blur-xl rounded-2xl p-6 border border-border/50 shadow-sm hover:shadow-md hover:border-cyan-500/30 transition-all duration-300 cursor-pointer flex flex-col justify-between"
+      >
+        <div class="flex items-start justify-between mb-8 relative z-10">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20"><Clapperboard class="w-5 h-5" /></div>
+            <h3 class="text-base font-semibold text-foreground">{{ $t('workspace.modules.activitiesName') }}</h3>
+          </div>
+        </div>
+        <div class="relative z-10">
+          <div class="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            {{ activityWantCount }}
+          </div>
+          <p class="text-xs font-medium text-muted-foreground mt-1">{{ $t('dashboard.activities.want') }}</p>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 // İkonlar arasına Repeat eklendi
-import { CheckSquare, Zap, Shield, Target, Layers, Dumbbell, ArrowRight, LayoutGrid, Lock, Sparkles, Code2, Repeat } from 'lucide-vue-next'
+import { CheckSquare, Zap, Shield, Target, Layers, Dumbbell, ArrowRight, LayoutGrid, Lock, Sparkles, Code2, Repeat, Clapperboard } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useLearningStore } from '@/features/learning/stores/learning'
 import { useWorkoutStore } from '@/features/workout/stores/workout'
 import { useFlashcardStore } from '@/features/flashcards/stores/flashcards'
+import { usePeriodicTasksStore } from '@/features/PeriodicTasks/stores/periodicTasks'
+import { useActivityListsStore } from '@/features/activity_lists/stores/activityLists'
 
 defineEmits(['enter-workspace'])
 
@@ -195,6 +218,17 @@ const todoStore = useTodoStore()
 const learningStore = useLearningStore()
 const workoutStore = useWorkoutStore()
 const flashcardStore = useFlashcardStore()
+const periodicStore = usePeriodicTasksStore()
+const activityStore = useActivityListsStore()
+
+onMounted(() => {
+  if (settingsStore.isModuleActive('periodic')) {
+    periodicStore.loadTasks()
+  }
+  if (settingsStore.isModuleActive('activities')) {
+    activityStore.loadItems()
+  }
+})
 
 const userName = computed(() => {
   const email = authStore.user?.email || ''
@@ -202,9 +236,8 @@ const userName = computed(() => {
   return name.charAt(0).toUpperCase() + name.slice(1)
 })
 
-// activeModulesCount dizisine 'periodic' dahil edildi
 const activeModulesCount = computed(() => {
-  return ['detailed', 'quick', 'secure', 'code', 'learning', 'flashcards', 'workout', 'periodic']
+  return ['plans', 'detailed', 'quick', 'secure', 'code', 'learning', 'flashcards', 'workout', 'periodic', 'activities']
     .filter(mod => settingsStore.isModuleActive(mod)).length
 })
 
@@ -227,6 +260,6 @@ const tasksDueToday = computed(() => {
   return todoStore.todos.filter(t => !t.completed && t.dueDate === todayStr).length
 })
 
-// İleride store entegrasyonu yapıldığında bu veriyi ilgili storedan çekeceksiniz.
-const periodicTaskCount = computed(() => 0) 
+const periodicTaskCount = computed(() => periodicStore.todaysPending.length)
+const activityWantCount = computed(() => activityStore.wantCount)
 </script>

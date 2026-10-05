@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
     
-    <div v-if="!isAuthenticated" class="w-full max-w-6xl mx-auto space-y-6">
+    <div v-if="!isAuthenticated" style="--workspace-default-max:72rem" class="workspace-content mx-auto space-y-6">
       
       <div class="flex flex-col md:flex-row gap-2.5 w-full relative z-[60]" style="overflow: visible;">
         <div class="relative flex-1 group">
@@ -10,7 +10,7 @@
             v-model="inlineSessionName"
             type="text"
             :placeholder="$t('secure.sessionNamePlaceholder')"
-            class="w-full h-10 pl-10 pr-3 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-medium"
+            class="secure-field w-full h-10 pl-10 pr-3 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-medium"
             @keyup.enter="handleInlineAddSession"
           />
         </div>
@@ -21,7 +21,7 @@
             v-model="inlineSessionPassword"
             :type="showInlinePassword ? 'text' : 'password'"
             :placeholder="$t('secure.sessionPasswordPlaceholder')"
-            class="w-full h-10 pl-10 pr-10 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-mono"
+            class="secure-field w-full h-10 pl-10 pr-10 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-mono tracking-wide"
             @keyup.enter="handleInlineAddSession"
           />
           <button
@@ -42,7 +42,7 @@
           <Loader2 v-if="isLoading" class="w-3.5 h-3.5 animate-spin" />
           <Plus v-else class="w-3.5 h-3.5" />
           <span class="hidden sm:inline">{{ $t('secure.newSession') }}</span>
-          <span class="sm:hidden">Ekle</span>
+          <span class="sm:hidden">{{ $t('secure.addShort') }}</span>
         </button>
       </div>
 
@@ -77,7 +77,7 @@
       </div>
     </div>
 
-    <div v-else class="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-500">
+    <div v-else style="--workspace-default-max:72rem" class="workspace-content mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-500">
       
       <div class="flex flex-col sm:flex-row items-center justify-between bg-card/40 backdrop-blur-2xl p-4 sm:p-5 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/10 dark:border-white/5 gap-4 relative overflow-hidden">
         <div class="absolute -left-10 -top-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-[40px] pointer-events-none"></div>
@@ -89,7 +89,7 @@
           <div class="text-center sm:text-left">
             <h2 class="text-lg font-bold tracking-tight text-foreground">{{ currentSession?.name }}</h2>
             <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center justify-center sm:justify-start gap-1 mt-0.5">
-              <Lock class="w-3 h-3" /> AÇIK KASA
+              <Lock class="w-3 h-3" /> {{ $t('secure.vaultUnlocked') }}
             </p>
           </div>
         </div>
@@ -144,8 +144,8 @@
             <input
               v-model="unlockPassword"
               :type="showUnlockPassword ? 'text' : 'password'"
-              class="w-full h-11 rounded-xl border border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all font-mono"
-              :placeholder="$t('secure.enterPasswordPlaceholder', { name: selectedSessionForUnlock?.name })"
+              class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 text-foreground px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all font-mono tracking-wide"
+              :placeholder="$t('secure.enterPasswordPlaceholder')"
               required
               autofocus
             />
@@ -176,7 +176,7 @@
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-1.5 col-span-2 sm:col-span-1">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.title') }}</label>
-            <input v-model="editingNote.title" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
+            <input v-model="editingNote.title" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
           </div>
           <div class="space-y-1.5 col-span-2 sm:col-span-1">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.type') }}</label>
@@ -184,25 +184,27 @@
               :modelValue="editingNote.type"
               @update:modelValue="editingNote.type = $event as 'password' | 'secret'"
               :options="noteTypeOptions"
+              size="md"
+              class="secure-type-select h-11"
             />
           </div>
         </div>
         
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.descriptionOptional') }}</label>
-          <input v-model="editingNote.description" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.descPlaceholder')" />
+          <input v-model="editingNote.description" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
         </div>
         
         <div v-if="editingNote.type === 'password'" class="space-y-4 p-5 rounded-2xl bg-muted/30 border border-border/40">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.username') }}</label>
-              <input v-model="editingNote.username" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.usernamePlaceholder')" />
+              <input v-model="editingNote.username" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.password') }}</label>
               <div class="relative">
-                <input v-model="editingNote.password_encrypted" :type="showDialogPassword ? 'text' : 'password'" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.password')" />
+                <input v-model="editingNote.password_encrypted" :type="showDialogPassword ? 'text' : 'password'" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-10 text-sm font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="new-password" />
                 <button type="button" @click="showDialogPassword = !showDialogPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
                   <Eye v-if="showDialogPassword" class="h-3.5 w-3.5" />
                   <EyeOff v-else class="h-3.5 w-3.5" />
@@ -212,13 +214,13 @@
           </div>
           <div class="space-y-1.5">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.urlOptional') }}</label>
-            <input v-model="editingNote.url" type="url" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" placeholder="https://example.com" />
+            <input v-model="editingNote.url" type="url" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
           </div>
         </div>
         
         <div v-else class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.content') }}</label>
-          <textarea v-model="editingNote.content" class="w-full rounded-xl border border-border/50 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-none" :placeholder="$t('secure.contentSecretPlaceholder')" required></textarea>
+          <textarea v-model="editingNote.content" class="secure-field w-full rounded-xl border border-border/50 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-none font-mono" required></textarea>
         </div>
         
         <div class="flex justify-end gap-3 pt-4">
@@ -245,8 +247,7 @@
             <input
               v-model="verificationPassword"
               :type="showVerificationPassword ? 'text' : 'password'"
-              class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono transition-all"
-              :placeholder="$t('secure.currentPasswordPlaceholder')"
+              class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono tracking-wide transition-all"
               @keyup.enter="verifyPassword"
               required
             />
@@ -275,12 +276,12 @@
       <form @submit.prevent="saveSession" class="space-y-5">
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionName') }}</label>
-          <input v-model="editingSession.name" type="text" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" :placeholder="$t('secure.sessionNamePlaceholder')" required />
+          <input v-model="editingSession.name" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
         </div>
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionPasswordLabel') }}</label>
           <div class="relative">
-            <input v-model="editingSession.password_hash" :type="showEditSessionPassword ? 'text' : 'password'" class="w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono transition-all" :placeholder="$t('secure.sessionPasswordPlaceholder')" required />
+            <input v-model="editingSession.password_hash" :type="showEditSessionPassword ? 'text' : 'password'" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono tracking-wide transition-all" required autocomplete="new-password" />
             <button type="button" @click="showEditSessionPassword = !showEditSessionPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors">
               <Eye v-if="showEditSessionPassword" class="h-4 w-4" />
               <EyeOff v-else class="h-4 w-4" />
@@ -637,4 +638,17 @@ onMounted(() => { loadPasswordSessions() })
 </script>
 
 <style scoped>
+.secure-field::placeholder {
+  color: hsl(var(--muted-foreground) / 0.38);
+  font-weight: 400;
+}
+
+.secure-type-select :deep(button) {
+  height: 2.75rem;
+  min-height: 2.75rem;
+  background-color: hsl(var(--background) / 0.5);
+  border-color: hsl(var(--border) / 0.5);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
 </style>

@@ -15,34 +15,8 @@
         <Settings class="w-4 h-4" /> {{ $t('workspace.general') }}
       </h2>
       
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      <div class="grid grid-cols-1 gap-4 sm:gap-6">
         
-        <div class="group flex items-center justify-between p-5 rounded-[1.5rem] border border-border/40 bg-card/40 backdrop-blur-xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:bg-card/60 transition-all duration-500">
-          <div class="flex items-center gap-4">
-            <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
-              <Monitor class="w-5 h-5" />
-            </div>
-            <div>
-              <h3 class="font-bold text-foreground tracking-tight">{{ $t('workspace.wideWorkspace') }}</h3>
-              <p class="text-xs text-muted-foreground/80 mt-0.5">{{ $t('workspace.wideWorkspaceDesc') }}</p>
-            </div>
-          </div>
-          
-          <button
-            type="button"
-            @click="settingsStore.isFullScreen = !settingsStore.isFullScreen"
-            class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            :class="settingsStore.isFullScreen ? 'bg-primary' : 'bg-muted-foreground/30'"
-            role="switch"
-          >
-            <span
-              aria-hidden="true"
-              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-300 ease-in-out"
-              :class="settingsStore.isFullScreen ? 'translate-x-5' : 'translate-x-0'"
-            />
-          </button>
-        </div>
-
         <div class="group flex items-center justify-between p-5 rounded-[1.5rem] border border-border/40 bg-card/40 backdrop-blur-xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:bg-card/60 transition-all duration-500">
           <div class="flex items-center gap-4">
             <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/20 shadow-inner">
@@ -162,11 +136,11 @@ import {
   Target,
   Layers,
   Dumbbell,
-  Monitor,
   Globe,
   Settings,
   LayoutGrid,
-  Repeat // YENİ EKLENDİ
+  Repeat,
+  Clapperboard,
 } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
@@ -186,6 +160,10 @@ const handleLanguageChange = (newLang: string) => {
 }
 
 const availableModules = [
+  {
+    id: 'plans', icon: CheckSquare, isRequired: false,
+    theme: { border: 'border-stone-400/30', glow: 'bg-stone-500', iconBg: 'bg-stone-500/15 border-stone-500/20 text-stone-500', switch: 'bg-stone-500', text: 'text-stone-500' }
+  },
   {
     id: 'detailed',
     icon: CheckSquare,
@@ -282,7 +260,6 @@ const availableModules = [
       text: 'text-teal-500'
     }
   },
-  // YENİ EKLENEN MODÜL TEMASI
   {
     id: 'periodic',
     icon: Repeat,
@@ -293,6 +270,18 @@ const availableModules = [
       iconBg: 'bg-pink-500/15 border-pink-500/20 text-pink-500',
       switch: 'bg-pink-500',
       text: 'text-pink-500'
+    }
+  },
+  {
+    id: 'activities',
+    icon: Clapperboard,
+    isRequired: false,
+    theme: {
+      border: 'border-cyan-500/30',
+      glow: 'bg-cyan-500',
+      iconBg: 'bg-cyan-500/15 border-cyan-500/20 text-cyan-500',
+      switch: 'bg-cyan-500',
+      text: 'text-cyan-500'
     }
   }
 ]

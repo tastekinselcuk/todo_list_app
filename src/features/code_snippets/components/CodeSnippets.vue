@@ -1,9 +1,9 @@
 <template>
   <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
     
-    <div class="flex flex-col sm:flex-row gap-2.5 max-w-5xl w-full relative z-30">
-      <div class="relative flex-1 group">
-        <Code2 class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+    <div class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-30">
+      <div class="relative flex-1 min-w-0 group">
+        <Code2 class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50 pointer-events-none" />
         <input
           v-model="snippetForm.title"
           @keyup.enter="handleInitNewSnippet"
@@ -13,28 +13,18 @@
           :disabled="isDrafting"
         />
       </div>
-      
-      <div class="flex items-center gap-2">
-        <CustomSelect
-          v-model="snippetForm.language"
-          :options="languageSelectOptions"
-          size="sm"
-          variant="default"
-          class="w-[130px] h-10 z-30 relative"
-          :disabled="isDrafting"
-        />
-        <button
-          @click="handleInitNewSnippet"
-          class="h-10 px-5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm hover:shadow-lg transition-all disabled:opacity-50 text-xs flex items-center gap-1.5 shrink-0"
-          :disabled="!snippetForm.title.trim() || isDrafting"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          {{ $t('code.newSnippet') }}
-        </button>
-      </div>
+
+      <CustomSelect
+        v-model="snippetForm.language"
+        :options="languageSelectOptions"
+        size="md"
+        variant="default"
+        class="snippet-toolbar-select w-full sm:w-44 shrink-0 z-30 relative"
+        :disabled="isDrafting"
+      />
     </div>
 
-    <div class="space-y-4 pt-2 max-w-5xl w-full relative z-20" style="overflow: visible;">
+    <div class="space-y-4 pt-2 workspace-content relative z-20" style="overflow: visible;">
       
       <transition name="slide-fade">
         <div v-if="isDrafting" class="rounded-xl border border-primary/30 bg-[#0d1117] shadow-lg flex flex-col animate-in slide-in-from-top-4 relative z-20">
@@ -107,7 +97,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Code2, Plus } from 'lucide-vue-next'
+import { Code2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n' 
 import { useUIStore } from '@/stores/ui' 
 import { useTodoStore, type CodeSnippet } from '@/features/todos/stores/todo'
@@ -229,6 +219,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.snippet-toolbar-select :deep(button) {
+  height: 2.5rem;
+  min-height: 2.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: hsl(var(--background) / 0.5);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border-color: hsl(var(--border) / 0.5);
+}
+
 .slide-fade-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .slide-fade-leave-active { transition: all 0.2s cubic-bezier(0.4, 0, 1, 1); }
 .slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }

@@ -129,8 +129,8 @@ const uiStore = useUIStore()
 const { t } = useI18n()
 
 const isNavbarExpanded = ref(false)
-const currentView = ref<'dashboard' | 'workspace' | 'settings'>('dashboard')
-const targetWorkspaceTab = ref('detailed')
+const currentView = ref<'dashboard' | 'workspace' | 'settings'>('workspace')
+const targetWorkspaceTab = ref('plans')
 const isNavbarVisible = ref(true)
 let lastScrollPosition = 0
 

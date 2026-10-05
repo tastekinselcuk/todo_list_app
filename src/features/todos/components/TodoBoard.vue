@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6 max-w-5xl mx-auto w-full animate-in fade-in zoom-in-95 duration-500">
+  <div class="space-y-6 workspace-content mx-auto animate-in fade-in zoom-in-95 duration-500">
     
     <TodoQuickAdd @open-category-dialog="showCategoryDialog = true" />
     <CategoryModal v-model:open="showCategoryDialog" />

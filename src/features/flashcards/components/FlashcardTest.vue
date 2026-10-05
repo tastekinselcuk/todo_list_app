@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full max-w-2xl mx-auto pt-4 space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+  <div style="--workspace-default-max:42rem" class="workspace-content mx-auto pt-4 space-y-6 animate-in slide-in-from-bottom-4 duration-500">
     <div class="flex items-center justify-between mb-8 bg-card/40 backdrop-blur-xl p-4 rounded-2xl border border-border/50 shadow-sm">
       <div class="flex items-center gap-3">
         <button @click="$emit('back')" class="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"><ArrowLeft class="w-4 h-4" /></button>

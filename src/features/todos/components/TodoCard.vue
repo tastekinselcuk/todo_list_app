@@ -2,7 +2,11 @@
   <div
     ref="itemRef"
     class="flex flex-col py-3 px-4 rounded-2xl border transition-all duration-300 group/item w-full relative overflow-hidden"
-    :class="todo.completed ? 'bg-muted/20 border-border/30 opacity-75' : 'bg-card/40 border-border/50 hover:border-primary/30 hover:shadow-sm'"
+    :class="[
+      todo.completed ? 'bg-muted/20 border-border/30 opacity-75' : 'bg-card/40 border-border/50 hover:border-primary/30 hover:shadow-sm',
+      !isExpanded ? 'cursor-pointer' : '',
+    ]"
+    @click="onCardClick"
   >
     <div v-if="!todo.completed" class="absolute inset-y-0 left-0 w-0.5" :style="{ backgroundColor: color }"></div>
 
@@ -29,7 +33,12 @@
             {{ todo.title }}
           </span>
 
-          <div v-if="!isExpanded && todo.description" class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 editor-content" v-html="todo.description"></div>
+          <p
+            v-if="!isExpanded && descriptionPreview"
+            class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 break-words"
+          >
+            {{ descriptionPreview }}
+          </p>
 
           <div v-if="!isExpanded" class="flex items-center gap-2.5 mt-1.5 flex-wrap">
             <span
@@ -63,22 +72,23 @@
         </div>
       </div>
 
-      <div class="flex items-center transition-opacity shrink-0 z-10" :class="isExpanded ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100'">
-        <button 
-          class="p-1.5 rounded-lg transition-colors" 
-          :class="isExpanded ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
-          @click.stop="toggleExpand"
+      <div
+        class="flex items-center shrink-0 z-10"
+        :class="isExpanded ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100'"
+        @click.stop
+      >
+        <button
+          type="button"
+          class="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+          @click.stop="$emit('delete')"
         >
-          <Edit class="w-4 h-4" />
-        </button>
-        <button class="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors ml-1" @click.stop="$emit('delete')">
           <Trash2 class="w-4 h-4" />
         </button>
       </div>
     </div>
 
     <transition name="expand">
-      <div v-if="isExpanded" class="w-full relative z-10 overflow-hidden">
+      <div v-if="isExpanded" class="w-full relative z-10 overflow-hidden" @click.stop>
         <div class="pt-4 mt-3 border-t border-border/30 space-y-4">
           
           <div class="space-y-1.5">
@@ -125,12 +135,17 @@
             </div>
           </div>
           
-          <div class="flex justify-end gap-2 pt-2">
-            <button @click="cancelEdit" class="px-4 py-2 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors">
+          <div class="flex justify-end gap-2 pt-2" @click.stop>
+            <button
+              type="button"
+              class="px-4 py-2 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors"
+              @click.stop="cancelEdit"
+            >
               {{ $t('common.cancel') || 'İptal' }}
             </button>
-            <button 
-              @click="saveEdit" 
+            <button
+              type="button"
+              @click.stop="saveEdit"
               :disabled="!isFormChanged || !editForm.title.trim()"
               class="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -145,14 +160,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue' // nextTick eklendi
-import { GripVertical, Check, ChevronsUp, Minus, ChevronDown, Calendar, Clock, Trash2, Edit } from 'lucide-vue-next'
+import { ref, watch, computed, nextTick } from 'vue'
+import { onClickOutside } from '@vueuse/core'
+import { GripVertical, Check, ChevronsUp, Minus, ChevronDown, Calendar, Clock, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { Todo } from '@/features/todos/stores/todo'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import RichTextEditor from './RichTextEditor.vue'
+
+const PREVIEW_MAX_CHARS = 160
 
 const props = defineProps<{
   todo: Todo
@@ -177,6 +195,30 @@ const editForm = ref<Todo>({ ...props.todo })
 
 const isFormChanged = computed(() => JSON.stringify(editForm.value) !== JSON.stringify(props.todo))
 
+/** Text-only preview: strip images/media; empty when description is image-only. */
+const descriptionPreview = computed(() => {
+  const html = props.todo.description
+  if (!html?.trim()) return ''
+
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    doc.querySelectorAll('img, picture, video, iframe, svg, figure').forEach((el) => el.remove())
+    const text = (doc.body.textContent || '').replace(/\s+/g, ' ').trim()
+    if (!text) return ''
+    if (text.length <= PREVIEW_MAX_CHARS) return text
+    return `${text.slice(0, PREVIEW_MAX_CHARS).trimEnd()}…`
+  } catch {
+    const stripped = html
+      .replace(/<img[\s\S]*?>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!stripped) return ''
+    if (stripped.length <= PREVIEW_MAX_CHARS) return stripped
+    return `${stripped.slice(0, PREVIEW_MAX_CHARS).trimEnd()}…`
+  }
+})
+
 const categoryOptions = computed(() => todoStore.categories.map(cat => ({ value: cat.id, label: cat.name })))
 const priorityOptions = computed(() => [
   { value: 'low', label: t('todo.low') },
@@ -184,22 +226,26 @@ const priorityOptions = computed(() => [
   { value: 'high', label: t('todo.high') }
 ])
 
-// YENİ: Expand alanı açıldığında scroll ve focus işlemi yapar
-watch(isExpanded, (expanded) => {
+watch(isExpanded, (expanded, _, onCleanup) => {
   if (expanded) {
-    // 1. Kullanıcı direkt yazabilsin diye başlık input'una odaklan
-    // preventScroll: true sayesinde tarayıcının aniden zıplamasını engelliyoruz
     nextTick(() => {
       titleInputRef.value?.focus({ preventScroll: true })
     })
 
-    // 2. CSS expand animasyonunun (0.35s) alan yaratmasını bekleyip sonra ortalıyoruz
     setTimeout(() => {
-      itemRef.value?.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center' 
+      itemRef.value?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
       })
-    }, 200) // Animasyonla uyumlu olması için 200ms bekletiyoruz
+    }, 200)
+
+    nextTick(() => {
+      if (!itemRef.value) return
+      const stop = onClickOutside(itemRef, () => {
+        closeEdit()
+      })
+      onCleanup(stop)
+    })
   }
 })
 
@@ -209,21 +255,26 @@ watch(() => props.todo, (newTodo) => {
   }
 }, { deep: true })
 
-const toggleExpand = () => {
-  if (!isExpanded.value) editForm.value = { ...props.todo }
-  isExpanded.value = !isExpanded.value
+const onCardClick = () => {
+  if (isExpanded.value) return
+  editForm.value = { ...props.todo }
+  isExpanded.value = true
+}
+
+const closeEdit = () => {
+  editForm.value = { ...props.todo }
+  isExpanded.value = false
 }
 
 const cancelEdit = () => {
-  editForm.value = { ...props.todo }
-  isExpanded.value = false
+  closeEdit()
 }
 
 const saveEdit = () => {
   if (!editForm.value.title.trim()) return
   todoStore.updateTodo({ ...editForm.value })
   uiStore.addToast(t('todo.taskUpdated') || 'Görev güncellendi', 'info')
-  isExpanded.value = false
+  closeEdit()
 }
 
 // Utils

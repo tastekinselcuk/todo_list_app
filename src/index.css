@@ -74,3 +74,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Module content follows the workspace width; dialogs keep their own limits. */
+.workspace-content {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--workspace-content-max, var(--workspace-default-max, 64rem));
+}

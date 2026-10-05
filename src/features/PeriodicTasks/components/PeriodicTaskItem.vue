@@ -1,60 +1,103 @@
 <template>
   <div
-    @click="$emit('toggle', task.id)"
-    class="flex items-center justify-between py-2.5 px-4 rounded-xl border transition-all duration-300 cursor-pointer group/task w-full"
+    class="group/task flex items-start gap-3 py-3 px-4 rounded-2xl border transition-all duration-300 w-full"
     :class="[
-      isCompletedToday 
-        ? 'bg-muted/30 border-border/30 opacity-80' 
-        : 'bg-card/40 dark:bg-muted/5 border-border/40 hover:border-primary/20 hover:shadow-md hover:bg-card/70'
+      done
+        ? 'bg-muted/25 border-border/30 opacity-75'
+        : 'bg-card/50 border-border/40 hover:border-primary/25 hover:shadow-sm'
     ]"
   >
-    <div class="flex items-center gap-3 flex-1 pr-3 min-w-0">
-      
-      <div 
-        class="flex-shrink-0 w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all duration-200"
-        :class="isCompletedToday ? 'bg-primary border-primary' : 'border-muted-foreground/40 group-hover/task:border-primary/50'"
-      >
-        <svg v-if="isCompletedToday" class="w-3 h-3 text-primary-foreground animate-in zoom-in duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-        </svg>
-      </div>
-      
-      <div class="flex flex-col min-w-0 flex-1">
-        <span 
-          :class="[
-            'font-semibold text-sm leading-snug transition-all duration-300 break-words w-full', 
-            isCompletedToday ? 'line-through text-muted-foreground/80' : 'text-foreground'
-          ]"
+    <button
+      type="button"
+      class="mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all"
+      :class="done ? 'bg-primary border-primary' : 'border-muted-foreground/40 hover:border-primary/50'"
+      :aria-label="done ? 'Undo' : 'Complete'"
+      @click="$emit('toggle', task.id)"
+    >
+      <Check v-if="done" class="w-3 h-3 text-primary-foreground" />
+    </button>
+
+    <div class="flex-1 min-w-0 space-y-1">
+      <div class="flex items-start justify-between gap-2">
+        <button
+          type="button"
+          class="text-left min-w-0"
+          @click="$emit('toggle', task.id)"
         >
-          {{ task.title }}
+          <p
+            class="text-sm font-semibold leading-snug break-words"
+            :class="done ? 'line-through text-muted-foreground' : 'text-foreground'"
+          >
+            {{ task.title }}
+          </p>
+        </button>
+
+        <div class="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity shrink-0">
+          <button
+            type="button"
+            class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+            :title="$t('periodicTasks.edit')"
+            @click="$emit('edit', task)"
+          >
+            <Pencil class="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            class="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            :title="$t('common.delete')"
+            @click="$emit('delete', task.id)"
+          >
+            <Trash2 class="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <p v-if="task.notes" class="text-xs text-muted-foreground/80 line-clamp-2">
+        {{ task.notes }}
+      </p>
+
+      <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <span
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
+          :class="categoryClass"
+        >
+          <component :is="categoryIcon" class="w-2.5 h-2.5" />
+          {{ $t(`periodicTasks.categories.${task.category}`) }}
         </span>
-        <span class="text-[10px] font-medium text-muted-foreground/60 mt-0.5 flex items-center gap-1">
-          <Repeat class="w-3 h-3" />
-          {{ getRecurrenceLabel(task) }}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-muted/60 text-muted-foreground">
+          <Repeat class="w-2.5 h-2.5" />
+          {{ recurrenceLabel }}
+        </span>
+        <span
+          v-if="task.reminder_time"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-muted/60 text-muted-foreground"
+        >
+          <Bell class="w-2.5 h-2.5" />
+          {{ task.reminder_time }}
+        </span>
+        <span
+          v-if="task.notify_email"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-muted/60 text-muted-foreground"
+        >
+          <Mail class="w-2.5 h-2.5" />
         </span>
       </div>
     </div>
-
-    <button
-      @click.stop="$emit('delete', task.id)"
-      class="opacity-0 group-hover/task:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all flex-shrink-0 ml-2"
-      title="Rutini Sil"
-    >
-      <Trash2 class="w-3.5 h-3.5" />
-    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Trash2, Repeat } from 'lucide-vue-next'
+import {
+  Check, Trash2, Pencil, Repeat, Bell, Mail,
+  Briefcase, HeartPulse, Leaf, Target, CircleDot,
+} from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { usePeriodicTasksStore, type PeriodicTask } from '../stores/periodicTasks';
+import {
+  type PeriodicTask,
+  isCompletedForPeriod,
+} from '../stores/periodicTasks'
 
-const { t } = useI18n()
-const taskStore = usePeriodicTasksStore()
-
-// Props tipini doğrudan Store'daki ana tip ile eşitledik
 const props = defineProps<{
   task: PeriodicTask
 }>()
@@ -62,29 +105,57 @@ const props = defineProps<{
 defineEmits<{
   toggle: [id: string]
   delete: [id: string]
+  edit: [task: PeriodicTask]
 }>()
 
-// Görev bugüne ait tarihte mi tamamlanmış kontrolü
-const isCompletedToday = computed(() => {
-  return props.task.completed_date === taskStore.getTodayDateString()
+const { t } = useI18n()
+
+const done = computed(() => isCompletedForPeriod(props.task))
+
+const categoryIcon = computed(() => {
+  const map = {
+    work: Briefcase,
+    health: HeartPulse,
+    habit: Leaf,
+    goal: Target,
+    other: CircleDot,
+  }
+  return map[props.task.category] || CircleDot
 })
 
-const getRecurrenceLabel = (task: PeriodicTask) => {
-  if (task.frequency === 'daily') return t('periodicTasks.daily') || 'Daily'
-  
-  if (task.frequency === 'weekly' && task.days_of_week) {
-    const daysMap = [
-      t('days.sun') || 'Sun',
-      t('days.mon') || 'Mon', 
-      t('days.tue') || 'Tue', 
-      t('days.wed') || 'Wed', 
-      t('days.thu') || 'Thu', 
-      t('days.fri') || 'Fri', 
-      t('days.sat') || 'Sat'
-    ]
-    const selectedDays = task.days_of_week.map((d: number) => daysMap[d]).join(', ')
-    return `${t('periodicTasks.weeklyOn') || 'Weekly on'} ${selectedDays}`
+const categoryClass = computed(() => {
+  const map: Record<string, string> = {
+    work: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
+    health: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+    habit: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    goal: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    other: 'bg-muted text-muted-foreground',
   }
-  return ''
-}
+  return map[props.task.category] || map.other
+})
+
+const recurrenceLabel = computed(() => {
+  const task = props.task
+  if (task.frequency === 'daily') return t('periodicTasks.daily')
+  if (task.frequency === 'weekly' && task.days_of_week?.length) {
+    const daysMap = [
+      t('days.sun'), t('days.mon'), t('days.tue'), t('days.wed'),
+      t('days.thu'), t('days.fri'), t('days.sat'),
+    ]
+    return `${t('periodicTasks.weeklyOn')} ${task.days_of_week.map((d) => daysMap[d]).join(', ')}`
+  }
+  if (task.frequency === 'monthly') {
+    return t('periodicTasks.monthlyOn', { day: String(task.day_of_month || 1) })
+  }
+  if (task.frequency === 'yearly') {
+    return t('periodicTasks.yearlyOn', {
+      day: String(task.day_of_month || 1),
+      month: String(task.month_of_year || 1),
+    })
+  }
+  if (task.frequency === 'custom') {
+    return t('periodicTasks.everyNDaysLabel', { n: String(task.interval_days || 1) })
+  }
+  return t(`periodicTasks.${task.frequency}`)
+})
 </script>

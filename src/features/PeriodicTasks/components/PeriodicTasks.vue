@@ -1,274 +1,304 @@
 <template>
-  <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
-    
-    <div class="flex flex-col gap-3 max-w-5xl w-full bg-card/40 border border-border/40 p-4 rounded-2xl shadow-sm">
-      <div class="flex gap-2.5 w-full">
-        <div class="relative flex-1 group">
-          <input
-            v-model="newTaskTitle"
-            @keyup.enter="addTask"
-            type="text"
-            :placeholder="$t('periodicTasks.placeholder') || 'Örn: Haftalık raporları kontrol et...'"
-            class="w-full h-10 pl-4 pr-3 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 focus:bg-background transition-all outline-none text-sm"
-          />
+  <div style="--workspace-default-max:48rem" class="workspace-content mx-auto space-y-5 animate-in fade-in duration-500">
+    <!-- Header + today's progress -->
+    <header class="space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-foreground">
+            {{ $t('periodicTasks.title') }}
+          </h2>
+          <p class="text-sm text-muted-foreground mt-0.5">
+            {{ $t('periodicTasks.subtitle') }}
+          </p>
         </div>
         <button
-          @click="addTask"
-          class="h-10 px-5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm hover:shadow-lg transition-all disabled:opacity-50 text-xs flex items-center justify-center gap-2"
-          :disabled="!newTaskTitle.trim() || (frequency === 'weekly' && selectedDays.length === 0) || taskStore.isLoading"
+          type="button"
+          class="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border text-xs font-medium transition-all"
+          :class="showForm
+            ? 'bg-muted border-border text-foreground'
+            : 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'"
+          @click="showForm = !showForm; editingTask = null"
         >
-          <span v-if="taskStore.isLoading" class="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full"></span>
-          {{ $t('periodicTasks.add') || 'Rutin Ekle' }}
+          <Plus v-if="!showForm" class="w-3.5 h-3.5" />
+          <X v-else class="w-3.5 h-3.5" />
+          {{ showForm ? $t('common.cancel') : $t('periodicTasks.add') }}
         </button>
       </div>
 
-      <div class="flex items-center gap-4 mt-1">
-        <select
-          v-model="frequency"
-          class="h-8 rounded-lg border border-input bg-background text-foreground px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-        >
-          <option value="daily">{{ $t('periodicTasks.daily') || 'Her Gün' }}</option>
-          <option value="weekly">{{ $t('periodicTasks.weekly') || 'Belirli Günler' }}</option>
-        </select>
-
-        <div v-if="frequency === 'weekly'" class="flex gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-          <button
-            v-for="day in weekDays"
-            :key="day.value"
-            @click="toggleDay(day.value)"
-            class="w-8 h-8 rounded-full text-[11px] font-medium transition-all flex items-center justify-center border"
-            :class="selectedDays.includes(day.value) 
-              ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
-              : 'bg-background/50 text-muted-foreground border-border/50 hover:bg-muted'"
-          >
-            {{ day.label }}
-          </button>
-        </div>
-      </div>
-    </div>
-    
-    <div class="space-y-4 pt-2 max-w-7xl w-full">
-      
-      <div class="flex items-center justify-between gap-3 w-full border-b border-border/40 pb-3">
-        <div class="flex items-center gap-3">
-          <div class="h-4 w-1 bg-primary rounded-full"></div>
-          <span class="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-            <CalendarCheck v-if="!showWeeklyPlanner" class="w-4 h-4" />
-            <LayoutGrid v-else class="w-4 h-4" />
-            {{ showWeeklyPlanner ? ($t('periodicTasks.weeklyPlanner') || 'Haftalık Planlayıcı') : ($t('periodicTasks.todayTasks') || "Bugünün Rutinleri") }}
+      <div class="rounded-2xl border border-border/40 bg-card/40 p-4 space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-medium text-muted-foreground">
+            {{ $t('periodicTasks.todayProgress') }}
+          </span>
+          <span class="font-semibold text-foreground">
+            {{ taskStore.todaysCompletedCount }}/{{ taskStore.todaysTasks.length }}
+            · {{ taskStore.progressPercent }}%
           </span>
         </div>
-        
-        <button 
-          @click="showWeeklyPlanner = !showWeeklyPlanner"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border"
-          :class="showWeeklyPlanner 
-            ? 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/20' 
-            : 'bg-background border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted'"
-        >
-          <ListTodo v-if="showWeeklyPlanner" class="w-3.5 h-3.5" />
-          <LayoutGrid v-else class="w-3.5 h-3.5" />
-          {{ showWeeklyPlanner ? ($t('periodicTasks.backToToday') || 'Bugüne Dön') : ($t('periodicTasks.viewAll') || 'Tümünü Gör / Düzenle') }}
-        </button>
-      </div>
-      
-      <div v-if="taskStore.isLoading && taskStore.tasks.length === 0" class="flex justify-center py-12 text-muted-foreground">
-         <span class="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full"></span>
-      </div>
-
-      <div v-else-if="!showWeeklyPlanner" class="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto w-full">
-        <div v-if="taskStore.todaysTasks.length > 0" class="grid grid-cols-1 gap-2 w-full">
-          <PeriodicTaskItem
-            v-for="task in taskStore.todaysTasks"
-            :key="task.id"
-            :task="task"
-            @toggle="toggleTask"
-            @delete="deleteTask"
+        <div class="h-2 rounded-full bg-muted overflow-hidden">
+          <div
+            class="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+            :style="{ width: `${taskStore.progressPercent}%` }"
           />
         </div>
-        <div v-else class="text-center py-10 flex flex-col items-center justify-center border border-dashed border-border/40 rounded-3xl bg-muted/5 w-full">
-          <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-            <CheckCircle class="w-5 h-5 text-emerald-500/60" />
-          </div>
-          <p class="text-sm font-medium text-muted-foreground">{{ $t('periodicTasks.noTasksToday') || 'Bugün için planlanmış bir rutin yok!' }}</p>
-        </div>
       </div>
+    </header>
 
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
-        <div 
-          v-for="day in plannerDays" 
-          :key="day.value" 
-          class="bg-card/40 border border-border/50 rounded-xl overflow-hidden flex flex-col h-[380px] shadow-sm hover:shadow-md transition-shadow"
-          :class="{'ring-1 ring-primary/30 bg-primary/5': currentDayOfWeek === day.value}"
-        >
-          <div class="bg-muted/30 border-b border-border/50 px-3 py-2.5 flex items-center justify-between">
-            <span class="font-semibold text-xs flex items-center gap-1.5" :class="currentDayOfWeek === day.value ? 'text-primary' : 'text-foreground'">
-              {{ day.label }}
-              <span v-if="currentDayOfWeek === day.value" class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-            </span>
-            <span class="text-[10px] font-medium bg-background border border-border/50 text-muted-foreground px-1.5 py-0.5 rounded-md">
-              {{ day.tasks.length }}
-            </span>
-          </div>
-          
-          <div class="p-2 overflow-y-auto flex-1 space-y-2 custom-scrollbar">
-            <div 
-              v-for="task in day.tasks" 
-              :key="task.id + day.value" 
-              class="group relative flex flex-col gap-1.5 bg-background/80 border border-border/40 p-2.5 rounded-lg text-xs transition-all hover:border-destructive/30 hover:shadow-sm"
-            >
-              <div class="flex items-start justify-between gap-2">
-                <span class="font-medium text-foreground/90 leading-tight break-words">{{ task.title }}</span>
-                <button 
-                  @click="deleteTask(task.id)" 
-                  class="opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-all shrink-0 rounded p-1" 
-                  title="Rutini Tamamen Sil"
-                >
-                  <Trash2 class="w-3 h-3" />
-                </button>
-              </div>
-              <div class="flex items-center gap-1 text-[9px] text-muted-foreground/70 font-medium">
-                <Repeat class="w-2.5 h-2.5" />
-                {{ task.frequency === 'daily' ? ($t('periodicTasks.daily') || 'Her Gün') : ($t('periodicTasks.weekly') || 'Haftalık') }}
-              </div>
-            </div>
-            
-            <div v-if="day.tasks.length === 0" class="h-full flex flex-col items-center justify-center text-muted-foreground/30 gap-2 opacity-50 pt-8">
-              <div class="w-8 h-8 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center">
-                <span class="text-[10px]">-</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
+    <!-- Browser notification banner -->
+    <div
+      v-if="browserPermission !== 'granted' && browserPermission !== 'unsupported'"
+      class="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3"
+    >
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-foreground">{{ $t('periodicTasks.enableNotificationsTitle') }}</p>
+        <p class="text-xs text-muted-foreground mt-0.5">{{ $t('periodicTasks.enableNotificationsDesc') }}</p>
       </div>
-
+      <button
+        type="button"
+        class="h-9 px-4 rounded-xl bg-foreground text-background text-xs font-semibold hover:opacity-90 shrink-0"
+        @click="enableBrowserNotifications"
+      >
+        {{ $t('periodicTasks.enableNotifications') }}
+      </button>
     </div>
+
+    <!-- Create / Edit form -->
+    <div
+      v-if="showForm || editingTask"
+      class="rounded-2xl border border-border/40 bg-card/50 p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300"
+    >
+      <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        {{ editingTask ? $t('periodicTasks.edit') : $t('periodicTasks.newRoutine') }}
+      </p>
+      <PeriodicTaskForm
+        :edit-task="editingTask"
+        :loading="taskStore.isLoading"
+        @submit="handleSubmit"
+        @cancel="closeForm"
+      />
+    </div>
+
+    <!-- Filters + view toggle -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          v-for="cat in categoryFilters"
+          :key="cat.id"
+          type="button"
+          class="px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all"
+          :class="categoryFilter === cat.id
+            ? 'bg-primary text-primary-foreground border-primary'
+            : 'bg-background/50 border-border/50 text-muted-foreground hover:text-foreground'"
+          @click="categoryFilter = cat.id"
+        >
+          {{ cat.label }}
+        </button>
+      </div>
+
+      <div class="flex rounded-xl border border-border/50 p-0.5 bg-muted/30 self-start">
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+          :class="viewMode === 'today' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'"
+          @click="viewMode = 'today'"
+        >
+          {{ $t('periodicTasks.todayTasks') }}
+        </button>
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+          :class="viewMode === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'"
+          @click="viewMode = 'all'"
+        >
+          {{ $t('periodicTasks.allRoutines') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="taskStore.isLoading && taskStore.tasks.length === 0" class="flex justify-center py-16">
+      <span class="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+    </div>
+
+    <!-- Task list -->
+    <div v-else class="space-y-2">
+      <PeriodicTaskItem
+        v-for="task in visibleTasks"
+        :key="task.id"
+        :task="task"
+        @toggle="toggleTask"
+        @delete="deleteTask"
+        @edit="startEdit"
+      />
+
+      <div
+        v-if="visibleTasks.length === 0"
+        class="text-center py-12 px-4 rounded-3xl border border-dashed border-border/40 bg-muted/5"
+      >
+        <div class="w-12 h-12 rounded-full bg-muted mx-auto mb-3 flex items-center justify-center">
+          <CalendarCheck class="w-5 h-5 text-muted-foreground/70" />
+        </div>
+        <p class="text-sm font-medium text-muted-foreground">
+          {{ emptyMessage }}
+        </p>
+        <button
+          v-if="!showForm"
+          type="button"
+          class="mt-3 text-xs font-semibold text-primary hover:underline"
+          @click="showForm = true"
+        >
+          {{ $t('periodicTasks.addFirst') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Free notification note -->
+    <p class="text-[11px] text-muted-foreground/70 leading-relaxed px-1">
+      {{ $t('periodicTasks.notificationNote') }}
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { CalendarCheck, CheckCircle, LayoutGrid, ListTodo, Trash2, Repeat } from 'lucide-vue-next'
-import { useUIStore } from '@/stores/ui'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Plus, X, CalendarCheck } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { usePeriodicTasksStore } from '../stores/periodicTasks';
+import { useUIStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
+import {
+  usePeriodicTasksStore,
+  type PeriodicTask,
+  type PeriodicTaskInput,
+  type TaskCategory,
+} from '../stores/periodicTasks'
 import PeriodicTaskItem from './PeriodicTaskItem.vue'
+import PeriodicTaskForm from './PeriodicTaskForm.vue'
+import {
+  checkAndFireReminders,
+  getBrowserPermission,
+  requestBrowserPermission,
+} from '../lib/reminders'
 
-const uiStore = useUIStore()
 const { t } = useI18n()
+const uiStore = useUIStore()
+const authStore = useAuthStore()
 const taskStore = usePeriodicTasksStore()
 
-// Form Durumları
-const newTaskTitle = ref('')
-const frequency = ref<'daily' | 'weekly'>('daily')
-const selectedDays = ref<number[]>([])
+const showForm = ref(false)
+const editingTask = ref<PeriodicTask | null>(null)
+const viewMode = ref<'today' | 'all'>('today')
+const categoryFilter = ref<'all' | TaskCategory>('all')
+const browserPermission = ref(getBrowserPermission())
 
-// Görünüm Değiştirici
-const showWeeklyPlanner = ref(false)
-const currentDayOfWeek = new Date().getDay() // Bugünün gün indeksini vurgulamak için
+let reminderTimer: ReturnType<typeof setInterval> | null = null
 
-const weekDays = computed(() => [
-  { label: t('days.mon') || 'Mon', value: 1 },
-  { label: t('days.tue') || 'Tue', value: 2 },
-  { label: t('days.wed') || 'Wed', value: 3 },
-  { label: t('days.thu') || 'Thu', value: 4 },
-  { label: t('days.fri') || 'Fri', value: 5 },
-  { label: t('days.sat') || 'Sat', value: 6 },
-  { label: t('days.sun') || 'Sun', value: 0 }
+const categoryFilters = computed(() => [
+  { id: 'all' as const, label: t('periodicTasks.filters.all') },
+  { id: 'work' as const, label: t('periodicTasks.categories.work') },
+  { id: 'health' as const, label: t('periodicTasks.categories.health') },
+  { id: 'habit' as const, label: t('periodicTasks.categories.habit') },
+  { id: 'goal' as const, label: t('periodicTasks.categories.goal') },
+  { id: 'other' as const, label: t('periodicTasks.categories.other') },
 ])
-// Sayfa yüklendiğinde verileri Supabase'den çek
-onMounted(() => {
-  taskStore.loadTasks()
+
+const visibleTasks = computed(() => {
+  const base = viewMode.value === 'today' ? taskStore.todaysTasks : taskStore.tasks
+  if (categoryFilter.value === 'all') return base
+  return base.filter((task) => task.category === categoryFilter.value)
 })
 
-// Haftalık Planlayıcı için Veri Hazırlığı
-const plannerDays = computed(() => {
-  // Pazartesi'den başlayacak şekilde günleri sıralayalım
-  const orderedDays = [
-    { label: t('days.mon') || 'Pazartesi', value: 1 },
-    { label: t('days.tue') || 'Salı', value: 2 },
-    { label: t('days.wed') || 'Çarşamba', value: 3 },
-    { label: t('days.thu') || 'Perşembe', value: 4 },
-    { label: t('days.fri') || 'Cuma', value: 5 },
-    { label: t('days.sat') || 'Cumartesi', value: 6 },
-    { label: t('days.sun') || 'Pazar', value: 0 }
-  ]
+const emptyMessage = computed(() => {
+  if (viewMode.value === 'today') return t('periodicTasks.noTasksToday')
+  return t('periodicTasks.noRoutines')
+})
 
-  return orderedDays.map(day => {
-    // Bu güne ait görevleri filtrele
-    const dayTasks = taskStore.tasks.filter(task => {
-      if (task.frequency === 'daily') return true
-      if (task.frequency === 'weekly' && task.days_of_week?.includes(day.value)) return true
-      return false
-    })
-    return { ...day, tasks: dayTasks }
+onMounted(async () => {
+  await taskStore.loadTasks()
+  browserPermission.value = getBrowserPermission()
+  runReminderCheck()
+  reminderTimer = setInterval(runReminderCheck, 30_000)
+})
+
+onUnmounted(() => {
+  if (reminderTimer) clearInterval(reminderTimer)
+})
+
+async function runReminderCheck() {
+  await checkAndFireReminders({
+    tasks: taskStore.tasks,
+    userEmail: authStore.user?.email,
+    onNotified: (id) => taskStore.markNotified(id),
+    t: (key, params) => t(key, params || {}),
   })
-})
+}
 
-const toggleDay = (dayValue: number) => {
-  const index = selectedDays.value.indexOf(dayValue)
-  if (index === -1) {
-    selectedDays.value.push(dayValue)
+async function enableBrowserNotifications() {
+  const result = await requestBrowserPermission()
+  browserPermission.value = result
+  if (result === 'granted') {
+    uiStore.addToast(t('periodicTasks.notificationsEnabled'), 'success')
   } else {
-    selectedDays.value.splice(index, 1)
+    uiStore.addToast(t('periodicTasks.notificationsDenied'), 'error')
   }
 }
 
-const addTask = async () => {
-  if (!newTaskTitle.value.trim() || taskStore.isLoading) return
-  if (frequency.value === 'weekly' && selectedDays.value.length === 0) {
-    uiStore.addToast('Lütfen en az bir gün seçin.', 'error')
+function closeForm() {
+  showForm.value = false
+  editingTask.value = null
+}
+
+function startEdit(task: PeriodicTask) {
+  editingTask.value = task
+  showForm.value = false
+}
+
+async function handleSubmit(input: PeriodicTaskInput) {
+  if (editingTask.value) {
+    const ok = await taskStore.updateTask(editingTask.value.id, input)
+    if (ok) {
+      uiStore.addToast(t('periodicTasks.updated'), 'success')
+      closeForm()
+    } else if (taskStore.error) {
+      uiStore.addToast(taskStore.error, 'error')
+    }
     return
   }
 
-  await taskStore.addTask(newTaskTitle.value.trim(), frequency.value, selectedDays.value)
+  if (input.frequency === 'weekly' && (!input.daysOfWeek || input.daysOfWeek.length === 0)) {
+    uiStore.addToast(t('periodicTasks.selectDayError'), 'error')
+    return
+  }
 
-  if (!taskStore.error) {
-    newTaskTitle.value = ''
-    frequency.value = 'daily'
-    selectedDays.value = []
-    uiStore.addToast(t('periodicTasks.added') || 'Rutin başarıyla eklendi', 'success')
-  } else {
+  if (input.notifyBrowser && getBrowserPermission() === 'default') {
+    await requestBrowserPermission()
+    browserPermission.value = getBrowserPermission()
+  }
+
+  const created = await taskStore.addTask(input)
+  if (created) {
+    uiStore.addToast(t('periodicTasks.added'), 'success')
+    showForm.value = false
+  } else if (taskStore.error) {
     uiStore.addToast(taskStore.error, 'error')
   }
 }
 
-const toggleTask = async (taskId: string) => {
+async function toggleTask(taskId: string) {
   await taskStore.toggleTask(taskId)
 }
 
-const deleteTask = async (taskId: string) => {
-  const isConfirmed = await uiStore.showConfirm(
-    t('periodicTasks.deleteConfirmTitle') || 'Rutini Sil', 
-    t('periodicTasks.deleteConfirmDesc') || 'Bu rutini kalıcı olarak silmek istediğinize emin misiniz? (Haftalık planlayıcıdan da tamamen silinecektir)', 
-    t('common.delete') || 'Sil', 
-    t('common.cancel') || 'İptal'
+async function deleteTask(taskId: string) {
+  const ok = await uiStore.showConfirm(
+    t('periodicTasks.deleteConfirmTitle'),
+    t('periodicTasks.deleteConfirmDesc'),
+    t('common.delete'),
+    t('common.cancel')
   )
-  
-  if (isConfirmed) {
-    await taskStore.deleteTask(taskId)
-    if (!taskStore.error) {
-      uiStore.addToast(t('periodicTasks.deleted') || 'Rutin silindi', 'info')
-    }
+  if (!ok) return
+  await taskStore.deleteTask(taskId)
+  if (!taskStore.error) {
+    uiStore.addToast(t('periodicTasks.deleted'), 'info')
+    if (editingTask.value?.id === taskId) closeForm()
   }
 }
 </script>
-
-<style scoped>
-/* İç panellerdeki scroll çubuğunu gizlemek ve daha şık yapmak için */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
-}
-</style>

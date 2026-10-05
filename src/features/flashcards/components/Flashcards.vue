@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center min-h-[400px]">
     
-    <div v-if="currentView === 'decks'" class="w-full max-w-5xl space-y-6">
+    <div v-if="currentView === 'decks'" class="workspace-content space-y-6">
       <div class="flex flex-col sm:flex-row gap-2.5 w-full relative z-[60]">
         <div class="relative flex-1 group">
           <Layers class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
@@ -56,7 +56,7 @@
         </div>
       </div>
 
-      <div v-else class="text-center py-12 flex flex-col items-center justify-center border border-dashed border-border/40 rounded-[2rem] bg-muted/5 w-full max-w-5xl">
+      <div v-else class="text-center py-12 flex flex-col items-center justify-center border border-dashed border-border/40 rounded-[2rem] bg-muted/5 workspace-content">
         <div class="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
           <Layers class="w-4 h-4 text-muted-foreground/40" />
         </div>
@@ -64,7 +64,7 @@
       </div>
     </div>
 
-    <div v-else-if="currentView === 'study' && activeDeck" class="w-full max-w-5xl space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+    <div v-else-if="currentView === 'study' && activeDeck" class="workspace-content space-y-6 animate-in slide-in-from-bottom-4 duration-500">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-card/40 backdrop-blur-2xl p-3 sm:p-4 rounded-2xl shadow-sm border border-white/10 dark:border-white/5 gap-4 relative overflow-hidden z-20">
         <div class="flex items-center gap-3">
           <button @click="currentView = 'decks'" class="p-2 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border/50">
@@ -92,7 +92,7 @@
         </div>
       </div>
 
-      <div class="flex flex-col sm:flex-row gap-2.5 max-w-5xl w-full relative z-10">
+      <div class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-10">
         <input 
           v-model="newCardFront" 
           @keyup.enter="focusBackInput" 
@@ -148,7 +148,7 @@
       @finish="handleGameFinish" 
     />
 
-    <div v-else-if="currentView === 'results'" class="w-full max-w-md mx-auto text-center space-y-6 py-12 animate-in slide-in-from-bottom-8 duration-700">
+    <div v-else-if="currentView === 'results'" style="--workspace-default-max:28rem" class="workspace-content mx-auto text-center space-y-6 py-12 animate-in slide-in-from-bottom-8 duration-700">
       <div class="relative inline-flex items-center justify-center w-20 h-20 rounded-full mb-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
         <div class="absolute inset-0 rounded-full blur-xl opacity-40 bg-emerald-500"></div>
         <Award class="w-8 h-8 relative z-10" />

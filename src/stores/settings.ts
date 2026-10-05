@@ -35,6 +35,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // Varsayılan modüller (Yeni kayıt olanlar veya veritabanında ayarı olmayanlar için)
   const defaultModules = [
+    'plans',
     'detailed', 
     'quick', 
     'secure', 
@@ -43,7 +44,8 @@ export const useSettingsStore = defineStore('settings', () => {
     'learning', 
     'flashcards', 
     'workout',
-    'periodic'
+    'periodic',
+    'activities',
   ]
   const activeModules = ref<string[]>([...defaultModules])
   const isSettingsLoaded = ref(false)
@@ -64,7 +66,15 @@ export const useSettingsStore = defineStore('settings', () => {
 
       if (data && data.active_modules) {
         // Veritabanında ayar varsa onu kullan
-        activeModules.value = data.active_modules
+        activeModules.value = [...data.active_modules]
+        const plansWelcomeKey = `plans-module-added:${authStore.user.id}`
+        if (!localStorage.getItem(plansWelcomeKey)) {
+          if (!activeModules.value.includes('plans')) {
+            activeModules.value.unshift('plans')
+            await saveSettingsToDb([...activeModules.value])
+          }
+          localStorage.setItem(plansWelcomeKey, 'true')
+        }
       } else {
         // Veritabanında ayar yoksa (ilk giriş), varsayılanları kaydet
         activeModules.value = [...defaultModules]
