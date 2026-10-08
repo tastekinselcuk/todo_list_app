@@ -98,6 +98,23 @@ export const usePlansStore = defineStore('plans', () => {
       return false
     } finally { savingIds.value = savingIds.value.filter(id => id !== plan.id) }
   }
+  async function remove(id: string) {
+    if (busy.value || savingIds.value.includes(id) || !auth.user) return false
+    const userId = auth.user.id
+    savingIds.value.push(id)
+    error.value = ''
+    try {
+      const result = await supabase.from('plans').delete()
+        .eq('id', id).eq('user_id', userId).select('id').single()
+      if (result.error) throw result.error
+      if (auth.user?.id !== userId) return false
+      plans.value = plans.value.filter(plan => plan.id !== id)
+      return true
+    } catch (err) {
+      if (auth.user?.id === userId) error.value = (err as Error).message
+      return false
+    } finally { savingIds.value = savingIds.value.filter(savingId => savingId !== id) }
+  }
   const isSaving = (id: string) => savingIds.value.includes(id)
-  return { plans, busy, error, load, add, update, isSaving }
+  return { plans, busy, error, load, add, update, remove, isSaving }
 })

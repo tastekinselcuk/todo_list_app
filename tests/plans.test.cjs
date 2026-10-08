@@ -48,21 +48,31 @@ test('opening chooses the shortest populated current period, excluding old recor
 function fixture(rows) {
   setActivePinia(createPinia())
   const calls = []
+  const deletions = []
   let fail = false
   let updateGate
   const auth = { user: { id: 'owner' } }
   const client = { from() {
-    let updates, inserted
+    let updates, inserted, deleting = false
     let id
+    let userId
     const query = {
       select() { return query },
-      eq(key, value) { if (key === 'id') id = value; return query },
+      eq(key, value) { if (key === 'id') id = value; if (key === 'user_id') userId = value; return query },
       async order() { return fail ? { error: new Error('offline') } : { data: structuredClone(rows) } },
       insert(value) { inserted = value; return query },
       update(value) { updates = value; return query },
+      delete() { deleting = true; return query },
       async single() {
         if (updateGate) await updateGate
         if (fail) return { error: new Error('offline') }
+        if (deleting) {
+          const index = rows.findIndex(r => r.id === id && r.user_id === userId)
+          if (index === -1) return { error: new Error('not found') }
+          deletions.push({ id, userId })
+          rows.splice(index, 1)
+          return { data: { id } }
+        }
         if (inserted) {
           const row = { ...inserted, id: 'new', completed: false, reason: '', history: [], created_at: new Date().toISOString() }
           rows.push(row)
@@ -88,7 +98,7 @@ function fixture(rows) {
     '../lib/periods': dates,
   })
   return {
-    store: module.usePlansStore(), calls, fail: () => { fail = true }, rows,
+    store: module.usePlansStore(), calls, deletions, fail: () => { fail = true }, rows,
     pauseWrites: () => {
       let release
       updateGate = new Promise(resolve => { release = resolve })
@@ -188,4 +198,48 @@ test('failed optimistic completion restores both status and deferral reason', as
   assert.equal(plan.reason, 'Waiting')
   assert.equal(store.isSaving(plan.id), false)
   assert.equal(store.error, 'offline')
+})
+
+test('deleting a plan removes only that owned plan and its period history', async () => {
+  const { store, rows, deletions } = fixture([
+    oldPlan({ completed: true, history: [{ date: '2025-01-01', completed: false, reason: 'Waiting' }] }),
+    oldPlan({ id: 'two', completed: true }),
+  ])
+  await store.load()
+  assert.equal(await store.remove('one'), true)
+  assert.deepEqual(deletions, [{ id: 'one', userId: 'owner' }])
+  assert.equal(store.plans.length, 1)
+  assert.equal(store.plans[0].id, 'two')
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].id, 'two')
+  assert.equal(store.isSaving('one'), false)
+})
+
+test('failed deletion preserves the plan and unlocks its actions', async () => {
+  const { store, rows, fail } = fixture([oldPlan({ completed: true })])
+  await store.load()
+  fail()
+  assert.equal(await store.remove('one'), false)
+  assert.equal(store.plans.length, 1)
+  assert.equal(rows.length, 1)
+  assert.equal(store.isSaving('one'), false)
+  assert.equal(store.error, 'offline')
+})
+
+test('pending deletion blocks duplicate writes and reloads until the result arrives', async () => {
+  const { store, deletions, pauseWrites } = fixture([oldPlan({ completed: true })])
+  await store.load()
+  const release = pauseWrites()
+  const plan = store.plans[0]
+  const removing = store.remove(plan.id)
+  assert.equal(store.isSaving(plan.id), true)
+  assert.equal(store.plans.length, 1, 'keep the plan until deletion is confirmed')
+  assert.equal(await store.remove(plan.id), false)
+  assert.equal(await store.update(plan, { completed: false }), false)
+  assert.equal(await store.load(), false)
+  release()
+  assert.equal(await removing, true)
+  assert.equal(deletions.length, 1)
+  assert.equal(store.plans.length, 0)
+  assert.equal(store.isSaving(plan.id), false)
 })

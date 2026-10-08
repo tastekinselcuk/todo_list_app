@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUpRight, Check, Clock3, History, X } from 'lucide-vue-next'
+import { ArrowUpRight, Check, Clock3, Copy, History, Trash2, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { usePlansStore, type Plan } from '../stores/plans'
 import { firstPopulatedPeriod, periodStart, periods, type Period } from '../lib/periods'
 import { useAuthStore } from '@/stores/auth'
+import { useUIStore } from '@/stores/ui'
 
 const store = usePlansStore()
 const auth = useAuthStore()
+const ui = useUIStore()
 const { locale } = useI18n()
 const tr = computed(() => locale.value === 'tr')
 const copy = computed(() => tr.value ? {
@@ -20,6 +22,7 @@ const copy = computed(() => tr.value ? {
   history: 'Geçmiş dönemler', historyEmpty: 'Henüz geçmiş bir dönem yok.',
   setup: 'Planlar yüklenemedi. Bağlantıyı kontrol et; ilk kurulumda PLANS_SETUP.md dosyasındaki veritabanı adımını tamamla.',
   retry: 'Tekrar dene', complete: 'Tamamla', undo: 'Tamamlanmadı olarak işaretle', progress: 'Dönem ilerlemesi',
+  copy: 'Kopyala', copied: 'Kopyalandı', copyFailed: 'Kopyalama başarısız', delete: 'Sil', deleted: 'Plan silindi', deleteFailed: 'Plan silinemedi',
 } : {
   daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',
   placeholder: 'What’s on your mind?', add: 'Add', archive: 'Show history', current: 'This period',
@@ -29,6 +32,7 @@ const copy = computed(() => tr.value ? {
   history: 'Past periods', historyEmpty: 'No past periods yet.',
   setup: 'Could not load plans. Check your connection; for first-time setup, complete the database step in PLANS_SETUP.md.',
   retry: 'Retry', complete: 'Complete', undo: 'Mark incomplete', progress: 'Period progress',
+  copy: 'Copy', copied: 'Copied', copyFailed: 'Could not copy', delete: 'Delete', deleted: 'Plan deleted', deleteFailed: 'Could not delete plan',
 })
 const selected = ref<Period>('daily')
 const emptyMessage = computed(() => tr.value
@@ -101,6 +105,23 @@ async function toggle(plan: Plan) {
   today.value = new Date()
 }
 function startDefer(plan: Plan) { editing.value = plan; reason.value = plan.reason }
+async function copyPlan(plan: Plan) {
+  try {
+    await navigator.clipboard.writeText(plan.title)
+    ui.addToast(copy.value.copied, 'success')
+  } catch {
+    ui.addToast(copy.value.copyFailed, 'error')
+  }
+}
+async function deletePlan(plan: Plan) {
+  if (store.busy || store.isSaving(plan.id)) return
+  if (await store.remove(plan.id)) {
+    if (editing.value?.id === plan.id) editing.value = null
+    ui.addToast(copy.value.deleted, 'success')
+  } else {
+    ui.addToast(copy.value.deleteFailed, 'error')
+  }
+}
 async function saveReason() {
   if (!editing.value || !reason.value.trim() || !await store.load()) return
   const current = store.plans.find(p => p.id === editing.value?.id)
@@ -110,7 +131,7 @@ async function saveReason() {
 async function resume(plan: Plan) {
   if (!await store.load()) return
   const current = store.plans.find(p => p.id === plan.id)
-  if (current) await store.update(current, { reason: '' })
+  if (current && await store.update(current, { reason: '' })) editing.value = null
   today.value = new Date()
 }
 watch(selected, value => { inputPeriod.value = value })
@@ -155,7 +176,11 @@ onUnmounted(() => clearInterval(timer))
       <article v-for="plan in [...active, ...completed]" :key="plan.id" class="task-row" :class="{ completed: plan.completed }" @click="toggle(plan)">
         <button class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="plan.completed ? copy.undo : copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
         <button class="task-content" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.history.length && !plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
-        <button v-if="!plan.completed" class="defer-button" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /><span>{{ copy.defer }}</span></button>
+        <div class="task-actions" @click.stop>
+          <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
+          <button type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
+          <button type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
+        </div>
       </article>
     </div>
 
@@ -163,7 +188,11 @@ onUnmounted(() => clearInterval(timer))
       <article v-for="plan in deferred" :key="plan.id" class="task-row deferred-row" @click="toggle(plan)">
         <button class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.complete" @click.stop="toggle(plan)"></button>
         <div class="task-content"><button class="task-title" :aria-disabled="store.busy || store.isSaving(plan.id)" @click.stop="toggle(plan)">{{ plan.title }}</button><button class="reason-text" @click.stop="startDefer(plan)">{{ plan.reason }}</button></div>
-        <button class="defer-button" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.resume" :title="copy.resume" @click.stop="resume(plan)"><ArrowUpRight :size="17" /></button>
+        <div class="task-actions" @click.stop>
+          <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
+          <button type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
+          <button type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
+        </div>
       </article>
     </section>
 
@@ -173,7 +202,7 @@ onUnmounted(() => clearInterval(timer))
     </section>
 
     <Teleport to="body"><dialog v-if="editing" ref="dialog" aria-labelledby="defer-title" class="plan-native-dialog" @cancel.prevent="editing = null" @click.self="editing = null">
-      <section class="defer-dialog"><button class="close-dialog" :aria-label="copy.cancel" @click="editing = null"><X :size="18" /></button><Clock3 :size="23" /><h2 id="defer-title">{{ copy.reason }}</h2><p>{{ editing.title }}</p><form @submit.prevent="saveReason"><textarea v-model="reason" :aria-label="copy.reason" :placeholder="copy.reasonHint" rows="3" maxlength="1000" autofocus required></textarea><div class="dialog-actions"><button type="button" @click="editing = null">{{ copy.cancel }}</button><button class="add-button" :disabled="!reason.trim() || store.busy">{{ copy.save }}</button></div></form></section>
+      <section class="defer-dialog"><button class="close-dialog" :aria-label="copy.cancel" @click="editing = null"><X :size="18" /></button><Clock3 :size="23" /><h2 id="defer-title">{{ copy.reason }}</h2><p>{{ editing.title }}</p><form @submit.prevent="saveReason"><textarea v-model="reason" :aria-label="copy.reason" :placeholder="copy.reasonHint" rows="3" maxlength="1000" autofocus required></textarea><button v-if="editing.reason" type="button" class="resume-button" :disabled="store.busy || store.isSaving(editing.id)" @click="resume(editing)">{{ copy.resume }}</button><div class="dialog-actions"><button type="button" @click="editing = null">{{ copy.cancel }}</button><button class="add-button" :disabled="!reason.trim() || store.busy">{{ copy.save }}</button></div></form></section>
     </dialog></Teleport>
   </section>
 </template>
@@ -422,17 +451,41 @@ onUnmounted(() => clearInterval(timer))
   color:hsl(var(--muted-foreground));
   text-decoration:line-through
 }
-.defer-button {
+.task-actions {
   display:flex;
   align-items:center;
-  gap:5px;
-  color:hsl(var(--muted-foreground));
-  font-size:10px;
-  padding:6px;
-  border-radius:6px
+  gap:2px;
+  flex-shrink:0
 }
-.defer-button:hover {
-  background:hsl(var(--muted))
+.task-action {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:hsl(var(--muted-foreground));
+  width:28px;
+  height:28px;
+  padding:6px;
+  border-radius:6px;
+  transition:background .18s,color .18s
+}
+.task-action:hover:not(:disabled) {
+  background:hsl(var(--muted));
+  color:hsl(var(--foreground))
+}
+.delete-action:hover:not(:disabled) {
+  background:hsl(var(--destructive)/.1);
+  color:hsl(var(--destructive))
+}
+.task-action:disabled {
+  opacity:.4
+}
+.resume-button {
+  font-size:11px;
+  color:var(--plan-accent);
+  margin-top:8px
+}
+.resume-button:hover:not(:disabled) {
+  text-decoration:underline
 }
 .deferred-section {
   margin-top:18px;
@@ -611,9 +664,6 @@ button:disabled {
   }
   .history-switch {
     margin-left:auto
-  }
-  .defer-button span {
-    display:none
   }
   .archive-group summary span {
     float:none;

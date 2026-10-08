@@ -1,25 +1,26 @@
 <template>
   <div
-    class="bg-card/60 backdrop-blur-3xl text-card-foreground px-5 pb-5 pt-4 sm:px-8 sm:pb-8 sm:pt-6 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/10 dark:border-white/5 space-y-6 relative overflow-hidden"
+    class="group/workspace bg-card/60 backdrop-blur-3xl text-card-foreground px-5 pb-5 pt-4 sm:px-8 sm:pb-8 sm:pt-6 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/10 dark:border-white/5 space-y-6 relative overflow-hidden"
     :style="{ '--workspace-content-max': settingsStore.isFullScreen ? 'none' : undefined }"
   >
     
     <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
 
-    <div class="relative z-10 flex items-center gap-2">
-      <WorkspaceTabStrip v-model="activeTab" :tabs="stripTabs" class="min-w-0 flex-1" />
-      <button
-        type="button"
-        class="shrink-0 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-        :title="widthToggleLabel"
-        :aria-label="widthToggleLabel"
-        :aria-pressed="settingsStore.isFullScreen"
-        @click="settingsStore.isFullScreen = !settingsStore.isFullScreen"
-      >
-        <Shrink v-if="settingsStore.isFullScreen" class="w-4 h-4" />
-        <Expand v-else class="w-4 h-4" />
-      </button>
+    <div class="relative z-10 pr-7">
+      <WorkspaceTabStrip v-model="activeTab" :tabs="stripTabs" />
     </div>
+
+    <button
+      type="button"
+      class="absolute top-4 right-4 z-20 !m-0 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-300 opacity-0 scale-90 pointer-events-none group-hover/workspace:opacity-100 group-hover/workspace:scale-100 group-hover/workspace:pointer-events-auto focus-visible:opacity-100 focus-visible:scale-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 [@media(hover:none)]:pointer-events-auto"
+      :title="widthToggleLabel"
+      :aria-label="widthToggleLabel"
+      :aria-pressed="settingsStore.isFullScreen"
+      @click="settingsStore.isFullScreen = !settingsStore.isFullScreen"
+    >
+      <Shrink v-if="settingsStore.isFullScreen" class="w-4 h-4" />
+      <Expand v-else class="w-4 h-4" />
+    </button>
 
     <div class="relative z-10 animate-in fade-in zoom-in-95 duration-500">
       <KeepAlive>
