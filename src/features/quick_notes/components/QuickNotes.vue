@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
+  <div class="space-y-5 relative z-10 w-full flex flex-col items-center">
     
-    <div class="flex gap-2.5 workspace-content">
+    <div v-if="canWrite" class="flex gap-2.5 workspace-content">
       <div class="relative flex-1 group">
         <input
           v-model="quickNote"
@@ -56,17 +56,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
+import { computed, onMounted } from 'vue'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import QuickNoteItem from './QuickNoteItem.vue'
 
+const { canWrite } = useModuleAccess('quick')
+
 const todoStore = useTodoStore()
 const uiStore = useUIStore()
 const { t } = useI18n()
 
-const quickNote = ref('')
+const quickNote = useWorkspaceDraft('quick-note', '')
 
 const getTodayKey = () => {
   const today = new Date()
@@ -118,10 +123,12 @@ const groupedNotes = computed(() => {
   return sortedGroups
 })
 
-const addQuickNote = () => {
+const addQuickNote = async () => {
   if (quickNote.value.trim()) {
-    todoStore.addQuickNote(quickNote.value)
-    quickNote.value = ''
+    const value = quickNote.value
+    const result = await todoStore.addQuickNote(value)
+    if (!result.success) { uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error'); return }
+    if (quickNote.value === value) quickNote.value = ''
     // DÜZELTME: Toast mesajı artık dil dosyasından (i18n) çekiliyor
     uiStore.addToast(t('quickNotes.noteAdded') || 'Note added successfully', 'success') 
   }
@@ -137,7 +144,7 @@ const handleDeleteQuickNote = async (noteId: string) => {
   )
   
   if (isConfirmed) {
-    todoStore.deleteQuickNote(noteId)
+    if (!await todoStore.deleteQuickNote(noteId)) return
     // DÜZELTME: Toast mesajı artık dil dosyasından (i18n) çekiliyor
     uiStore.addToast(t('quickNotes.noteDeleted') || 'Note deleted', 'info')
   }
@@ -146,4 +153,5 @@ const handleDeleteQuickNote = async (noteId: string) => {
 onMounted(() => {
   todoStore.fetchQuickNotes()
 })
+useSearchReveal('quick', async hit => { await todoStore.fetchQuickNotes(hit.record_id) })
 </script>

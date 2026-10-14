@@ -1,6 +1,5 @@
-import { defineStore } from 'pinia'
+import { defineWorkspaceStore as defineStore, useWorkspaceClient } from '@/lib/workspaceScope'
 import { ref, computed } from 'vue'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 
 export type TaskCategory = 'work' | 'health' | 'habit' | 'goal' | 'other'
@@ -9,6 +8,7 @@ export type TaskFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'
 export interface PeriodicTask {
   id: string
   user_id: string
+  workspace_id: string
   title: string
   notes: string | null
   category: TaskCategory
@@ -43,7 +43,7 @@ export interface PeriodicTaskInput {
 }
 
 function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0]
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 function parseDate(dateStr: string): Date {
@@ -115,6 +115,7 @@ function normalizeTask(row: Record<string, unknown>): PeriodicTask {
   return {
     id: String(row.id),
     user_id: String(row.user_id),
+    workspace_id: String(row.workspace_id),
     title: String(row.title),
     notes: (row.notes as string | null) ?? null,
     category: (row.category as TaskCategory) || 'other',
@@ -166,6 +167,7 @@ function buildInsertPayload(userId: string, input: PeriodicTaskInput) {
 
 export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
   const authStore = useAuthStore()
+  const supabase = useWorkspaceClient()
 
   const tasks = ref<PeriodicTask[]>([])
   const isLoading = ref(false)
@@ -205,26 +207,38 @@ export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
     return map
   })
 
-  const loadTasks = async () => {
-    if (!authStore.user) return
+  let loadTasksGeneration = 0
+  const loadTasks = async (targetId?: string) => {
+    const request = ++loadTasksGeneration
+    if (!authStore.user) return false
 
     isLoading.value = true
     error.value = null
 
     try {
-      const { data, error: supabaseError } = await supabase
+      let { data, error: supabaseError } = await supabase
         .from('periodic_tasks')
         .select('*')
         .eq('user_id', authStore.user.id)
         .order('created_at', { ascending: false })
 
+      if (request !== loadTasksGeneration) return false
       if (supabaseError) throw supabaseError
-      tasks.value = (data || []).map((row) => normalizeTask(row as Record<string, unknown>))
+      if (typeof targetId === 'string' && !(data || []).some((row: { id: string }) => row.id === targetId)) {
+        const located = await supabase.from('periodic_tasks').select('*').eq('id', targetId).maybeSingle()
+        if (located.error) throw located.error
+        if (located.data) data = [located.data, ...(data || [])]
+      }
+      if (request !== loadTasksGeneration) return false
+      tasks.value = (data || []).map((row: Record<string, unknown>) => normalizeTask(row))
+      return true
     } catch (err) {
+      if (request !== loadTasksGeneration) return false
       error.value = err instanceof Error ? err.message : 'Failed to load tasks'
       console.error('Error loading periodic tasks:', err)
+      return false
     } finally {
-      isLoading.value = false
+      if (request === loadTasksGeneration) isLoading.value = false
     }
   }
 
@@ -312,7 +326,7 @@ export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
 
   const toggleTask = async (taskId: string) => {
     const task = tasks.value.find((t) => t.id === taskId)
-    if (!task) return
+    if (!task) return false
 
     const today = getTodayDateString()
     const currentlyDone = isCompletedForPeriod(task)
@@ -332,9 +346,11 @@ export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
 
       if (supabaseError) throw supabaseError
       task.completed_date = newCompletedDate
+      return true
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to toggle task'
       console.error('Error toggling periodic task:', err)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -346,6 +362,11 @@ export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
 
     const now = new Date().toISOString()
     try {
+      if (supabase.collection('periodic')) {
+        await supabase.markNotified(taskId)
+        task.last_notified_at = now
+        return
+      }
       await supabase
         .from('periodic_tasks')
         .update({ last_notified_at: now })
@@ -375,6 +396,7 @@ export const usePeriodicTasksStore = defineStore('periodicTasks', () => {
     }
   }
 
+  supabase.listen?.({ periodic_tasks: loadTasks }, () => isLoading.value)
   return {
     tasks,
     isLoading,

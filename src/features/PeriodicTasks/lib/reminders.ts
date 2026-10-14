@@ -1,29 +1,26 @@
 import { supabase } from '@/lib/supabase'
 import type { PeriodicTask } from '../stores/periodicTasks'
 import { isCompletedForPeriod, isTaskDueOn } from '../stores/periodicTasks'
+import { readStoredJSON, writeStoredJSON } from '@/lib/storage'
 
 const NOTIFIED_SESSION_KEY = 'periodic_notified_session'
 
 function getSessionNotified(): Set<string> {
-  try {
-    const raw = sessionStorage.getItem(NOTIFIED_SESSION_KEY)
-    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
-  } catch {
-    return new Set()
-  }
+  return new Set(readStoredJSON<string[]>(NOTIFIED_SESSION_KEY, [], value => Array.isArray(value) && value.every(item => typeof item === 'string'), 'session'))
 }
 
 function saveSessionNotified(set: Set<string>) {
-  sessionStorage.setItem(NOTIFIED_SESSION_KEY, JSON.stringify([...set]))
+  writeStoredJSON(NOTIFIED_SESSION_KEY, [...set], 'session')
 }
 
 function notificationKey(task: PeriodicTask, dateStr: string): string {
-  return `${task.id}:${dateStr}:${task.reminder_time || 'none'}`
+  return `${task.user_id}:${task.workspace_id}:${task.id}:${dateStr}:${task.reminder_time || 'none'}`
 }
 
 function wasNotifiedToday(task: PeriodicTask, dateStr: string): boolean {
   if (!task.last_notified_at) return false
-  return task.last_notified_at.startsWith(dateStr)
+  const date = new Date(task.last_notified_at)
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}` === dateStr
 }
 
 function isReminderDueNow(task: PeriodicTask, now: Date): boolean {
@@ -50,40 +47,38 @@ export function getBrowserPermission(): NotificationPermission | 'unsupported' {
 }
 
 function showBrowserNotification(task: PeriodicTask, body: string) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false
   try {
     new Notification(task.title, {
       body,
       tag: `periodic-${task.id}`,
       requireInteraction: true,
     })
+    return true
   } catch (err) {
     console.error('Browser notification failed:', err)
+    return false
   }
 }
 
 /**
  * Optional email via Supabase Edge Function + Resend free tier.
- * Fails silently if the function is not deployed.
+ * A failed delivery remains eligible for retry; browser and email acknowledgements are separate.
  */
-async function sendEmailReminder(task: PeriodicTask, userEmail: string | undefined) {
-  if (!task.notify_email || !userEmail) return
+async function sendEmailReminder(task: PeriodicTask) {
 
   try {
-    const { error } = await supabase.functions.invoke('send-periodic-reminder', {
+    const { data, error } = await supabase.functions.invoke('send-periodic-reminder', {
       body: {
-        to: userEmail,
-        title: task.title,
-        notes: task.notes,
-        category: task.category,
-        reminderTime: task.reminder_time,
+        taskId: task.id,
+        workspaceId: task.workspace_id,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     })
-    if (error) {
-      console.warn('Email reminder unavailable (deploy edge function + Resend):', error.message)
-    }
+    return !error && data?.ok === true
   } catch (err) {
-    console.warn('Email reminder skipped:', err)
+    console.warn('Email reminder pending:', err)
+    return false
   }
 }
 
@@ -92,6 +87,8 @@ export interface ReminderCheckOptions {
   userEmail?: string
   onNotified?: (taskId: string) => void | Promise<void>
   t?: (key: string, params?: Record<string, string>) => string
+  workspaceName?: string
+  isCurrent?: () => boolean
 }
 
 /**
@@ -100,31 +97,37 @@ export interface ReminderCheckOptions {
  */
 export async function checkAndFireReminders(options: ReminderCheckOptions) {
   const now = new Date()
-  const dateStr = now.toISOString().split('T')[0]
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
   const session = getSessionNotified()
 
   for (const task of options.tasks) {
+    if (options.isCurrent && !options.isCurrent()) return
     if (!isTaskDueOn(task, now)) continue
     if (isCompletedForPeriod(task, now)) continue
     if (!task.notify_browser && !task.notify_email) continue
     if (!isReminderDueNow(task, now)) continue
 
     const key = notificationKey(task, dateStr)
-    if (session.has(key) || wasNotifiedToday(task, dateStr)) continue
 
-    const body =
+    const reminderBody =
       options.t?.('periodicTasks.reminderBody', { title: task.title }) ||
       (task.notes?.trim() || 'Hatırlatma zamanı geldi')
+    const body = options.workspaceName ? `${options.workspaceName} · ${reminderBody}` : reminderBody
 
-    if (task.notify_browser) {
-      showBrowserNotification(task, body)
+    if (task.notify_browser && !session.has(`${key}:browser`) && !wasNotifiedToday(task, dateStr)) {
+      if (showBrowserNotification(task, body)) {
+        session.add(`${key}:browser`)
+        saveSessionNotified(session)
+        await options.onNotified?.(task.id)
+      }
     }
-    if (task.notify_email) {
-      await sendEmailReminder(task, options.userEmail)
+    if (task.notify_email && !session.has(`${key}:email`)) {
+      if (options.isCurrent && !options.isCurrent()) return
+      if (await sendEmailReminder(task)) {
+        session.add(`${key}:email`)
+        saveSessionNotified(session)
+      }
     }
 
-    session.add(key)
-    saveSessionNotified(session)
-    await options.onNotified?.(task.id)
   }
 }

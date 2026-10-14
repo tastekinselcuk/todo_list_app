@@ -1,6 +1,5 @@
-import { defineStore } from 'pinia'
+import { defineWorkspaceStore as defineStore, useWorkspaceClient } from '@/lib/workspaceScope'
 import { computed, ref } from 'vue'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import type { ActivitySource, ActivityType, SearchResult } from '../lib/providers'
 
@@ -24,6 +23,7 @@ export interface ActivityItem {
 
 export const useActivityListsStore = defineStore('activityLists', () => {
   const authStore = useAuthStore()
+  const supabase = useWorkspaceClient()
 
   const items = ref<ActivityItem[]>([])
   const isLoading = ref(false)
@@ -45,25 +45,37 @@ export const useActivityListsStore = defineStore('activityLists', () => {
     return groups
   })
 
-  const loadItems = async () => {
-    if (!authStore.user) return
+  let loadItemsGeneration = 0
+  const loadItems = async (targetId?: string) => {
+    const request = ++loadItemsGeneration
+    if (!authStore.user) return false
     isLoading.value = true
     error.value = null
 
     try {
-      const { data, error: supabaseError } = await supabase
+      let { data, error: supabaseError } = await supabase
         .from('activity_items')
         .select('*')
         .eq('user_id', authStore.user.id)
         .order('created_at', { ascending: false })
 
+      if (request !== loadItemsGeneration) return false
       if (supabaseError) throw supabaseError
+      if (typeof targetId === 'string' && !(data || []).some((row: { id: string }) => row.id === targetId)) {
+        const located = await supabase.from('activity_items').select('*').eq('id', targetId).maybeSingle()
+        if (located.error) throw located.error
+        if (located.data) data = [located.data, ...(data || [])]
+      }
+      if (request !== loadItemsGeneration) return false
       items.value = (data || []) as ActivityItem[]
+      return true
     } catch (err) {
+      if (request !== loadItemsGeneration) return false
       error.value = err instanceof Error ? err.message : 'Failed to load list'
       console.error('Error loading activity items:', err)
+      return false
     } finally {
-      isLoading.value = false
+      if (request === loadItemsGeneration) isLoading.value = false
     }
   }
 
@@ -161,6 +173,8 @@ export const useActivityListsStore = defineStore('activityLists', () => {
       console.error('Error deleting activity item:', err)
     }
   }
+
+  supabase.listen({ activity_items: loadItems }, () => isLoading.value)
 
   return {
     items,

@@ -42,6 +42,13 @@ async function measure() {
   })
   if (widths.length !== labels.value.length || widths.some((width, index) => width !== labels.value[index])) labels.value = widths
 }
+async function selectFromKeyboard(index: number) {
+  if (!props.tabs.length) return
+  const next = (index + props.tabs.length) % props.tabs.length
+  emit('update:modelValue', props.tabs[next].id)
+  await nextTick()
+  track.value?.querySelectorAll<HTMLButtonElement>('.strip-tab')[next]?.focus()
+}
 onMounted(() => {
   void measure()
   if (shell.value) {
@@ -69,13 +76,15 @@ onBeforeUnmount(() => { disposed = true; observer?.disconnect() })
       </div>
       <div class="strip-frame">
         <div class="strip-viewport" :style="{ width: ready ? `${visibleWidth + 4}px` : '100%', visibility: ready ? 'visible' : 'hidden' }">
-          <div ref="track" class="strip-track" :style="{ transform: `translateX(-${offset}px)` }">
+          <div ref="track" class="strip-track" role="tablist" :aria-label="locale === 'tr' ? 'Çalışma alanı sekmeleri' : 'Workspace tabs'" :style="{ transform: `translateX(-${offset}px)` }">
             <button
               v-for="(tab, index) in tabs" :key="tab.id" type="button"
+              :id="`workspace-tab-${tab.id}`" role="tab" :aria-controls="`workspace-panel-${tab.id}`" :tabindex="modelValue === tab.id ? 0 : -1"
               :inert="index < first || index >= first + layout.count"
               class="strip-tab relative py-2 text-sm font-medium rounded-xl transition-colors duration-200 whitespace-nowrap"
               :class="modelValue === tab.id ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground hover:bg-background/40'"
-              :aria-pressed="modelValue === tab.id" :title="tab.label" @click="emit('update:modelValue', tab.id)">
+              :aria-selected="modelValue === tab.id" :title="tab.label" @click="emit('update:modelValue', tab.id)"
+              @keydown.right.prevent="selectFromKeyboard(index + 1)" @keydown.left.prevent="selectFromKeyboard(index - 1)" @keydown.home.prevent="selectFromKeyboard(0)" @keydown.end.prevent="selectFromKeyboard(tabs.length - 1)">
               <span class="tab-label">{{ tab.label }}</span>
             </button>
           </div>

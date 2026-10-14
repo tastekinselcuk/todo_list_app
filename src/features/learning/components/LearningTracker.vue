@@ -12,7 +12,7 @@
         </div>
       </div>
       
-      <button
+      <button v-if="canWrite"
         @click="showAddSubject = !showAddSubject"
         class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all flex items-center gap-2"
       >
@@ -23,7 +23,7 @@
     </div>
 
     <transition name="slide-fade">
-      <div v-if="showAddSubject" class="p-4 rounded-xl border border-border bg-card shadow-sm space-y-4">
+      <div v-if="canWrite && showAddSubject" class="p-4 rounded-xl border border-border bg-card shadow-sm space-y-4">
         <div class="flex items-center gap-3">
           <input
             v-model="newSubjectTitle"
@@ -38,7 +38,7 @@
             type="color"
             class="h-10 w-10 p-1 rounded-lg border border-input bg-transparent cursor-pointer"
           />
-          <button
+          <button v-if="canWrite"
             @click="handleAddSubject"
             :disabled="!newSubjectTitle.trim() || learningStore.isLoading"
             class="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
@@ -58,6 +58,7 @@
         v-for="subject in learningStore.subjects" 
         :key="subject.id"
         :subject="subject"
+        :data-search-record="subject.id"
         :isExpanded="expandedSubject === subject.id"
         @toggle="toggleSubject(subject.id)"
       />
@@ -67,16 +68,25 @@
 </template>
 
 <script setup lang="ts">
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { ref, onMounted } from 'vue'
 import { Target, Plus, X } from 'lucide-vue-next'
 import { useLearningStore } from '@/features/learning/stores/learning'
+import { useUIStore } from '@/stores/ui'
+import { useI18n } from 'vue-i18n'
 import LearningSubjectItem from './LearningSubjectItem.vue'
 
+const { canWrite } = useModuleAccess('learning')
+
 const learningStore = useLearningStore()
+const uiStore = useUIStore()
+const { t } = useI18n()
 // UI States
 const showAddSubject = ref(false)
 const expandedSubject = ref<string | null>(null)
-const newSubjectTitle = ref('')
+const newSubjectTitle = useWorkspaceDraft('subject-title', '')
 const newSubjectColor = ref('#6366f1')
 
 onMounted(async () => {
@@ -87,14 +97,19 @@ const toggleSubject = (id: string) => {
   expandedSubject.value = expandedSubject.value === id ? null : id
 }
 
+const addingSubject = ref(false)
 const handleAddSubject = async () => {
-  if (!newSubjectTitle.value.trim()) return
+  if (addingSubject.value || !newSubjectTitle.value.trim()) return
+  const title = newSubjectTitle.value
+  addingSubject.value = true
+  let saved = false
+  try { saved = await learningStore.addSubject(title.trim(), newSubjectColor.value) } finally { addingSubject.value = false }
+  if (!saved) { uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error'); return }
   
-  await learningStore.addSubject(newSubjectTitle.value.trim(), newSubjectColor.value)
-  
-  newSubjectTitle.value = ''
+  if (newSubjectTitle.value === title) newSubjectTitle.value = ''
   showAddSubject.value = false
 }
+useSearchReveal('learning', async (hit, isCurrent) => { await learningStore.fetchSubjects(hit.record_id);if(!isCurrent())return;expandedSubject.value=hit.record_id })
 </script>
 
 <style scoped>

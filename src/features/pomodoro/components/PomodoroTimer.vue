@@ -27,6 +27,7 @@
       </div>
 
       <div class="flex flex-col items-center justify-center py-2 w-full border-y border-border/30 mb-5">
+        <div v-if="currentTarget" class="mb-2 flex max-w-full items-center gap-1"><button type="button" class="min-w-0 truncate px-2 text-xs text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task', currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button><button type="button" :disabled="timer.clearing" class="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-label="t('pomoNotes.freeFocus')" :title="t('pomoNotes.freeFocus')" @click="clearFocus()"><X class="h-3 w-3" /></button></div>
         <div
           class="text-6xl font-thin tabular-nums tracking-tighter text-foreground cursor-pointer select-none transition-colors hover:text-primary duration-300"
           @click="clickTimerCustomize"
@@ -39,6 +40,7 @@
       <div class="flex justify-center gap-3 w-full">
         <button
           @click="toggleTimer"
+          :disabled="starting || timer.clearing"
           class="flex-1 py-2.5 rounded-xl font-semibold transition-all duration-300 shadow-sm flex items-center justify-center gap-2 text-xs"
           :class="[
             isRunning 
@@ -46,7 +48,7 @@
               : 'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md'
           ]"
         >
-          {{ isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}
+          {{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}
         </button>
         <button
           @click="resetTimer"
@@ -58,44 +60,49 @@
       </div>
 
       <button
-        @click="() => { isExpanded = true; emit('expand') }"
-        class="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-300 opacity-0 group-hover/pomodoro:opacity-100 scale-90 group-hover/pomodoro:scale-100"
+        type="button"
+        @click="setExpanded(true)"
+        class="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-200 opacity-0 group-hover/pomodoro:opacity-100 scale-90 group-hover/pomodoro:scale-100 focus-visible:opacity-100 focus-visible:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100"
         :title="$t('pomodoro.expandToNavbar')"
+        :aria-label="$t('pomodoro.expandToNavbar')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
         </svg>
       </button>
+      <p v-if="timer.error && timer.error !== 'REMOTE_ACTIVE'" class="mt-2 text-center text-xs text-muted-foreground" role="status">{{ t(timer.errorMessageKey) }}</p>
     </div>
 
     <div
       v-else
       key="expanded"
       data-teleport="expanded"
+      data-pomodoro-navigation
+      :inert="!navbarVisible"
       :class="[
-        'fixed left-0 right-0 bg-card/60 backdrop-blur-2xl border-b border-border shadow-sm z-40 transition-all duration-500 ease-in-out',
-        isNavbarVisible ? 'top-0 translate-y-0' : 'top-0 -translate-y-full'
+        'pomodoro-dock fixed top-0 left-0 right-0 bg-card/70 backdrop-blur-2xl border-b border-border/60 shadow-sm z-40',
+        navbarVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
       ]"
     >
-      <div class="max-w-full px-5 py-2 flex items-center justify-between gap-6 relative">
-        <div class="flex items-center gap-3 flex-shrink-0">
-          <div class="p-1.5 bg-primary/10 text-primary rounded-lg ring-1 ring-primary/20">
-            <Timer class="h-4 w-4" />
-          </div>
+      <div class="h-14 max-w-full pl-3 pr-[4.5rem] sm:pl-5 sm:pr-28 flex items-center justify-between gap-2 relative">
+        <div data-pomodoro-left class="flex shrink-0 items-center gap-3 xl:gap-4">
           <div class="flex items-center gap-2">
-            <p class="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mt-0.5">{{ $t('pomodoro.focusTime') }}</p>
-            <p class="text-xl font-medium tracking-tight text-foreground tabular-nums">{{ formattedTime }}</p>
+            <div class="hidden xl:block p-1.5 bg-primary/10 text-primary rounded-lg ring-1 ring-primary/20">
+              <Timer class="h-4 w-4" />
+            </div>
+            <div class="flex flex-col items-start"><button type="button" @click="clickTimerCustomize" :title="$t('pomodoro.clickSetup')" :aria-label="$t('pomodoro.clickSetup')" class="rounded-lg px-1 text-xl font-medium tracking-tight text-foreground tabular-nums hover:bg-muted/50 transition-colors">{{ formattedTime }}</button><div v-if="currentTarget" class="flex max-w-[6rem] items-center"><button type="button" class="min-w-0 truncate px-1 text-[9px] leading-3 text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task', currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button><button type="button" :disabled="timer.clearing" class="rounded p-0.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-label="t('pomoNotes.freeFocus')" :title="t('pomoNotes.freeFocus')" @click="clearFocus()"><X class="h-2.5 w-2.5" /></button></div></div>
           </div>
-        </div>
 
-        <div class="flex gap-1 p-0.5 bg-muted/40 backdrop-blur-md rounded-full border border-border/50 hidden lg:flex items-center">
+        <div data-pomodoro-modes role="group" :aria-label="$t('pomodoro.modeSelect')" class="hidden lg:flex gap-1 p-0.5 bg-muted/40 rounded-full border border-border/50 items-center">
           <button
             v-for="mode in modes"
             :key="mode.name"
             @click="setMode(mode)"
             @context-menu.prevent="openCustomizeDialog"
             :title="$t('pomodoro.rightClickSetup')"
-            class="px-3 py-1 text-[10px] font-semibold rounded-full transition-all duration-300"
+            type="button"
+            :aria-pressed="currentMode.key === mode.key"
+            class="px-2.5 py-1 text-[10px] font-semibold whitespace-nowrap rounded-full transition-colors duration-200"
             :class="[
               currentMode.name === mode.name
                 ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
@@ -105,11 +112,13 @@
             {{ mode.name }}
           </button>
         </div>
+        </div>
 
-        <div class="flex items-center gap-3 flex-shrink-0">
+        <div class="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div class="flex items-center gap-1.5 bg-muted/40 rounded-full p-0.5 border border-border/50">
             <button
               @click="toggleTimer"
+              :disabled="starting || timer.clearing"
               class="px-3 py-1 rounded-full text-[11px] font-semibold transition-all duration-300"
               :class="[
                 isRunning 
@@ -117,19 +126,21 @@
                   : 'bg-primary text-primary-foreground hover:bg-primary/90'
               ]"
             >
-              {{ isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}
+              {{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}
             </button>
             <button
               @click="resetTimer"
-              class="px-3 py-1 rounded-full text-[11px] font-medium bg-transparent text-foreground hover:bg-background transition-colors disabled:opacity-40"
+              :title="$t('pomodoro.reset')" :aria-label="$t('pomodoro.reset')" class="px-2 py-1 rounded-full text-[11px] font-medium bg-transparent text-foreground hover:bg-background transition-colors disabled:opacity-40"
               :disabled="!canReset"
             >
-              {{ $t('pomodoro.reset') }}
+              <span class="hidden lg:inline">{{ $t('pomodoro.reset') }}</span><RotateCcw class="h-3.5 w-3.5 lg:hidden" />
             </button>
             <button
-              @click="() => { isExpanded = false; emit('collapse') }"
+              type="button"
+              @click="setExpanded(false)"
               class="p-1.5 hover:bg-background rounded-full transition-colors text-muted-foreground hover:text-foreground"
               :title="$t('pomodoro.collapse')"
+              :aria-label="$t('pomodoro.collapse')"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
@@ -137,29 +148,18 @@
             </button>
           </div>
 
-          <div class="flex items-center gap-3 bg-muted/40 p-0.5 rounded-full border border-border/50 hidden sm:flex text-xs">
-            <div class="pl-2.5 pr-1.5 cursor-default font-semibold text-foreground border-r border-border/50">
-              {{ userEmail || 'User' }}
-            </div>
-            <button
-              @click="themeStore.toggleTheme"
-              class="p-1.5 rounded-full hover:bg-background transition-colors text-muted-foreground"
-            >
-              <svg v-if="themeStore.theme === 'light'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-              </svg>
-              <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.536l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zm5.657-9.193a1 1 0 00-1.414 0l-.707.707A1 1 0 005.05 6.464l.707-.707a1 1 0 001.414 0zm2.828 9.193a1 1 0 011.414-1.414l.707.707a1 1 0 11-1.414 1.414l-.707-.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" clip-rule="evenodd"></path>
-              </svg>
-            </button>
-            <button
-              @click="emit('logout')"
-              class="pr-3 pl-1 text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors"
-              :title="$t('app.signOut')"
-            >
-              {{ $t('app.signOut') }}
-            </button>
+
+        </div>
+        <button type="button" popovertarget="pomodoro-dock-controls" :aria-label="$t('pomodoro.controls')" :title="$t('pomodoro.controls')" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground transition-colors hover:bg-background hover:text-foreground sm:hidden">
+          <MoreHorizontal class="h-4 w-4" />
+        </button>
+        <div ref="dockControls" id="pomodoro-dock-controls" popover="auto" :aria-label="$t('pomodoro.controls')" class="dock-controls rounded-2xl border border-border/60 bg-card p-1.5 text-card-foreground shadow-[0_12px_36px_rgb(0,0,0,0.12)] sm:hidden">
+          <div role="group" :aria-label="$t('pomodoro.modeSelect')" class="border-b border-border/40 pb-1.5 mb-1.5">
+            <button v-for="mode in modes" :key="mode.key" type="button" :aria-pressed="currentMode.key === mode.key" class="dock-control" :class="currentMode.key === mode.key ? 'bg-muted text-foreground' : 'text-muted-foreground'" @click="setMode(mode); closeDockControls()">{{ mode.name }}<Check v-if="currentMode.key === mode.key" class="ml-auto h-3.5 w-3.5" /></button>
           </div>
+          <button type="button" :disabled="starting || timer.clearing" class="dock-control" @click="toggleTimer(); closeDockControls()"><Pause v-if="isRunning && !remote" class="h-3.5 w-3.5" /><Play v-else class="h-3.5 w-3.5" />{{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}</button>
+          <button type="button" :disabled="!canReset" class="dock-control" @click="resetTimer(); closeDockControls()"><RotateCcw class="h-3.5 w-3.5" />{{ $t('pomodoro.reset') }}</button>
+          <button type="button" class="dock-control text-muted-foreground" @click="closeDockControls(); setExpanded(false)"><ArrowDown class="h-3.5 w-3.5" />{{ $t('pomodoro.collapse') }}</button>
         </div>
       </div>
       
@@ -287,246 +287,80 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { Timer, X } from 'lucide-vue-next'
-import { useThemeStore } from '@/stores/theme'
+import { storeToRefs } from 'pinia'
+import { ArrowDown, Check, MoreHorizontal, Pause, Play, Timer, X, RotateCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-
-interface Props { userEmail?: string }
-interface Emits { logout: []; expand: []; collapse: [] }
-interface TimerMode { key: 'focus' | 'shortBreak' | 'longBreak'; name: string; label: string; duration: number }
-interface TimerDurations { focus: number; shortBreak: number; longBreak: number }
+import { useUIStore } from '@/stores/ui'
+import { usePomodoroStore, normalizeDurations, type TimerDurations, type ModeKey } from '@/features/pomodoro/stores/pomodoro'
+interface Props { navbarVisible?: boolean; docked?: boolean }
+interface Emits { expand: []; collapse: []; 'focus-task': [workspace: string] }
+interface TimerMode { key: ModeKey; name: string; label: string; duration: number }
 type TimerPresetId = 'baby-step' | 'popular' | 'medium' | 'extended' | 'custom'
-interface TimerPreset { id: Exclude<TimerPresetId, 'custom'>; name: string; focus: number; shortBreak: number; longBreak: number }
-
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { navbarVisible: true, docked: false })
 const emit = defineEmits<Emits>()
-const themeStore = useThemeStore()
 const { t } = useI18n()
-
-const timerPresets: TimerPreset[] = [
-  { id: 'baby-step', name: 'Baby Step', focus: 10, shortBreak: 5, longBreak: 10 },
-  { id: 'popular', name: 'Popular', focus: 25, shortBreak: 5, longBreak: 15 },
-  { id: 'medium', name: 'Medium', focus: 40, shortBreak: 8, longBreak: 20 },
-  { id: 'extended', name: 'Extended', focus: 60, shortBreak: 10, longBreak: 25 },
-]
-
-const defaultCustomDurations: TimerDurations = { focus: 31, shortBreak: 8, longBreak: 10 }
-
+const timer = usePomodoroStore()
+const ui = useUIStore()
+const { isRunning, formattedTime, progressPercentage, canReset, currentTarget, remote, starting } = storeToRefs(timer)
 const modes = computed<TimerMode[]>(() => [
-  { key: 'focus', name: t('pomodoro.focus'), label: 'Pomodoro', duration: 25 * 60 },
-  { key: 'shortBreak', name: t('pomodoro.shortBreak'), label: 'Rest', duration: 5 * 60 },
-  { key: 'longBreak', name: t('pomodoro.longBreak'), label: 'Long Rest', duration: 15 * 60 },
+  { key:'focus',name:t('pomodoro.focus'),label:'Pomodoro',duration:timer.durations.focus*60 },
+  { key:'shortBreak',name:t('pomodoro.shortBreak'),label:'Rest',duration:timer.durations.shortBreak*60 },
+  { key:'longBreak',name:t('pomodoro.longBreak'),label:'Long Rest',duration:timer.durations.longBreak*60 },
 ])
-
-const currentMode = ref(modes.value[0])
-
-watch(modes, (newModes) => {
-  const updatedMode = newModes.find(m => m.key === currentMode.value.key)
-  if (updatedMode) {
-    currentMode.value = { ...currentMode.value, name: updatedMode.name }
-  }
-})
-
-const timeLeft = ref(currentMode.value.duration)
-const isRunning = ref(false)
-const isExpanded = ref(false)
-const customizeDialog = ref<HTMLDialogElement | null>(null)
-const customDurations = ref<TimerDurations>({ ...defaultCustomDurations })
-const draftCustomDurations = ref<TimerDurations>({ ...defaultCustomDurations })
+const currentMode = computed(() => ({ ...modes.value.find(mode=>mode.key===timer.modeKey)!, duration:timer.sessionSeconds }))
+const isExpanded = ref(props.docked)
+const dockControls = ref<HTMLElement>()
+const customizeDialog = ref<HTMLDialogElement|null>(null)
+const closeDockControls = () => dockControls.value?.hidePopover?.()
+watch(()=>props.navbarVisible,visible=>{if(!visible)closeDockControls()})
+watch(()=>props.docked,value=>{isExpanded.value=value})
+function setExpanded(value:boolean) { isExpanded.value=value;if(value)emit('expand');else emit('collapse') }
+const timerPresets = [
+  { id:'baby-step',focus:10,shortBreak:5,longBreak:10 }, { id:'popular',focus:25,shortBreak:5,longBreak:15 },
+  { id:'medium',focus:40,shortBreak:8,longBreak:20 }, { id:'extended',focus:60,shortBreak:10,longBreak:25 },
+] as const
+const customDurations = ref<TimerDurations>({...timer.durations})
+const draftCustomDurations = ref<TimerDurations>({...customDurations.value})
 const draftPreset = ref<TimerPresetId>('popular')
-const timerInterval = ref<ReturnType<typeof setInterval> | null>(null)
-let endTimestamp: number | null = null
-let visibilityListenerAdded = false
-const originalTitle = typeof document !== 'undefined' ? document.title || 'Pomodoro Timer' : 'Pomodoro Timer'
-
-// YENİ: İlerleme Çubuğu (Progress Bar) Hesaplaması
-const progressPercentage = computed(() => {
-  const totalDuration = currentMode.value.duration
-  const elapsedTime = totalDuration - timeLeft.value
-  return (elapsedTime / totalDuration) * 100
-})
-
-const isNavbarVisible = ref(true)
-let lastScrollPosition = 0
-
-const handleScroll = () => {
-  if (!isExpanded.value) return
-  const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop
-  if (currentScrollPosition < 0) return
-  if (Math.abs(currentScrollPosition - lastScrollPosition) < 15) return
-
-  if (currentScrollPosition > lastScrollPosition && currentScrollPosition > 50) {
-    isNavbarVisible.value = false
-  } else {
-    isNavbarVisible.value = true 
-  }
-  lastScrollPosition = currentScrollPosition
-}
-
-watch(isExpanded, (newVal) => {
-  if (newVal) {
-    isNavbarVisible.value = true
-    lastScrollPosition = window.pageYOffset || document.documentElement.scrollTop
+const findPresetId=(value:TimerDurations):TimerPresetId=>timerPresets.find(preset=>preset.focus===value.focus&&preset.shortBreak===value.shortBreak&&preset.longBreak===value.longBreak)?.id||'custom'
+const formatDurationTriplet=(value:TimerDurations)=>`${value.focus}m / ${value.shortBreak}m / ${value.longBreak}m`
+const customPreviewDurations=computed(()=>draftPreset.value==='custom'?normalizeDurations(draftCustomDurations.value):customDurations.value)
+const presetCards=computed(()=>[...timerPresets.map(preset=>({id:preset.id as TimerPresetId,name:t(`pomodoro.presets.${preset.id}`),summary:formatDurationTriplet(preset)})),
+  {id:'custom' as TimerPresetId,name:t('pomodoro.custom'),summary:formatDurationTriplet(customPreviewDurations.value)}])
+const openCustomizeDialog=()=>{draftPreset.value=findPresetId(timer.durations);draftCustomDurations.value={...timer.durations};customizeDialog.value?.showModal()}
+const selectDraftPreset=(id:TimerPresetId)=>{draftPreset.value=id;draftCustomDurations.value={...(timerPresets.find(preset=>preset.id===id)||customDurations.value)}}
+const saveTimerConfiguration=()=>{const value=normalizeDurations(draftCustomDurations.value);if(draftPreset.value==='custom')customDurations.value=value;timer.configure(value);customizeDialog.value?.close()}
+const clickTimerCustomize=()=>openCustomizeDialog()
+const setMode=async(mode:TimerMode)=>{await timer.setMode(mode.key);notifyFailure()}
+const notifyFailure=()=>{if(timer.error&&timer.error!=='REMOTE_ACTIVE')ui.addToast(t(timer.errorMessageKey),'error')}
+const toggleTimer=async()=>{await timer.toggleTimer();notifyFailure()}
+const clearFocus=async()=>{await timer.clearFocus();notifyFailure()}
+const resetTimer=async()=>{await timer.resetTimer();notifyFailure()}
+watch(()=>timer.completionSequence,()=>{
+  if(typeof Audio!=='undefined'){const audio=new Audio('/notification.mp3');void audio.play().catch(()=>{})}
+  if('Notification' in window&&Notification.permission==='granted'){
+    try{new Notification(t('pomodoro.timerComplete'),{body:t('pomodoro.sessionCompleted',{mode:t(`pomodoro.${timer.lastCompletedMode}`)})})}catch{}
   }
 })
-
-onMounted(() => {
-  window.addEventListener('scroll', handleScroll, { passive: true })
-})
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(value)))
-
-const normalizeDurations = (durations: TimerDurations): TimerDurations => ({
-  focus: clamp(durations.focus, 10, 90), shortBreak: clamp(durations.shortBreak, 3, 30), longBreak: clamp(durations.longBreak, 5, 45)
-})
-
-const getCurrentDurations = (): TimerDurations => ({
-  focus: Math.round(modes.value[0].duration / 60), shortBreak: Math.round(modes.value[1].duration / 60), longBreak: Math.round(modes.value[2].duration / 60)
-})
-
-const findPresetId = (durations: TimerDurations): TimerPresetId => {
-  const matchedPreset = timerPresets.find((preset) => preset.focus === durations.focus && preset.shortBreak === durations.shortBreak && preset.longBreak === durations.longBreak)
-  return matchedPreset?.id ?? 'custom'
-}
-
-const formatDurationTriplet = (durations: TimerDurations) => `${durations.focus}m / ${durations.shortBreak}m / ${durations.longBreak}m`
-
-const customPreviewDurations = computed(() => draftPreset.value === 'custom' ? normalizeDurations(draftCustomDurations.value) : customDurations.value)
-
-const presetCards = computed(() => [
-  ...timerPresets.map((preset) => ({ 
-    id: preset.id as TimerPresetId, 
-    name: t(`pomodoro.presets.${preset.id}`),
-    summary: formatDurationTriplet({ focus: preset.focus, shortBreak: preset.shortBreak, longBreak: preset.longBreak }) 
-  })),
-  { id: 'custom' as TimerPresetId, name: t('pomodoro.custom'), summary: formatDurationTriplet(customPreviewDurations.value) }
-])
-
-const formattedTime = computed(() => {
-  const minutes = Math.floor(timeLeft.value / 60)
-  const seconds = timeLeft.value % 60
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-})
-
-const canReset = computed(() => timeLeft.value !== currentMode.value.duration || isRunning.value)
-
-const setMode = (mode: (typeof modes.value)[0]) => {
-  currentMode.value = mode
-  resetTimer()
-}
-
-const applyDurationsToModes = (durations: TimerDurations) => {
-  const normalized = normalizeDurations(durations)
-  modes.value[0].duration = normalized.focus * 60
-  modes.value[1].duration = normalized.shortBreak * 60
-  modes.value[2].duration = normalized.longBreak * 60
-  resetTimer()
-}
-
-const openCustomizeDialog = () => {
-  const liveDurations = getCurrentDurations()
-  const detectedPreset = findPresetId(liveDurations)
-  if (detectedPreset === 'custom') customDurations.value = { ...liveDurations }
-  draftPreset.value = detectedPreset
-  draftCustomDurations.value = detectedPreset === 'custom' ? { ...customDurations.value } : { ...liveDurations }
-  customizeDialog.value?.showModal()
-}
-
-const selectDraftPreset = (presetId: TimerPresetId) => {
-  if (presetId === 'custom') { draftPreset.value = 'custom'; draftCustomDurations.value = { ...customDurations.value }; return }
-  const selectedPreset = timerPresets.find((preset) => preset.id === presetId)
-  if (!selectedPreset) return
-  draftPreset.value = presetId
-  draftCustomDurations.value = { focus: selectedPreset.focus, shortBreak: selectedPreset.shortBreak, longBreak: selectedPreset.longBreak }
-}
-
-const saveTimerConfiguration = () => {
-  if (draftPreset.value === 'custom') {
-    const normalizedCustomDurations = normalizeDurations(draftCustomDurations.value)
-    customDurations.value = { ...normalizedCustomDurations }
-    applyDurationsToModes(normalizedCustomDurations)
-    customizeDialog.value?.close()
-    return
-  }
-  const selectedPreset = timerPresets.find((preset) => preset.id === draftPreset.value)
-  if (!selectedPreset) { customizeDialog.value?.close(); return }
-  applyDurationsToModes({ focus: selectedPreset.focus, shortBreak: selectedPreset.shortBreak, longBreak: selectedPreset.longBreak })
-  customizeDialog.value?.close()
-}
-
-const clickTimerCustomize = () => openCustomizeDialog()
-
-const toggleTimer = () => isRunning.value ? pauseTimer() : startTimer()
-
-const updatePageTitle = () => document.title = isRunning.value ? `${formattedTime.value} - ${originalTitle}` : originalTitle
-
-const startTimer = () => {
-  if (isRunning.value) return
-  if (timeLeft.value <= 0) return
-
-  endTimestamp = Date.now() + timeLeft.value * 1000
-  isRunning.value = true
-
-  if (!visibilityListenerAdded) {
-    visibilityListenerAdded = true
-    window.addEventListener('visibilitychange', () => {
-      if (isRunning.value && endTimestamp) timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
-      updatePageTitle()
-    })
-  }
-
-  timerInterval.value = setInterval(() => {
-    if (!endTimestamp) return
-    const secs = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
-    timeLeft.value = secs
-    updatePageTitle()
-    if (secs <= 0) { notifyTimerComplete(); pauseTimer() }
-  }, 500)
-
-  timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
-  updatePageTitle()
-}
-
-const pauseTimer = () => {
-  if (timerInterval.value) { clearInterval(timerInterval.value); timerInterval.value = null }
-  if (endTimestamp) timeLeft.value = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000))
-  endTimestamp = null
-  isRunning.value = false
-  updatePageTitle()
-}
-
-const resetTimer = () => {
-  pauseTimer()
-  timeLeft.value = currentMode.value.duration
-  endTimestamp = null
-  updatePageTitle()
-}
-
-const notifyTimerComplete = () => {
-  const audio = new Audio('/notification.mp3')
-  audio.play()
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(t('pomodoro.timerComplete'), { body: t('pomodoro.sessionCompleted', { mode: currentMode.value.name }) })
-  }
-}
-
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll) 
-  if (timerInterval.value) clearInterval(timerInterval.value)
-  document.title = originalTitle
-})
+onMounted(()=>timer.init())
+onUnmounted(()=>timer.shutdown())
 </script>
 
 <style scoped>
-.teleportLift-enter-active, .teleportLift-leave-active { will-change: transform, opacity, filter; backface-visibility: hidden; }
-.teleportLift-leave-active[data-teleport='compact'] { transform-origin: center top; animation: beamOutUp 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-.teleportLift-enter-active[data-teleport='expanded'] { animation: materializeTop 560ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-.teleportLift-leave-active[data-teleport='expanded'] { animation: dissolveTop 380ms cubic-bezier(0.4, 0, 1, 1) both; }
-.teleportLift-enter-active[data-teleport='compact'] { transform-origin: center top; animation: landFromBeam 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-@keyframes beamOutUp { 0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } 38% { opacity: 0.95; transform: translateY(-10px) scale(0.99); filter: blur(0.5px); } 100% { opacity: 0; transform: translateY(-72px) scale(0.94); filter: blur(8px); } }
-@keyframes materializeTop { 0% { opacity: 0; transform: translateY(-115%) scale(1.02); filter: blur(10px); } 55% { opacity: 0.9; transform: translateY(-6%) scale(1.005); filter: blur(2px); } 100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
-@keyframes dissolveTop { 0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } 100% { opacity: 0; transform: translateY(-46px) scale(0.985); filter: blur(6px); } }
-@keyframes landFromBeam { 0% { opacity: 0; transform: translateY(-40px) scale(0.96); filter: blur(8px); } 65% { opacity: 1; transform: translateY(4px) scale(1.01); filter: blur(1px); } 100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+.pomodoro-dock { transition: transform 240ms cubic-bezier(.22,1,.36,1), opacity 180ms ease; }
+.dock-controls { inset: 3rem 4.5rem auto auto; margin: 0; width: 11rem; opacity: 0; transform: translateY(-4px); transition: opacity 140ms ease, transform 160ms cubic-bezier(.22,1,.36,1), display 160ms allow-discrete, overlay 160ms allow-discrete; }
+.dock-controls:popover-open { opacity: 1; transform: translateY(0); }
+@starting-style { .dock-controls:popover-open { opacity: 0; transform: translateY(-4px); } }
+.dock-control { display: flex; width: 100%; align-items: center; gap: .5rem; padding: .6rem .65rem; border-radius: .65rem; font-size: .75rem; transition: background-color 150ms, color 150ms; }
+.dock-control:hover { background: hsl(var(--muted) / .6); }
+.teleportLift-enter-active, .teleportLift-leave-active { transition: opacity 180ms ease, transform 220ms cubic-bezier(.22,1,.36,1); }
+.teleportLift-enter-from[data-teleport='compact'], .teleportLift-leave-to[data-teleport='compact'] { opacity: 0; transform: translateY(-8px) scale(.98); }
+.teleportLift-enter-from[data-teleport='expanded'], .teleportLift-leave-to[data-teleport='expanded'] { opacity: 0; transform: translateY(-100%); }
+button:focus-visible { outline: 2px solid hsl(var(--primary) / .45); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .pomodoro-dock, .dock-controls, .teleportLift-enter-active, .teleportLift-leave-active, .customPanel-enter-active, .customPanel-leave-active { transition: none !important; }
+  .teleportLift-enter-from[data-teleport='compact'], .teleportLift-leave-to[data-teleport='compact'] { transform: none; }
+}
 .pomodoro-dialog { overflow: hidden; }
 .pomodoro-dialog::backdrop { background: rgb(2 6 23 / 0.5); backdrop-filter: blur(8px); }
 .preset-radio { width: 1.1rem; height: 1.1rem; border-radius: 9999px; border: 1.5px solid hsl(var(--border)); background: hsl(var(--card)); position: relative; flex-shrink: 0; transition: border-color 160ms ease, box-shadow 160ms ease; }

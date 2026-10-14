@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
+  <div class="space-y-5 relative z-10 w-full flex flex-col items-center">
     
-    <div class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-30">
+    <div v-if="canWrite" class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-30">
       <div class="relative flex-1 min-w-0 group">
         <Code2 class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50 pointer-events-none" />
         <input
@@ -27,7 +27,7 @@
     <div class="space-y-4 pt-2 workspace-content relative z-20" style="overflow: visible;">
       
       <transition name="slide-fade">
-        <div v-if="isDrafting" class="rounded-xl border border-primary/30 bg-[#0d1117] shadow-lg flex flex-col animate-in slide-in-from-top-4 relative z-20">
+        <div v-if="canWrite && isDrafting" class="rounded-xl border border-primary/30 bg-[#0d1117] shadow-lg flex flex-col animate-in slide-in-from-top-4 relative z-20">
           <div class="px-4 py-2 border-b border-white/5 bg-white/5 flex items-center justify-between rounded-t-xl">
             <div class="flex items-center gap-3 w-full">
               <div class="flex gap-1.5 opacity-50 shrink-0">
@@ -84,8 +84,10 @@
           v-for="snippet in todoStore.codeSnippets"
           :key="snippet.id"
           :snippet="snippet"
+          :data-search-record="snippet.id"
           :languageOptions="languageSelectOptions"
           @update="handleUpdateSnippet"
+          @refresh="refreshSnippetDraft"
           @delete="handleDeleteSnippet"
           @copy="handleCopySnippet"
         />
@@ -96,7 +98,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
+import { computed, onMounted } from 'vue'
 import { Code2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n' 
 import { useUIStore } from '@/stores/ui' 
@@ -111,14 +116,16 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import { javascript } from '@codemirror/lang-javascript'
 import hljs from 'highlight.js'
 
+const { canWrite } = useModuleAccess('code')
+
 const todoStore = useTodoStore()
 const uiStore = useUIStore() 
 const { t } = useI18n()
 
 const cmExtensions = [oneDark, javascript()]
 
-const isDrafting = ref(false) 
-const snippetForm = ref({
+const isDrafting = useWorkspaceDraft('code-drafting', false)
+const snippetForm = useWorkspaceDraft('code-draft', {
   title: '',
   language: 'javascript', 
   code: '',
@@ -175,12 +182,19 @@ const handleSaveSnippet = async () => {
 }
 
 // Item'dan (Alt bileşenden) gelen Update Event'ini karşıla
-const handleUpdateSnippet = async (snippetId: string, data: Partial<CodeSnippet>) => {
+const refreshSnippetDraft = async (snippetId: string, done: (version?: number) => void) => {
+  if (!await todoStore.fetchCodeSnippets()) return
+  const latest = todoStore.codeSnippets.find(snippet => snippet.id === snippetId)
+  done(latest?.version)
+  if (latest) uiStore.addToast(t('sharing.draftReady'), 'info')
+}
+const handleUpdateSnippet = async (snippetId: string, data: Partial<CodeSnippet>, done?: (success: boolean, conflict?: boolean) => void) => {
   const result = await todoStore.updateCodeSnippet(snippetId, data)
+  done?.(result.success, result.message === 'SHARING_CONFLICT')
   if (result.success) {
     uiStore.addToast('Kod bloğu güncellendi', 'success')
   } else {
-    uiStore.addToast(result.message || t('code.errorUpdating'), 'error')
+    uiStore.addToast(result.message === 'SHARING_CONFLICT' ? t('sharing.conflict') : t('code.errorUpdating'), 'error')
   }
 }
 
@@ -216,6 +230,7 @@ const handleCopySnippet = async (code: string) => {
 onMounted(async () => {
   await todoStore.fetchCodeSnippets()
 })
+useSearchReveal('code', async hit => { await todoStore.fetchCodeSnippets(hit.record_id) })
 </script>
 
 <style scoped>

@@ -1,11 +1,12 @@
 <template>
   <div
-    @click="$emit('toggle', note.id)"
-    class="flex items-center justify-between py-2.5 px-4 rounded-xl border transition-all duration-300 cursor-pointer group/note w-full"
+    :data-search-record="note.id"
+    @click="canWrite && $emit('toggle', note.id)"
+    class="workspace-card flex items-center justify-between py-2.5 px-4 cursor-pointer group/note w-full"
     :class="[
       note.completed 
-        ? 'bg-muted/30 border-border/30 opacity-80' 
-        : 'bg-card/40 dark:bg-muted/5 border-border/40 hover:border-primary/20 hover:shadow-md hover:bg-card/70'
+        ? 'bg-muted/30'
+        : 'bg-card/40 dark:bg-muted/5 hover:bg-card/70'
     ]"
   >
     <div class="flex items-center gap-3 flex-1 pr-3 min-w-0">
@@ -36,7 +37,7 @@
         <Copy class="w-3.5 h-3.5" />
       </button>
 
-      <button
+      <button v-if="canWrite"
         @click.stop="$emit('delete', note.id)"
         class="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
       >
@@ -47,9 +48,12 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { Trash2, Copy } from 'lucide-vue-next'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
+
+const { canWrite } = useModuleAccess('quick')
 
 const props = defineProps<{
   note: any 

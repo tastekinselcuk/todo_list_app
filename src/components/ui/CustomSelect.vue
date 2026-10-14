@@ -1,9 +1,14 @@
 <template>
-  <div class="relative" ref="containerRef">
+  <div class="relative" ref="containerRef" @keydown="handleKeydown" @keydown.esc.stop.prevent="close()">
     <button
       type="button"
+      ref="triggerRef"
+      :aria-label="ariaLabel"
+      :aria-expanded="isOpen"
+      :disabled="disabled"
+      @mousedown="preserveFocus && $event.preventDefault()"
       @click="toggle"
-      class="appearance-none w-full flex items-center justify-between gap-2 cursor-pointer outline-none transition-all duration-200 truncate"
+      class="appearance-none w-full flex items-center justify-between gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default disabled:opacity-50 transition-all duration-200 truncate"
       :class="[
         sizeClasses,
         variantClasses,
@@ -11,7 +16,7 @@
       ]"
       :style="buttonStyle"
     >
-      <span class="truncate text-left">{{ displayLabel }}</span>
+      <slot name="value" :option="selectedOption"><span class="truncate text-left">{{ displayLabel }}</span></slot>
       <ChevronDown
         class="shrink-0 opacity-60 transition-transform duration-200"
         :class="[isOpen ? 'rotate-180' : '', iconSizeClass]"
@@ -38,8 +43,10 @@
             v-for="option in options"
             :key="option.value"
             type="button"
+            :disabled="option.disabled"
+            @mousedown="preserveFocus && $event.preventDefault()"
             @click="selectOption(option)"
-            class="w-full flex items-center gap-2 px-3 text-left text-sm font-medium transition-colors duration-100 hover:bg-primary/10 hover:text-primary"
+            class="w-full flex items-center gap-2 px-3 text-left text-sm font-medium transition-colors duration-100 hover:bg-primary/10 hover:text-primary disabled:cursor-default disabled:opacity-40"
             :class="[
               modelValue === option.value
                 ? 'bg-primary/10 text-primary font-semibold'
@@ -52,7 +59,7 @@
               class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
             />
             <div v-else class="w-1.5 shrink-0" />
-            <span class="truncate">{{ option.label }}</span>
+            <slot name="option" :option="option"><span class="truncate">{{ option.label }}</span></slot>
           </button>
         </div>
       </div>
@@ -61,21 +68,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 
 export interface SelectOption {
   value: string
   label: string
+  disabled?: boolean
 }
 
 const props = withDefaults(defineProps<{
   modelValue: string
   options: SelectOption[]
   placeholder?: string
+  ariaLabel?: string
+  disabled?: boolean
   size?: 'sm' | 'md'
   variant?: 'default' | 'ghost'
   colorClass?: string
+  preserveFocus?: boolean
   buttonStyle?: Record<string, string>
 }>(), {
   placeholder: 'Seçiniz',
@@ -87,18 +98,18 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'open-change': [value: boolean]
 }>()
 
 const isOpen = ref(false)
 const openAbove = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
+const triggerRef = ref<HTMLButtonElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownMinWidth = ref('160px')
 
-const displayLabel = computed(() => {
-  const found = props.options.find(o => o.value === props.modelValue)
-  return found ? found.label : props.placeholder
-})
+const selectedOption = computed(() => props.options.find(o => o.value === props.modelValue))
+const displayLabel = computed(() => selectedOption.value?.label || props.placeholder)
 
 const sizeClasses = computed(() =>
   props.size === 'sm'
@@ -127,31 +138,61 @@ function updatePosition() {
 }
 
 function toggle() {
+  if (props.disabled) return
   isOpen.value = !isOpen.value
+  emit('open-change', isOpen.value)
   if (isOpen.value) {
     nextTick(updatePosition)
   }
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (props.disabled || !['ArrowDown','ArrowUp','Home','End'].includes(event.key)) return
+  if (!isOpen.value && ['Home','End'].includes(event.key)) return
+  event.preventDefault()
+  const opening=!isOpen.value
+  if (opening) toggle()
+  nextTick(() => {
+    if (!isOpen.value) return
+    const choices=Array.from(dropdownRef.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
+    if (!choices.length) return
+    const index=choices.indexOf(document.activeElement as HTMLButtonElement)
+    const target=event.key==='Home'?0:event.key==='End'?choices.length-1:opening?(event.key==='ArrowUp'?choices.length-1:0):(index+(event.key==='ArrowUp'?-1:1)+choices.length)%choices.length
+    choices[target]?.focus()
+  })
+}
+watch(() => props.disabled, value => { if (value) close(false) })
+
 function selectOption(option: SelectOption) {
+  if (props.disabled || option.disabled) return
   emit('update:modelValue', option.value)
-  isOpen.value = false
+  close()
 }
 
-function handleClickOutside(e: MouseEvent) {
+function close(restoreFocus = true) {
+  if (!isOpen.value) return
+  isOpen.value = false
+  emit('open-change', false)
+  if (restoreFocus && !props.preserveFocus) triggerRef.value?.focus()
+}
+defineExpose({ close })
+
+function handleClickOutside(e: Event) {
   if (
     containerRef.value && !containerRef.value.contains(e.target as Node)
   ) {
-    isOpen.value = false
+    close(false)
   }
 }
 
 onMounted(() => {
-  document.addEventListener('mousedown', handleClickOutside)
+  document.addEventListener('pointerdown', handleClickOutside, true)
+  document.addEventListener('focusin', handleClickOutside, true)
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleClickOutside)
+  document.removeEventListener('pointerdown', handleClickOutside, true)
+  document.removeEventListener('focusin', handleClickOutside, true)
 })
 </script>
 

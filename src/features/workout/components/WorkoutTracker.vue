@@ -1,211 +1,182 @@
 <template>
-  <div class="space-y-6 w-full min-w-0">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div class="flex items-center gap-2">
-        <div class="h-8 w-8 rounded-lg bg-teal-500/10 flex items-center justify-center">
-          <Dumbbell class="h-4 w-4 text-teal-500" />
+  <div class="workout-view w-full min-w-0 space-y-4">
+    <template v-if="!activeRoutine">
+      <form v-if="canWrite" class="flex flex-wrap items-center gap-2.5" @submit.prevent="createProgram">
+        <input v-model="newRoutineTitle" type="text" maxlength="120" required :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programName')" :placeholder="t('workout.routinePlaceholder')" class="workout-input h-10 min-w-40 flex-1" />
+        <CustomSelect v-model="newRoutineDay" :options="dayOptions" :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programDay')" class="w-36 shrink-0" />
+        <button type="submit" :disabled="store.isSaving || store.isLoading || !newRoutineTitle.trim()" class="primary-button h-10"><Plus class="h-3.5 w-3.5" />{{ t('workout.newRoutine') }}</button>
+      </form>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
+        <div class="flex items-center gap-2"><h2 class="text-xs font-semibold">{{ t('workout.programs') }}</h2><span class="rounded-md bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{{ store.routines.length }}</span></div>
+      </div>
+      <div v-if="loadFailed" role="alert" class="rounded-2xl border border-border/50 p-5 text-center text-xs text-muted-foreground"><p>{{ t('workout.loadFailed') }}</p><button type="button" class="mt-2 text-foreground underline" @click="loadPrograms">{{ t('workout.retry') }}</button></div>
+      <div v-else-if="store.isLoading && !store.routines.length" class="flex justify-center py-10" role="status" :aria-label="t('app.loading')"><Loader2 class="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none" /></div>
+      <div v-else-if="filtered.length" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <WorkoutRoutineCard v-for="routine in filtered" :key="routine.id" :routine="routine" :data-search-record="routine.id" :disabled="store.isSaving" @open="activeId = $event.id" @edit="editProgram" @duplicate="duplicateProgram" @delete="deleteProgram" />
+      </div>
+      <div v-else class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/40 bg-muted/[0.04] px-5 py-10 text-center">
+        <Dumbbell class="mb-3 h-6 w-6 text-muted-foreground/40" />
+        <p class="text-xs font-medium text-muted-foreground">{{ t(store.routines.length ? 'workout.noProgramMatches' : 'workout.noPrograms') }}</p>
+        <p v-if="!store.routines.length && canWrite" class="mt-1.5 text-[11px] text-muted-foreground/70">{{ t('workout.createHint') }}</p>
+      </div>
+    </template>
+
+    <template v-else>
+      <header :data-search-record="activeRoutine.id" class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-2.5">
+          <button type="button" class="icon-button shrink-0" :aria-label="t('workout.back')" :title="t('workout.back')" @click="activeId = ''"><ArrowLeft class="h-4 w-4" /></button>
+          <div class="min-w-0"><h2 class="break-words text-sm font-semibold">{{ activeRoutine.title }}</h2><p class="mt-0.5 text-[11px] text-muted-foreground">{{ dayLabel(activeRoutine.day_of_week) }} · {{ t('workout.exercisesCount', { count: activeRoutine.exercises.length }) }}</p></div>
         </div>
-        <div>
-          <h2 class="text-sm font-semibold text-foreground">{{ $t('workout.title') }}</h2>
-          <p class="text-xs text-muted-foreground">{{ $t('workout.subtitle') }}</p>
+        <div v-if="canWrite" class="flex shrink-0 items-center gap-1">
+          <button type="button" class="icon-button" :disabled="store.isSaving" :aria-label="t('workout.editProgram')" :title="t('workout.editProgram')" @click="editProgram(activeRoutine)"><Pencil class="h-3.5 w-3.5" /></button>
+          <button type="button" class="icon-button" :disabled="store.isSaving" :aria-label="t('workout.duplicateProgram')" :title="t('workout.duplicateProgram')" @click="duplicateProgram(activeRoutine.id)"><Copy class="h-3.5 w-3.5" /></button>
+          <button type="button" class="icon-button hover:!bg-destructive/5 hover:!text-destructive" :disabled="store.isSaving" :aria-label="t('common.delete')" :title="t('common.delete')" @click="deleteProgram(activeRoutine.id)"><Trash2 class="h-3.5 w-3.5" /></button>
+          <button type="button" class="primary-button ml-2 h-9" :disabled="store.isSaving" @click="editedExercise = null; showLibrary = true"><Plus class="h-3.5 w-3.5" />{{ t('workout.addExercise') }}</button>
         </div>
+      </header>
+      <div v-if="activeRoutine.exercises.length" class="space-y-2">
+        <div class="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"><span class="tabular-nums">{{ t('workout.completedCount', { completed, total: activeRoutine.exercises.length }) }}</span><button v-if="canWrite && completed" type="button" :disabled="store.isSaving" class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/50 hover:text-foreground" @click="resetProgram"><RotateCcw class="h-3 w-3" />{{ t('workout.resetRoutine') }}</button></div>
+        <div class="h-0.5 overflow-hidden rounded-full bg-border/40"><div class="h-full rounded-full bg-teal-500/70 transition-[width] duration-300 motion-reduce:transition-none" :style="{ width: progress + '%' }" /></div>
       </div>
-      
-      <button
-        v-if="!activeRoutine"
-        @click="showAddRoutine = !showAddRoutine"
-        class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 flex items-center gap-2"
-      >
-        <Plus v-if="!showAddRoutine" class="h-4 w-4" />
-        <X v-else class="h-4 w-4" />
-        <span>{{ showAddRoutine ? $t('workout.cancel') : $t('workout.newRoutine') }}</span>
-      </button>
-    </div>
-
-    <div v-if="!activeRoutine" class="space-y-6">
-      <transition name="slide-fade">
-        <div v-if="showAddRoutine" class="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-3">
-          <input
-            v-model="newRoutineTitle"
-            type="text"
-            :placeholder="$t('workout.routinePlaceholder')"
-            class="flex-1 h-10 px-3 rounded-lg border border-input bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-          <CustomSelect v-model="newRoutineDay" :options="dayOptions" />
-          <button
-            @click="handleAddRoutine"
-            :disabled="!newRoutineTitle.trim()"
-            class="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-          >
-            {{ $t('workout.create') }}
-          </button>
-        </div>
-      </transition>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <WorkoutRoutineCard
-          v-for="routine in store.routines"
-          :key="routine.id"
-          :routine="routine"
-          @open="openRoutine"
-          @delete="handleDeleteRoutine"
-        />
+      <div v-if="activeRoutine.exercises.length" class="grid grid-cols-1 items-start gap-2.5 min-[1440px]:grid-cols-2">
+        <WorkoutExerciseRow v-for="exercise in activeRoutine.exercises" :key="exercise.id" :exercise="exercise" :data-search-record="activeRoutine.id" :data-search-child="exercise.id" :disabled="store.isSaving" @edit="editExercise" @delete="deleteExercise" @toggle="toggleExercise" />
       </div>
-    </div>
-
-    <div v-else class="space-y-6">
-      <div class="flex items-center justify-between border-b border-border pb-4">
-        <button @click="activeRoutine = null" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft class="w-4 h-4" /> {{ $t('workout.back') }}
-        </button>
-        <div class="text-right">
-          <h2 class="text-xl font-bold text-foreground">{{ activeRoutine.title }}</h2>
-          <p class="text-xs text-muted-foreground">{{ $t('workout.completedCount', { completed: getCompletedCount(), total: activeRoutine.exercises.length }) }}</p>
-        </div>
+      <div v-else class="flex flex-col items-center rounded-2xl border border-dashed border-border/40 px-5 py-10 text-center">
+        <Dumbbell class="mb-3 h-6 w-6 text-muted-foreground/40" /><p class="text-xs text-muted-foreground">{{ t('workout.emptyProgram') }}</p>
+        <button v-if="canWrite" type="button" class="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-teal-600 transition-colors hover:bg-teal-500/5 dark:text-teal-400" @click="editedExercise = null; showLibrary = true"><Plus class="h-3.5 w-3.5" />{{ t('workout.firstExercise') }}</button>
       </div>
+      <p v-if="progress === 100 && activeRoutine.exercises.length" role="status" class="flex items-center gap-2 text-xs text-teal-600 dark:text-teal-400"><CheckCircle2 class="h-4 w-4" />{{ t('workout.workoutComplete') }}</p>
+    </template>
 
-      <div class="w-full h-2 bg-muted rounded-full overflow-hidden">
-        <div class="h-full bg-teal-500 transition-all duration-500" :style="{ width: `${getProgress()}%` }"></div>
-      </div>
-
-      <button @click="showLibrary = true" class="w-full py-4 border-2 border-dashed border-border rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:border-teal-500/50 hover:bg-teal-500/5 transition-all flex items-center justify-center gap-2">
-        <Search class="w-5 h-5" /> {{ $t('workout.searchDatabase') }}
-      </button>
-
-      <div class="space-y-4">
-        <div
-          v-for="exercise in activeRoutine.exercises"
-          :key="exercise.id"
-          @click="store.toggleExerciseCompletion(activeRoutine!.id, exercise.id)"
-          class="flex items-center gap-4 p-3 rounded-2xl border transition-all duration-300 cursor-pointer group"
-          :class="exercise.isCompleted ? 'bg-teal-500/10 border-teal-500/40 shadow-sm' : 'bg-card border-border hover:border-muted-foreground/30'"
-        >
-          <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-white shrink-0 relative border border-border/50 flex items-center justify-center p-1">
-            <img :src="exercise.imageUrl" :alt="exercise.name" class="w-full h-full object-contain transition-opacity duration-300" :class="exercise.isCompleted ? 'opacity-30 grayscale' : 'opacity-100'" />
-            <div class="absolute inset-0 transition-all duration-300 flex items-center justify-center pointer-events-none" :class="exercise.isCompleted ? 'bg-teal-500/20 backdrop-blur-[1px] opacity-100' : 'opacity-0'">
-              <CheckCircle2 class="w-10 h-10 text-teal-600 dark:text-teal-400 drop-shadow-md" />
-            </div>
-          </div>
-
-          <div class="flex-1 py-2">
-            <h4 class="font-bold text-lg text-foreground transition-all duration-300 capitalize" :class="{ 'line-through opacity-60 text-teal-700 dark:text-teal-400': exercise.isCompleted }">{{ exercise.name }}</h4>
-            <div class="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
-              <span class="flex items-center gap-1.5 bg-muted px-2 py-1 rounded-md"><Layers class="w-4 h-4"/> {{ $t('workout.sets', { count: exercise.sets }) }}</span>
-              <span class="flex items-center gap-1.5 bg-muted px-2 py-1 rounded-md"><RotateCcw class="w-4 h-4"/> {{ $t('workout.reps', { count: exercise.reps }) }}</span>
-            </div>
-          </div>
-
-          <div class="pr-4">
-            <button v-if="!exercise.isCompleted" @click.stop="store.deleteExercise(activeRoutine!.id, exercise.id)" class="p-2.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-              <Trash2 class="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="getProgress() === 100 && activeRoutine.exercises.length > 0" class="p-6 bg-teal-500/10 border border-teal-500/30 rounded-2xl text-center space-y-3 mt-8">
-        <h3 class="text-teal-600 dark:text-teal-400 font-bold text-xl">{{ $t('workout.workoutComplete') }}</h3>
-        <p class="text-sm text-muted-foreground">{{ $t('workout.greatJob') }}</p>
-        <button @click="store.resetRoutine(activeRoutine!.id)" class="text-sm font-medium text-teal-600 dark:text-teal-400 underline hover:text-teal-700 mt-2">{{ $t('workout.resetRoutine') }}</button>
-      </div>
-    </div>
-
-    <ExerciseLibraryModal 
-      :show="showLibrary" 
-      @close="showLibrary = false" 
-      @add="handleAddFromLibrary" 
-    />
-
+    <ExerciseLibraryModal :show="showLibrary && canWrite" :busy="store.isSaving" :exercise="editedExercise" @close="showLibrary = false" @add="addExercise" @update="updateExercise" />
+    <dialog ref="programDialog" class="program-dialog w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-border/60 bg-card p-4 text-card-foreground shadow-2xl" aria-labelledby="workout-edit-title" @cancel="cancelProgramEdit">
+      <form v-if="editingProgram" class="space-y-4" @submit.prevent="saveProgram">
+        <header class="flex items-center justify-between gap-3"><h3 id="workout-edit-title" class="text-sm font-semibold">{{ t('workout.editProgram') }}</h3><button type="button" :disabled="store.isSaving" class="icon-button" :aria-label="t('common.close')" @click="programDialog?.close()"><X class="h-4 w-4" /></button></header>
+        <label class="block text-xs text-muted-foreground" for="workout-program-title">{{ t('workout.programName') }}<input id="workout-program-title" v-model="editingTitle" type="text" maxlength="120" required class="workout-input mt-1.5 h-10 w-full" :disabled="store.isSaving" /></label>
+        <label class="block text-xs text-muted-foreground">{{ t('workout.programDay') }}<CustomSelect v-model="editingDay" :options="dayOptions" :aria-label="t('workout.programDay')" :disabled="store.isSaving" class="mt-1.5" /></label>
+        <div class="flex justify-end gap-2"><button type="button" class="h-9 rounded-xl px-3 text-xs text-muted-foreground hover:bg-muted/50" :disabled="store.isSaving" @click="programDialog?.close()">{{ t('common.cancel') }}</button><button type="submit" class="primary-button h-9" :disabled="store.isSaving || !editingTitle.trim()">{{ t('workout.saveChanges') }}</button></div>
+      </form>
+    </dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Dumbbell, Plus, X, Trash2, ArrowLeft, CheckCircle2, Layers, RotateCcw, Search } from 'lucide-vue-next'
-import { useWorkoutStore, type Routine } from '@/features/workout/stores/workout'
-import { useUIStore } from '@/stores/ui'
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ArrowLeft, CheckCircle2, Copy, Dumbbell, Loader2, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-
+import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
+import { useUIStore } from '@/stores/ui'
+import { useWorkoutStore, type Exercise, type Routine } from '../stores/workout'
+import { fold, type ExerciseInput } from '../lib/exercises'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import WorkoutRoutineCard from './WorkoutRoutineCard.vue'
+import WorkoutExerciseRow from './WorkoutExerciseRow.vue'
 import ExerciseLibraryModal from './ExerciseLibraryModal.vue'
 
-const store = useWorkoutStore()
-const uiStore = useUIStore()
-const { t } = useI18n()
+const store = useWorkoutStore(), ui = useUIStore(), { t } = useI18n()
+const { canWrite } = useModuleAccess('workout')
+const days = ['Any', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const dayLabel = (day: string) => t(day === 'Any' ? 'workout.anyDay' : 'workout.' + day.toLowerCase())
+const dayOptions = computed(() => days.map(value => ({ value, label: dayLabel(value) })))
+const newRoutineTitle = useWorkspaceDraft('routine-title', ''), newRoutineDay = useWorkspaceDraft('routine-day', 'Any')
+const activeId = useWorkspaceDraft('workout-active-routine', ''), query = ref('')
+const activeRoutine = computed(() => store.routines.find(routine => routine.id === activeId.value))
+const filtered = computed(() => store.routines.filter(routine => fold(routine.title).includes(fold(query.value))))
+const completed = computed(() => activeRoutine.value?.exercises.filter(exercise => exercise.isCompleted).length || 0)
+const progress = computed(() => activeRoutine.value?.exercises.length ? Math.round(completed.value / activeRoutine.value.exercises.length * 100) : 0)
+const showLibrary = ref(false), editedExercise = ref<Exercise | null>(null), loadFailed = ref(false)
+const programDialog = ref<HTMLDialogElement>(), editingProgram = ref<Routine | null>(null), editingTitle = ref(''), editingDay = ref('Any')
+const failed = () => ui.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
 
-const dayOptions = computed(() => [
-  { value: 'Any', label: t('workout.anyDay') },
-  { value: 'Monday', label: t('workout.monday') },
-  { value: 'Tuesday', label: t('workout.tuesday') },
-  { value: 'Wednesday', label: t('workout.wednesday') },
-  { value: 'Thursday', label: t('workout.thursday') },
-  { value: 'Friday', label: t('workout.friday') },
-  { value: 'Saturday', label: t('workout.saturday') },
-  { value: 'Sunday', label: t('workout.sunday') },
-])
-
-const showAddRoutine = ref(false)
-const newRoutineTitle = ref('')
-const newRoutineDay = ref('Any')
-const activeRoutine = ref<Routine | null>(null)
-const showLibrary = ref(false)
-
-onMounted(async () => {
-  await store.fetchRoutines()
-})
-
-const handleAddRoutine = async () => {
-  if (!newRoutineTitle.value.trim()) return
-  await store.addRoutine(newRoutineTitle.value.trim(), newRoutineDay.value)
-  newRoutineTitle.value = ''
-  newRoutineDay.value = 'Any'
-  showAddRoutine.value = false
+async function loadPrograms() { loadFailed.value = !await store.fetchRoutines() }
+onMounted(loadPrograms)
+watch(() => [store.routines, store.isLoading], () => { if (!store.isLoading && activeId.value && !activeRoutine.value) { activeId.value = ''; showLibrary.value = false } })
+watch(canWrite, writable => { if (!writable) { showLibrary.value = false; programDialog.value?.close() } })
+async function createProgram() {
+  if (!canWrite.value || store.isSaving || store.isLoading || !newRoutineTitle.value.trim()) return
+  const title = newRoutineTitle.value
+  const saved = await store.addRoutine(title, newRoutineDay.value)
+  if (!saved) { failed(); return }
+  if (newRoutineTitle.value === title) newRoutineTitle.value = ''
+  activeId.value = saved.id
+  editedExercise.value = null; showLibrary.value = true
 }
-
-const handleDeleteRoutine = async (id: string) => {
-  const isConfirmed = await uiStore.showConfirm(
-    t('common.delete') || 'Delete',
-    t('workout.deleteRoutineConfirm'),
-    t('common.delete') || 'Delete',
-    t('common.cancel') || 'Cancel'
-  )
-  if (isConfirmed) {
-    store.deleteRoutine(id)
-    uiStore.addToast(t('common.success') || 'Success', 'info')
-  }
+async function editProgram(routine: Routine) {
+  if (!canWrite.value || store.isSaving) return
+  editingProgram.value = { ...routine }
+  editingTitle.value = routine.title; editingDay.value = routine.day_of_week
+  await nextTick()
+  programDialog.value?.showModal()
 }
-
-const openRoutine = (routine: Routine) => {
-  activeRoutine.value = routine
+async function saveProgram() {
+  const routine = editingProgram.value
+  if (!routine || !canWrite.value || store.isSaving) return
+  if (!await store.updateRoutine(routine.id, editingTitle.value, editingDay.value, routine.version)) { failed(); return }
+  programDialog.value?.close()
 }
-
-const handleAddFromLibrary = (ex: any, sets: number, reps: string) => {
-  if (!activeRoutine.value) return
-  store.addExerciseToRoutine(activeRoutine.value.id, {
-    name: ex.name,
-    imageUrl: ex.imageUrl,
-    sets,
-    reps
-  })
-  uiStore.addToast((t('common.success') || 'Success') + ': ' + ex.name, 'success')
+function cancelProgramEdit(event: Event) { if (store.isSaving) event.preventDefault() }
+async function duplicateProgram(id: string) {
+  if (!canWrite.value || store.isSaving) return
+  const routine = store.routines.find(item => item.id === id)
+  if (!routine) return
+  const result = await store.duplicateRoutine(id, routine.title + ' (' + t('workout.copySuffix') + ')')
+  if (!result) { failed(); return }
+  activeId.value = result.id
+  ui.addToast(t('workout.programCopied'), 'success')
 }
-
-const getCompletedCount = () => {
-  if (!activeRoutine.value) return 0
-  return activeRoutine.value.exercises.filter(e => e.isCompleted).length
+async function deleteProgram(id: string) {
+  if (!canWrite.value || store.isSaving) return
+  if (!await ui.showConfirm(t('workout.deleteProgram'), t('workout.deleteRoutineConfirm'), t('common.delete'), t('common.cancel'))) return
+  if (!await store.deleteRoutine(id)) { failed(); return }
+  if (activeId.value === id) activeId.value = ''
 }
-
-const getProgress = () => {
-  if (!activeRoutine.value || activeRoutine.value.exercises.length === 0) return 0
-  return (getCompletedCount() / activeRoutine.value.exercises.length) * 100
+function editExercise(exercise: Exercise) {
+  if (!canWrite.value || store.isSaving) return
+  editedExercise.value = { ...exercise }; showLibrary.value = true
 }
+async function addExercise(input: ExerciseInput) {
+  const routine = activeRoutine.value
+  if (!routine || !canWrite.value || store.isSaving) return
+  if (!await store.addExerciseToRoutine(routine.id, input)) { failed(); return }
+  showLibrary.value = false
+}
+async function updateExercise(id: string, input: ExerciseInput, version?: number) {
+  const routine = activeRoutine.value
+  if (!routine || !canWrite.value || store.isSaving) return
+  if (!await store.updateExercise(routine.id, id, input, version)) { failed(); return }
+  showLibrary.value = false
+}
+async function deleteExercise(id: string) {
+  const routine = activeRoutine.value
+  if (!routine || !canWrite.value || store.isSaving) return
+  if (!await ui.showConfirm(t('workout.deleteExercise'), t('workout.deleteExerciseConfirm'), t('common.delete'), t('common.cancel'))) return
+  if (!await store.deleteExercise(routine.id, id)) failed()
+}
+async function toggleExercise(id: string) {
+  const routine = activeRoutine.value
+  if (!routine || !canWrite.value || store.isSaving) return
+  if (!await store.toggleExerciseCompletion(routine.id, id)) failed()
+}
+async function resetProgram() {
+  const routine = activeRoutine.value
+  if (!routine || !canWrite.value || store.isSaving) return
+  if (!await store.resetRoutine(routine.id)) failed()
+}
+onBeforeUnmount(() => programDialog.value?.close())
+useSearchReveal('workout', async (hit, isCurrent) => { await store.fetchRoutines(hit.record_id);if(!isCurrent())return;activeId.value=hit.record_id;query.value='' })
 </script>
 
 <style scoped>
-.slide-fade-enter-active { transition: all 0.3s ease-out; }
-.slide-fade-leave-active { transition: all 0.2s ease-in; }
-.slide-fade-enter-from, .slide-fade-leave-to {
-  transform: translateY(-10px); opacity: 0;
-}
+.workout-input { border-radius: .75rem; border: 1px solid hsl(var(--border) / .5); background: hsl(var(--background) / .5); padding-inline: 1rem; font-size: .875rem; color: hsl(var(--foreground)); outline: none; box-shadow: 0 1px 2px rgb(0 0 0 / .03); transition: border-color 150ms, background-color 150ms; }
+.workout-input::placeholder { color: hsl(var(--muted-foreground) / .6); }
+.workout-input:focus { border-color: hsl(var(--primary) / .4); box-shadow: 0 0 0 1px hsl(var(--primary) / .2); background: hsl(var(--background)); }
+.primary-button { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: .375rem; border-radius: .75rem; padding-inline: 1rem; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-size: .75rem; font-weight: 600; transition: background-color 150ms; }
+.primary-button:hover { background: hsl(var(--primary) / .9); }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; height: 1.875rem; width: 1.875rem; border-radius: .625rem; color: hsl(var(--muted-foreground)); transition: background-color 150ms, color 150ms; }
+.icon-button:hover { background: hsl(var(--muted) / .5); color: hsl(var(--foreground)); }
+.workout-view button:disabled { cursor: default; opacity: .4; }
+.workout-view button:focus-visible { outline: 2px solid hsl(var(--primary) / .4); outline-offset: 2px; }
+.program-dialog::backdrop { background: rgb(2 6 23 / .4); backdrop-filter: blur(5px); }
+@media (prefers-reduced-motion: reduce) { .workout-view *, .workout-view *::before, .workout-view *::after { transition: none !important; } }
 </style>

@@ -1,13 +1,18 @@
 export const periods = ['daily', 'weekly', 'monthly', 'yearly'] as const
 export type Period = typeof periods[number]
 
-export function firstPopulatedPeriod(plans: { period: Period; period_date: string }[], date = new Date()): Period {
-  return periods.find(period => plans.some(plan => plan.period === period && plan.period_date === periodStart(period, date))) || 'daily'
+export function firstPopulatedPeriod(plans: { period: Period; period_date: string }[], date = new Date(), timezone?: string): Period {
+  return periods.find(period => plans.some(plan => plan.period === period && plan.period_date === periodStart(period, date, timezone))) || 'daily'
 }
 
-// Calendar boundaries in the user's local timezone; weeks start on Monday.
-export function periodStart(period: Period, date = new Date()): string {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+// Shared collections use one calendar across all participants. Weeks start on Monday.
+export function periodStart(period: Period, date = new Date(), timezone?: string): string {
+  let start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  if (timezone) {
+    const parts = new Intl.DateTimeFormat('en', { timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(date)
+    const value = (type: string) => Number(parts.find(p => p.type === type)!.value)
+    start = new Date(value('year'), value('month') - 1, value('day'))
+  }
   if (period === 'weekly') start.setDate(start.getDate() - (start.getDay() + 6) % 7)
   if (period === 'monthly') start.setDate(1)
   if (period === 'yearly') start.setMonth(0, 1)

@@ -1,11 +1,11 @@
-import { defineStore } from 'pinia'
+import { defineWorkspaceStore as defineStore, useWorkspaceClient } from '@/lib/workspaceScope'
 import { ref, watch } from 'vue'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { nextPeriod, periodStart, type Period } from '../lib/periods'
 
 export interface Snapshot { date: string; completed: boolean; reason: string }
 export interface Plan {
+  version?: number
   id: string
   user_id: string
   title: string
@@ -19,25 +19,35 @@ export interface Plan {
 
 export const usePlansStore = defineStore('plans', () => {
   const auth = useAuthStore()
+  const supabase = useWorkspaceClient()
+  const timezone = supabase.timezone?.('plans')
   const plans = ref<Plan[]>([])
   const busy = ref(false)
   const savingIds = ref<string[]>([])
   const error = ref('')
+  let searchTargetId = ''
   watch(() => auth.user?.id, () => { plans.value = []; error.value = '' })
 
-  async function load() {
+  async function load(targetId?: string) {
+    if (typeof targetId === 'string') searchTargetId = targetId
     if (busy.value || savingIds.value.length || !auth.user) return false
     const userId = auth.user.id
     busy.value = true
     error.value = ''
     try {
+      const serverRollover = await supabase.rolloverPlans?.()
       const result = await supabase.from('plans').select('*').eq('user_id', userId).order('created_at')
       if (result.error) throw result.error
+      if (searchTargetId && !(result.data || []).some((row: { id: string }) => row.id === searchTargetId)) {
+        const located = await supabase.from('plans').select('*').eq('id', searchTargetId).maybeSingle()
+        if (located.error) throw located.error
+        if (located.data) result.data = [located.data, ...(result.data || [])]
+      }
       if (auth.user?.id !== userId) return false
       plans.value = result.data || []
       // Keep a snapshot for every elapsed period, including periods without a login.
-      for (const plan of plans.value) {
-        const current = periodStart(plan.period)
+      for (const plan of serverRollover ? [] : plans.value) {
+        const current = periodStart(plan.period, new Date(), timezone)
         if (plan.completed || plan.period_date >= current) continue
         const history = [...plan.history]
         let date = plan.period_date
@@ -67,7 +77,7 @@ export const usePlansStore = defineStore('plans', () => {
     try {
       const userId = auth.user.id
       const result = await supabase.from('plans').insert({
-        user_id: userId, title: title.trim(), period, period_date: periodStart(period),
+        user_id: userId, title: title.trim(), period, period_date: periodStart(period, new Date(), timezone),
       }).select().single()
       if (result.error) throw result.error
       if (auth.user?.id !== userId) return false
@@ -86,7 +96,7 @@ export const usePlansStore = defineStore('plans', () => {
     // Render immediately, then restore the previous state if the write fails.
     Object.assign(plan, updates)
     try {
-      const result = await supabase.from('plans').update(updates)
+      const result = await supabase.from('plans').update({ ...updates, ...(plan.version === undefined ? {} : { version: plan.version }) })
         .eq('id', plan.id).eq('user_id', userId).eq('period_date', plan.period_date).select().single()
       if (result.error) throw result.error
       if (auth.user?.id !== userId) return false
@@ -116,5 +126,6 @@ export const usePlansStore = defineStore('plans', () => {
     } finally { savingIds.value = savingIds.value.filter(savingId => savingId !== id) }
   }
   const isSaving = (id: string) => savingIds.value.includes(id)
-  return { plans, busy, error, load, add, update, remove, isSaving }
+  supabase.listen?.({ plans: load }, () => busy.value || Boolean(savingIds.value.length))
+  return { plans, busy, error, load, add, update, remove, isSaving, timezone }
 })

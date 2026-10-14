@@ -1,169 +1,139 @@
-<template>
-  <div class="space-y-6 workspace-content mx-auto animate-in fade-in zoom-in-95 duration-500">
-    
-    <TodoQuickAdd @open-category-dialog="showCategoryDialog = true" />
-    <CategoryModal v-model:open="showCategoryDialog" />
+﻿<template>
+  <div class="workspace-content mx-auto space-y-4">
+    <TodoQuickAdd v-if="canWrite" @open-category-dialog="showCategoryDialog = !showCategoryDialog" />
+    <CategoryModal v-if="canWrite" v-model:open="showCategoryDialog" />
 
-    <TodoFilters
-      v-model:selectedCategories="selectedCategories"
-      v-model:selectedPriority="selectedPriority"
-      v-model:showCompleted="showCompleted"
-      v-model:isGrouped="isGrouped"
-    />
-
-    <div class="space-y-4 relative z-0">
-      
-      <template v-if="isGrouped">
-        <div 
-          v-for="(groupData, categoryId) in groupedTodos" 
-          :key="categoryId"
-          class="rounded-3xl border transition-all duration-300 p-4 sm:p-5"
-          :style="{
-            backgroundColor: `${groupData.category.color}08`, 
-            borderColor: `${groupData.category.color}30`
-          }"
-        >
-          <div class="flex items-center gap-3 mb-4">
-            <div class="p-1.5 rounded-lg border shadow-sm" :style="{ backgroundColor: `${groupData.category.color}15`, borderColor: `${groupData.category.color}40`, color: groupData.category.color }">
-              <FolderTree class="w-4 h-4" />
-            </div>
-            <h3 class="text-sm font-bold tracking-tight" :style="{ color: groupData.category.color }">{{ groupData.category.name }}</h3>
-            <div class="flex-1 h-px bg-gradient-to-r from-transparent to-transparent" :style="{ backgroundImage: `linear-gradient(to right, ${groupData.category.color}40, transparent)` }"></div>
-          </div>
-            
-          <div class="space-y-2">
-            <draggable
-              v-model="groupData.todos"
-              item-key="id"
-              class="space-y-2 w-full"
-              handle=".drag-handle"
-              @end="handleDragEnd"
-            >
-              <template #item="{ element: todo }">
-                <TodoCardItem 
-                  :todo="todo" 
-                  :color="groupData.category.color" 
-                  :categoryName="groupData.category.name" 
-                  @toggle="todoStore.toggleTodo(todo.id)" 
-                  @delete="handleDeleteTodo(todo.id)" 
-                />
-              </template>
-            </draggable>
-          </div>
-        </div>
-      </template>
-      
-      <draggable
-        v-else
-        v-model="filteredTodosArray"
-        item-key="id"
-        class="space-y-2 w-full"
-        handle=".drag-handle"
-        @end="handleDragEnd"
-      >
-        <template #item="{ element: todo }">
-          <TodoCardItem 
-            :todo="todo" 
-            :color="getCategoryColor(todo.categoryId)" 
-            :categoryName="getCategoryName(todo.categoryId)" 
-            @toggle="todoStore.toggleTodo(todo.id)" 
-            @delete="handleDeleteTodo(todo.id)" 
-          />
-        </template>
-      </draggable>
-      
-      <div v-if="filteredTodosArray.length === 0" class="text-center py-16 flex flex-col items-center justify-center border border-dashed border-border/40 rounded-[2rem] bg-muted/5 w-full">
-        <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
-          <CheckSquare class="w-5 h-5 text-muted-foreground/40" />
-        </div>
-        <p class="text-sm font-semibold text-muted-foreground/80">{{ $t('todo.noTasks') || 'Görev bulunamadı' }}</p>
+    <div class="relative z-30">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <TodoFilters class="max-w-full" v-model:selectedCategories="selectedCategories" v-model:showCompleted="showCompleted" v-model:isGrouped="isGrouped" />
       </div>
+      <div class="note-progress mt-3" role="progressbar" :aria-label="t('todo.completionProgress')" :aria-valuenow="completionPercent" :aria-valuetext="t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length})" :aria-valuemin="0" :aria-valuemax="100"><span :style="{width:completionPercent+'%'}" /></div>
+      <div class="mt-2 flex justify-end text-[11px] text-muted-foreground" aria-live="polite">{{ t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length}) }}</div>
     </div>
 
-
+    <div v-if="loadFailed" role="alert" class="rounded-2xl border border-border/50 px-5 py-8 text-center text-xs text-muted-foreground">
+      <p>{{ t('todo.loadFailed') }}</p>
+      <button type="button" class="mt-2 rounded-md px-2 py-1 text-foreground underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" @click="loadNotes">{{ t('workspace.retryModule') }}</button>
+    </div>
+    <div v-else-if="loading && !todoStore.todos.length" role="status" :aria-label="t('app.loading')" class="flex justify-center py-10">
+      <Loader2 class="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none" />
+    </div>
+    <div v-else-if="filteredTodosArray.length" class="relative z-0 space-y-5">
+      <template v-if="isGrouped">
+        <section v-for="group in groupedTodos" :key="group.category.id" class="space-y-2.5">
+          <header class="flex min-w-0 items-center gap-2.5 px-1">
+            <span class="h-1 w-1 shrink-0 rounded-full opacity-70" :style="{ backgroundColor: group.category.color }" />
+            <h3 class="truncate text-[11px] font-medium text-muted-foreground">{{ group.category.name }}</h3>
+            <span class="text-[10px] tabular-nums text-muted-foreground/60">{{ group.todos.length }}</span>
+          </header>
+          <draggable :model-value="group.todos" @update:model-value="todoStore.reorderTodos($event)" :disabled="!canWrite" item-key="id" class="space-y-1.5" handle=".drag-handle" :animation="180" ghost-class="note-drag-ghost" :delay="100" :delay-on-touch-only="true">
+            <template #item="{ element: todo }">
+              <TodoCardItem :todo="todo" :color="group.category.color" :category-name="group.category.name" :disabled="pendingIds.has(todo.id)" @toggle="handleToggleTodo(todo.id)" @delete="handleDeleteTodo(todo.id)" />
+            </template>
+          </draggable>
+        </section>
+      </template>
+      <draggable v-else v-model="filteredTodosArray" :disabled="!canWrite" item-key="id" class="space-y-1.5" handle=".drag-handle" :animation="180" ghost-class="note-drag-ghost" :delay="100" :delay-on-touch-only="true">
+        <template #item="{ element: todo }">
+          <TodoCardItem :todo="todo" :color="getCategoryColor(todo.categoryId)" :category-name="getCategoryName(todo.categoryId)" :disabled="pendingIds.has(todo.id)" @toggle="handleToggleTodo(todo.id)" @delete="handleDeleteTodo(todo.id)" />
+        </template>
+      </draggable>
+    </div>
+    <div v-else class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/40 bg-muted/[0.04] px-5 py-10 text-center">
+      <CheckSquare class="mb-3 h-6 w-6 text-muted-foreground/40" />
+      <p class="text-xs font-medium text-muted-foreground">{{ t(todoStore.todos.length ? 'todo.noMatches' : 'todo.noTasks') }}</p>
+      <button v-if="hasFilters" type="button" class="mt-2 rounded-lg px-3 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-muted/50" @click="clearFilters">{{ t('todo.clearFilters') }}</button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
 import { ref, computed, onMounted } from 'vue'
-import { FolderTree, CheckSquare } from 'lucide-vue-next'
-import { useTodoStore, type Todo } from '@/features/todos/stores/todo'
+import { CheckSquare, Loader2 } from 'lucide-vue-next'
+import { useTodoStore, type Todo, type Category } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
-
 import TodoQuickAdd from './TodoQuickAdd.vue'
 import TodoFilters from './TodoFilters.vue'
 import TodoCardItem from './TodoCard.vue'
 import CategoryModal from './CategoryModal.vue'
 
-const todoStore = useTodoStore()
-const uiStore = useUIStore()
-const { t } = useI18n()
+const { canWrite } = useModuleAccess('detailed')
+const todoStore = useTodoStore(), uiStore = useUIStore()
+const { t, locale } = useI18n()
+const selectedCategories = useWorkspaceDraft<string[]>('todo-categories', [])
+const showCompleted = useWorkspaceDraft('todo-show-completed', true)
+const isGrouped = useWorkspaceDraft('todo-grouped', false)
+const query = ref('')
+const showCategoryDialog = ref(false), loading = ref(true), loadFailed = ref(false)
+const pendingIds = ref(new Set<string>())
 
-const selectedCategories = ref<string[]>([])
-const selectedPriority = ref('all')
-const showCompleted = ref(true)
-const isGrouped = ref(false)
+async function loadNotes() {
+  loading.value = true
+  loadFailed.value = false
+  try {
+    const results = await Promise.all([todoStore.fetchCategories(), todoStore.fetchTodos()])
+    loadFailed.value = results.some(result => !result)
+  } finally { loading.value = false }
+}
+onMounted(loadNotes)
 
-const showCategoryDialog = ref(false)
-
-onMounted(async () => {
-  await Promise.all([
-    todoStore.fetchCategories(),
-    todoStore.fetchTodos()
-  ])
-})
-
-const filteredTodos = computed(() => {
-  return todoStore.todos.filter((todo) => {
-    const categoryMatch = selectedCategories.value.length === 0 || (todo.categoryId !== null && selectedCategories.value.includes(todo.categoryId))
-    const priorityMatch = selectedPriority.value === 'all' || todo.priority === selectedPriority.value
-    const completionMatch = showCompleted.value || !todo.completed
-    return categoryMatch && priorityMatch && completionMatch
+const scopedTodos = computed(() => {
+  const search=query.value.trim().toLocaleLowerCase(locale.value)
+  return todoStore.todos.filter(todo => {
+    const categoryMatch=!selectedCategories.value.length || (todo.categoryId!==null && selectedCategories.value.includes(todo.categoryId))
+    const description=todo.description.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ')
+    return categoryMatch && (!search || `${todo.title} ${description}`.toLocaleLowerCase(locale.value).includes(search))
   })
 })
-
 const filteredTodosArray = computed({
-  get: () => {
-    const todos = [...filteredTodos.value]
-    return todos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  },
-  set: (newValue) => { todoStore.reorderTodos(newValue) }
+  get:()=>scopedTodos.value.filter(todo=>showCompleted.value || !todo.completed),
+  set:(newValue:Todo[])=>{todoStore.reorderTodos(newValue)},
 })
-
+const completedCount=computed(()=>scopedTodos.value.filter(todo=>todo.completed).length)
+const completionPercent=computed(()=>scopedTodos.value.length?Math.round(completedCount.value/scopedTodos.value.length*100):0)
+const hasFilters = computed(() => Boolean(query.value.trim() || selectedCategories.value.length || !showCompleted.value))
 const groupedTodos = computed(() => {
-  const groups: { [key: string]: { category: any, todos: Todo[] } } = {}
-  const categoriesToShow = selectedCategories.value.length > 0 ? todoStore.categories.filter(cat => selectedCategories.value.includes(cat.id)) : todoStore.categories
-  
-  categoriesToShow.forEach(category => {
-    const categoryTodos = filteredTodos.value.filter(todo => todo.categoryId === category.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    if (categoryTodos.length > 0) groups[category.id] = { category, todos: categoryTodos }
-  })
+  const groups: { category: Category; todos: Todo[] }[] = []
+  for (const category of todoStore.categories) {
+    const todos = filteredTodosArray.value.filter(todo => todo.categoryId === category.id)
+    if (todos.length) groups.push({ category, todos })
+  }
+  const uncategorized = filteredTodosArray.value.filter(todo => !todoStore.categories.some(category => category.id === todo.categoryId))
+  if (uncategorized.length) groups.push({ category: { id: 'uncategorized', name: t('todo.uncategorized'), color: '#94A3B8', icon: 'folder' }, todos: uncategorized })
   return groups
 })
-
-const getCategoryColor = (categoryId: string) => todoStore.categories.find(c => c.id === categoryId)?.color || '#3B82F6'
-const getCategoryName = (categoryId: string) => todoStore.categories.find(c => c.id === categoryId)?.name || 'Kategori'
-
-const handleDragEnd = () => {
-  if (isGrouped.value) {
-    Object.values(groupedTodos.value).forEach(groupData => {
-      if (groupData.todos.length > 0) todoStore.reorderTodos(groupData.todos)
-    })
-  }
+const getCategoryColor = (id: string | null) => todoStore.categories.find(category => category.id === id)?.color || '#94A3B8'
+const getCategoryName = (id: string | null) => todoStore.categories.find(category => category.id === id)?.name || t('todo.uncategorized')
+function clearFilters() {
+  query.value = ''; selectedCategories.value = []; showCompleted.value = true
 }
-
-const handleDeleteTodo = async (todoId: string) => {
-  const isConfirmed = await uiStore.showConfirm(t('todo.deleteTask') || 'Görevi Sil', t('todo.deleteTaskConfirm') || 'Bu görevi kalıcı olarak silmek istediğinize emin misiniz?', t('todo.delete') || 'Sil', t('todo.cancel') || 'İptal')
-  if (isConfirmed) {
-    todoStore.deleteTodo(todoId)
-    uiStore.addToast(t('todo.taskDeleted') || 'Görev silindi', 'info')
-  }
+async function handleToggleTodo(id: string) {
+  if (!canWrite.value || pendingIds.value.has(id)) return
+  pendingIds.value.add(id)
+  try {
+    if (!await todoStore.toggleTodo(id)) uiStore.addToast(t('todo.saveFailed'), 'error')
+  } finally { pendingIds.value.delete(id) }
 }
+async function handleDeleteTodo(id: string) {
+  if (!canWrite.value || pendingIds.value.has(id)) return
+  pendingIds.value.add(id)
+  try {
+    const confirmed = await uiStore.showConfirm(t('todo.deleteTask'), t('todo.deleteTaskConfirm'), t('todo.delete'), t('todo.cancel'))
+    if (!confirmed) return
+    const saved = await todoStore.deleteTodo(id)
+    uiStore.addToast(t(saved ? 'todo.taskDeleted' : 'todo.saveFailed'), saved ? 'info' : 'error')
+  } finally { pendingIds.value.delete(id) }
+}
+useSearchReveal('detailed', async (hit, isCurrent) => { await todoStore.fetchTodos(hit.record_id);if(!isCurrent())return;selectedCategories.value=[];showCompleted.value=true;query.value='' })
 </script>
 
 <style scoped>
-.drag-handle { touch-action: none; }
-.drag-handle:active { cursor: grabbing; }
+.note-drag-ghost { opacity: 0.3; }
+.note-progress { height:1px; overflow:hidden; background:hsl(var(--border)); }
+.note-progress span { display:block; height:100%; background:hsl(var(--primary)/.6); transition:width .3s ease; }
+@media(prefers-reduced-motion:reduce){.note-progress span{transition:none}}
 </style>

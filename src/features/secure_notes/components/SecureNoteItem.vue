@@ -1,5 +1,5 @@
 <template>
-  <div class="group bg-card/40 backdrop-blur-md text-card-foreground p-5 rounded-[1.5rem] shadow-sm border border-border/50 hover:border-primary/30 transition-all duration-300 flex flex-col">
+  <div class="workspace-card group bg-card/40 backdrop-blur-md text-card-foreground p-5 flex flex-col">
     
     <div class="flex items-start justify-between mb-4">
       <div class="space-y-1.5 pr-4">
@@ -21,10 +21,10 @@
       </div>
       
       <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button @click="$emit('edit', note)" class="p-1.5 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors" :title="$t('secure.editNoteTitle')">
+        <button v-if="canWrite" @click="$emit('edit', note)" class="p-1.5 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors" :title="$t('secure.editNoteTitle')">
           <Edit class="h-3.5 w-3.5" />
         </button>
-        <button @click="$emit('delete', note.id)" class="p-1.5 hover:bg-rose-500/10 rounded-xl text-muted-foreground hover:text-rose-500 transition-colors" :title="$t('secure.deleteNoteTitle')">
+        <button v-if="canWrite" @click="$emit('delete', note.id)" class="p-1.5 hover:bg-rose-500/10 rounded-xl text-muted-foreground hover:text-rose-500 transition-colors" :title="$t('secure.deleteNoteTitle')">
           <Trash2 class="h-3.5 w-3.5" />
         </button>
       </div>
@@ -77,8 +77,8 @@
         </div>
       </div>
       
-      <div v-if="note.url" class="pt-3">
-        <a :href="note.url" target="_blank" class="inline-flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 px-2 py-1 rounded-md border border-primary/10">
+      <div v-if="safeUrl" class="pt-3">
+        <a :href="safeUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 px-2 py-1 rounded-md border border-primary/10">
           <Globe class="w-3 h-3" /> {{ note.url.replace(/^https?:\/\//, '') }}
         </a>
       </div>
@@ -92,10 +92,13 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { ref, computed } from 'vue'
 import { Edit, Trash2, Copy, Eye, EyeOff, Globe } from 'lucide-vue-next'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
+
+const { canWrite } = useModuleAccess('secure')
 
 const props = defineProps<{
   note: any // İsterseniz buraya SecureNote tipini import edebilirsiniz
@@ -112,6 +115,9 @@ const { t } = useI18n()
 // Her karta özel lokal state (Ana dosyadaki Record karmaşasından kurtulduk!)
 const showPassword = ref(false)
 
+const safeUrl = computed(() => {
+  try { const url = new URL(props.note.url || ''); return ['https:', 'http:'].includes(url.protocol) ? url.href : '' } catch { return '' }
+})
 const formattedDate = computed(() => {
   const currentLang = t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US'
   return new Date(props.note.created_at).toLocaleDateString(currentLang, { year: 'numeric', month: 'short', day: 'numeric' })

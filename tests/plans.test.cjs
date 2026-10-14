@@ -93,6 +93,7 @@ function fixture(rows) {
     return query
   } }
   const module = loadTS('src/features/plans/stores/plans.ts', {
+    '@/lib/workspaceScope': { defineWorkspaceStore: require('pinia').defineStore, useWorkspaceClient: () => client },
     '@/lib/supabase': { supabase: client },
     '@/stores/auth': { useAuthStore: () => auth },
     '../lib/periods': dates,

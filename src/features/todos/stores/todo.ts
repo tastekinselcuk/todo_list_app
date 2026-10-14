@@ -1,27 +1,16 @@
-import { defineStore } from 'pinia'
+import { defineWorkspaceStore as defineStore, useWorkspaceClient, workspaceStorageKey } from '@/lib/workspaceScope'
 import { ref, watch } from 'vue'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '../../../stores/auth'
+import { readStoredJSON, writeStoredJSON } from '@/lib/storage'
+
+export const TODO_TITLE_MAX_LENGTH = 120
 
 export type Priority = 'low' | 'medium' | 'high'
 
-// Helper: Get current user ID from auth store
-const getCurrentUserId = async (): Promise<string | null> => {
-  const authStore = useAuthStore()
-  if (authStore.user?.id) {
-    return authStore.user.id
-  }
-  
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    return user?.id || null
-  } catch (err) {
-    console.error('Error getting current user:', err)
-    return null
-  }
-}
+const getCurrentUserId = async () => useAuthStore().user?.id || null
 
 export interface Todo {
+  version?: number;
   id: string;
   title: string;
   description: string;
@@ -48,6 +37,7 @@ export interface QuickNote {
 }
 
 export interface CodeSnippet {
+  version?: number;
   id: string;
   title: string;
   language: string;
@@ -66,30 +56,41 @@ const defaultCategories: Category[] = [
 const STORAGE_KEY = 'todo-app-data'
 
 export const useTodoStore = defineStore('todo', () => {
-  const savedData = localStorage.getItem(STORAGE_KEY)
-  const initialData = savedData ? JSON.parse(savedData) : {
+  const supabase = useWorkspaceClient()
+  const storageKey = workspaceStorageKey(STORAGE_KEY)
+  const emptyData = {
     todos: [],
-    categories: defaultCategories,
+    categories: [],
     quickNotes: [],
     codeSnippets: [],
   }
+  const initialData = readStoredJSON(storageKey, emptyData, value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+    const data = value as Record<string, unknown>
+    return ['todos', 'categories', 'quickNotes', 'codeSnippets'].every(key =>
+      data[key] === undefined || (Array.isArray(data[key]) && data[key].every(item =>
+        item && typeof item === 'object' && typeof item.id === 'string')))
+      && (data.todoOrder === undefined || (Array.isArray(data.todoOrder) && data.todoOrder.every(id => typeof id === 'string')))
+  }) as typeof emptyData & { todoOrder?: string[] }
 
-  const todos = ref<Todo[]>(initialData.todos)
-  const categories = ref<Category[]>(initialData.categories)
+  const todos = ref<Todo[]>(initialData.todos || [])
+  const todoOrder = ref<string[]>(initialData.todoOrder || [])
+  const categories = ref<Category[]>(initialData.categories || [])
   const quickNotes = ref<QuickNote[]>(initialData.quickNotes || [])
   const codeSnippets = ref<CodeSnippet[]>(initialData.codeSnippets || [])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
   watch(
-    [todos, categories, quickNotes, codeSnippets],
+    [todos, todoOrder, categories, quickNotes, codeSnippets],
     () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      writeStoredJSON(storageKey, {
         todos: todos.value,
+        todoOrder: todoOrder.value,
         categories: categories.value,
         quickNotes: quickNotes.value,
         codeSnippets: codeSnippets.value,
-      }))
+      })
     },
     { deep: true }
   )
@@ -105,15 +106,17 @@ export const useTodoStore = defineStore('todo', () => {
         .order('created_at', { ascending: false })
       
       if (err) throw err
-      categories.value = (data || []).map(cat => ({
+      categories.value = (data || []).map((cat: Record<string, any>) => ({
         id: cat.id,
         name: cat.name,
         color: cat.color || '#3B82F6',
         icon: cat.icon || 'folder'
       }))
+      return true
     } catch (err) {
       error.value = (err as Error).message
       console.error('Error fetching categories:', err)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -216,17 +219,27 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   // ===== TODO OPERATIONS =====
-  const fetchTodos = async () => {
+  let fetchTodosGeneration = 0
+  const fetchTodos = async (targetId?: string) => {
+    const request = ++fetchTodosGeneration
     isLoading.value = true
     error.value = null
     try {
-      const { data, error: err } = await supabase
+      let { data, error: err } = await supabase
         .from('todos')
         .select('*')
         .order('created_at', { ascending: false })
       
+      if (request !== fetchTodosGeneration) return false
       if (err) throw err
-      todos.value = (data || []).map(todo => ({
+      if (typeof targetId === 'string' && !(data || []).some((row: { id: string }) => row.id === targetId)) {
+        const located = await supabase.from('todos').select('*').eq('id', targetId).maybeSingle()
+        if (located.error) throw located.error
+        if (located.data) data = [located.data, ...(data || [])]
+      }
+      if (request !== fetchTodosGeneration) return false
+      const fetched: Todo[] = (data || []).map((todo: Record<string, any>) => ({
+        version: todo.version,
         id: todo.id,
         title: todo.title,
         description: todo.description || '',
@@ -237,15 +250,25 @@ export const useTodoStore = defineStore('todo', () => {
         createdAt: todo.created_at,
         updatedAt: todo.updated_at
       }))
+      // Manual ordering is a local workspace preference; new notes remain first.
+      const positions = new Map(todoOrder.value.map((id, index) => [id, index]))
+      todos.value = positions.size
+        ? [...fetched.filter(todo => !positions.has(todo.id)), ...fetched.filter(todo => positions.has(todo.id)).sort((a, b) => positions.get(a.id)! - positions.get(b.id)!)]
+        : fetched
+      if (positions.size) todoOrder.value = todos.value.map(todo => todo.id)
+      return true
     } catch (err) {
+      if (request !== fetchTodosGeneration) return false
       error.value = (err as Error).message
       console.error('Error fetching todos:', err)
+      return false
     } finally {
-      isLoading.value = false
+      if (request === fetchTodosGeneration) isLoading.value = false
     }
   }
 
   const addTodo = async (todo: Omit<Todo, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if(todo.title.trim().length>TODO_TITLE_MAX_LENGTH){error.value='TITLE_TOO_LONG';return {success:false,message:error.value}}
     isLoading.value = true
     error.value = null
     try {
@@ -316,6 +339,7 @@ export const useTodoStore = defineStore('todo', () => {
       if (record && record.id) {
         // Data direkt geldiyse hemen UI'a ekle
         const newTodo = {
+          version: record.version,
           id: record.id,
           title: record.title,
           description: record.description || '',
@@ -346,27 +370,33 @@ export const useTodoStore = defineStore('todo', () => {
     isLoading.value = true
     try {
       const todo = todos.value.find(t => t.id === id)
-      if (!todo) return
+      if (!todo) return false
       
-      const { error: err } = await supabase.from('todos').update({ completed: !todo.completed }).eq('id', id)
+      const { data, error: err } = await supabase.from('todos').update({ completed: !todo.completed }).eq('id', id).select().single()
       
       if (err) throw err
       todo.completed = !todo.completed
+      if (data?.version !== undefined) todo.version = data.version
+      return true
     } catch (err) {
       error.value = (err as Error).message
       console.error('Error toggling todo:', err)
+      return false
     } finally {
       isLoading.value = false
     }
   }
 
   const updateTodo = async (updatedTodo: Todo) => {
+    const previous=todos.value.find(todo=>todo.id===updatedTodo.id)
+    if(updatedTodo.title.trim().length>TODO_TITLE_MAX_LENGTH && updatedTodo.title.trim()!==previous?.title.trim()){error.value='TITLE_TOO_LONG';return false}
     isLoading.value = true
     error.value = null
     try {
-      const { error: err } = await supabase
+      const { data, error: err } = await supabase
         .from('todos')
         .update({
+          ...(updatedTodo.version === undefined ? {} : { version: updatedTodo.version }),
           title: updatedTodo.title,
           description: updatedTodo.description,
           completed: updatedTodo.completed,
@@ -380,11 +410,14 @@ export const useTodoStore = defineStore('todo', () => {
       
       const index = todos.value.findIndex(t => t.id === updatedTodo.id)
       if (index !== -1) {
-        todos.value[index] = updatedTodo
+        const record = Array.isArray(data) ? data[0] : data
+        todos.value[index] = { ...updatedTodo, ...(record?.version === undefined ? {} : { version: record.version }) }
       }
+      return true
     } catch (err) {
       error.value = (err as Error).message
       console.error('Error updating todo:', err)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -399,9 +432,12 @@ export const useTodoStore = defineStore('todo', () => {
       if (err) throw err
       
       todos.value = todos.value.filter(t => t.id !== id)
+      todoOrder.value = todoOrder.value.filter(todoId => todoId !== id)
+      return true
     } catch (err) {
       error.value = (err as Error).message
       console.error('Error deleting todo:', err)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -410,36 +446,60 @@ export const useTodoStore = defineStore('todo', () => {
   const editTodo = (id: string, updates: Partial<Todo>) => {
     const todo = todos.value.find(t => t.id === id)
     if (todo) {
+      if(updates.title && updates.title.trim().length>TODO_TITLE_MAX_LENGTH && updates.title.trim()!==todo.title.trim())return
       Object.assign(todo, updates)
     }
   }
 
   const reorderTodos = (newOrder: Todo[]) => {
-    todos.value = [...newOrder]
+    if (!supabase.canWrite('detailed')) return
+    // Only replace the visible slots. Filtered/grouped dragging must retain hidden notes.
+    const current = new Map(todos.value.map(todo => [todo.id, todo]))
+    const seen = new Set<string>()
+    const ordered = newOrder.filter(todo => {
+      if (!current.has(todo.id) || seen.has(todo.id)) return false
+      seen.add(todo.id)
+      return true
+    }).map(todo => current.get(todo.id)!)
+    let index = 0
+    todos.value = todos.value.map(todo => seen.has(todo.id) ? ordered[index++]! : todo)
+    todoOrder.value = todos.value.map(todo => todo.id)
   }
 
   // ===== QUICK NOTES OPERATIONS =====
-  const fetchQuickNotes = async () => {
+  let fetchQuickNotesGeneration = 0
+  const fetchQuickNotes = async (targetId?: string) => {
+    const request = ++fetchQuickNotesGeneration
     isLoading.value = true
     error.value = null
     try {
-      const { data, error: err } = await supabase
+      let { data, error: err } = await supabase
         .from('quick_notes')
         .select('*')
         .order('created_at', { ascending: false })
       
+      if (request !== fetchQuickNotesGeneration) return false
       if (err) throw err
-      quickNotes.value = (data || []).map(note => ({
+      if (typeof targetId === 'string' && !(data || []).some((row: { id: string }) => row.id === targetId)) {
+        const located = await supabase.from('quick_notes').select('*').eq('id', targetId).maybeSingle()
+        if (located.error) throw located.error
+        if (located.data) data = [located.data, ...(data || [])]
+      }
+      if (request !== fetchQuickNotesGeneration) return false
+      quickNotes.value = (data || []).map((note: Record<string, any>) => ({
         id: note.id,
         content: note.content,
         createdAt: note.created_at,
         completed: note.completed || false
       }))
+      return true
     } catch (err) {
+      if (request !== fetchQuickNotesGeneration) return false
       error.value = (err as Error).message
       console.error('Error fetching quick notes:', err)
+      return false
     } finally {
-      isLoading.value = false
+      if (request === fetchQuickNotesGeneration) isLoading.value = false
     }
   }
 
@@ -481,9 +541,11 @@ export const useTodoStore = defineStore('todo', () => {
       
       if (err) throw err
       note.completed = !note.completed
+      return true
     } catch (err) {
       error.value = (err as Error).message
       console.error('Error toggling quick note:', err)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -498,26 +560,38 @@ export const useTodoStore = defineStore('todo', () => {
       if (err) throw err
       
       quickNotes.value = quickNotes.value.filter(note => note.id !== id)
+      return true
     } catch (err) {
       error.value = (err as Error).message
       console.error('Error deleting quick note:', err)
+      return false
     } finally {
       isLoading.value = false
     }
   }
 
   // ===== CODE SNIPPETS OPERATIONS =====
-  const fetchCodeSnippets = async () => {
+  let fetchCodeSnippetsGeneration = 0
+  const fetchCodeSnippets = async (targetId?: string) => {
+    const request = ++fetchCodeSnippetsGeneration
     isLoading.value = true
     error.value = null
     try {
-      const { data, error: err } = await supabase
+      let { data, error: err } = await supabase
         .from('code_snippets')
         .select('*')
         .order('created_at', { ascending: false })
 
+      if (request !== fetchCodeSnippetsGeneration) return false
       if (err) throw err
-      codeSnippets.value = (data || []).map(snippet => ({
+      if (typeof targetId === 'string' && !(data || []).some((row: { id: string }) => row.id === targetId)) {
+        const located = await supabase.from('code_snippets').select('*').eq('id', targetId).maybeSingle()
+        if (located.error) throw located.error
+        if (located.data) data = [located.data, ...(data || [])]
+      }
+      if (request !== fetchCodeSnippetsGeneration) return false
+      codeSnippets.value = (data || []).map((snippet: Record<string, any>) => ({
+        version: snippet.version,
         id: snippet.id,
         title: snippet.title || 'Untitled snippet',
         language: snippet.language || 'plaintext',
@@ -525,11 +599,14 @@ export const useTodoStore = defineStore('todo', () => {
         createdAt: snippet.created_at,
         updatedAt: snippet.updated_at
       }))
+      return true
     } catch (err) {
+      if (request !== fetchCodeSnippetsGeneration) return false
       error.value = (err as Error).message
       console.error('Error fetching code snippets:', err)
+      return false
     } finally {
-      isLoading.value = false
+      if (request === fetchCodeSnippetsGeneration) isLoading.value = false
     }
   }
 
@@ -548,6 +625,7 @@ export const useTodoStore = defineStore('todo', () => {
       const record = data && Array.isArray(data) ? data[0] : data;
       if (record && record.id) {
         codeSnippets.value.unshift({
+          version: record.version,
           id: record.id,
           title: record.title || 'Untitled snippet',
           language: record.language || 'plaintext',
@@ -571,7 +649,7 @@ export const useTodoStore = defineStore('todo', () => {
 
   const updateCodeSnippet = async (
     id: string,
-    updates: Partial<Pick<CodeSnippet, 'title' | 'language' | 'code'>>
+    updates: Partial<Pick<CodeSnippet, 'title' | 'language' | 'code' | 'version'>>
   ) => {
     isLoading.value = true
     error.value = null
@@ -579,6 +657,7 @@ export const useTodoStore = defineStore('todo', () => {
       const { data, error: err } = await supabase
         .from('code_snippets')
         .update({
+          ...(updates.version === undefined ? {} : { version: updates.version }),
           title: updates.title,
           language: updates.language,
           code: updates.code,
@@ -593,6 +672,7 @@ export const useTodoStore = defineStore('todo', () => {
       const index = codeSnippets.value.findIndex(snippet => snippet.id === id)
       if (index !== -1) {
         codeSnippets.value[index] = {
+          version: data.version,
           id: data.id,
           title: data.title || 'Untitled snippet',
           language: data.language || 'plaintext',
@@ -632,6 +712,8 @@ export const useTodoStore = defineStore('todo', () => {
       isLoading.value = false
     }
   }
+
+  supabase.listen({ categories: fetchCategories, todos: fetchTodos, quick_notes: fetchQuickNotes, code_snippets: fetchCodeSnippets }, () => isLoading.value)
 
   return {
     todos,

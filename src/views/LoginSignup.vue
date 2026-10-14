@@ -3,7 +3,7 @@
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
         <div class="inline-flex items-center justify-center w-14 h-14 bg-primary rounded-lg mb-4">
-          <CheckCircle2 class="h-8 w-8 text-white" />
+          <CheckCircle2 class="h-8 w-8 text-primary-foreground" />
         </div>
         <h1 class="text-3xl font-bold text-foreground">{{ $t('auth.title') }}</h1>
         <p class="text-muted-foreground text-sm mt-2">{{ $t('auth.subtitle') }}</p>
@@ -194,10 +194,12 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useUIStore } from '@/stores/ui'
 import { Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 const authStore = useAuthStore()
+const uiStore = useUIStore()
 const { t } = useI18n()
 
 const isLogin = ref(true)
@@ -221,6 +223,7 @@ const resetSuccess = ref('')
 const isLoading = computed(() => authStore.isLoading)
 
 const handleSubmit = async () => {
+  if (isLoading.value) return
   error.value = ''
   successMessage.value = ''
 
@@ -246,10 +249,13 @@ const handleSubmit = async () => {
     const result = await authStore.login(formData.value.email, formData.value.password)
     if (!result.success) {
       error.value = result.message || t('auth.errors.loginFailed')
+    } else if (result.persistent === false) {
+      uiStore.addToast(t('auth.sessionTemporary'), 'warning')
     }
   } else {
     const result = await authStore.signup(formData.value.email, formData.value.password)
     if (result.success) {
+      if (result.persistent === false) uiStore.addToast(t('auth.sessionTemporary'), 'warning')
       successMessage.value = result.message || t('auth.success.signup')
       formData.value = { email: '', password: '', confirmPassword: '' }
       // Switch to login after 2 seconds
@@ -263,6 +269,7 @@ const handleSubmit = async () => {
 }
 
 const handlePasswordReset = async () => {
+  if (isLoading.value) return
   resetError.value = ''
   resetSuccess.value = ''
 

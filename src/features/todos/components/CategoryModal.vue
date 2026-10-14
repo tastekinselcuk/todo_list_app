@@ -1,127 +1,56 @@
-<template>
-  <transition name="expand">
-    <div
-      v-if="open"
-      class="mb-4 overflow-hidden transition-all duration-300"
-      ref="formContainerRef"
-    >
-      <form 
-        @submit.prevent="handleSubmit" 
-        class="flex items-center gap-2 p-2 rounded-xl border border-border/80 bg-card shadow-sm w-full relative"
-      >
-        <div 
-          class="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-border/50 transition-all hover:ring-2 hover:ring-primary/40 focus-within:ring-2 focus-within:ring-primary"
-          :title="$t('todo.color') || 'Renk'"
-        >
-          <input
-            v-model="newCategory.color"
-            type="color"
-            class="absolute -top-2 -left-2 w-12 h-12 cursor-pointer bg-transparent border-0"
-          />
-        </div>
-
-        <input
-          v-model="newCategory.name"
-          type="text"
-          class="flex-1 h-8 bg-transparent border-none focus:outline-none focus:ring-0 text-sm px-2 text-foreground placeholder:text-muted-foreground/50"
-          :placeholder="$t('todo.enterCategoryName') || 'Kategori adını girin...'"
-          required
-          ref="nameInputRef"
-        />
-
-        <div class="flex items-center shrink-0">
-          <button 
-            type="submit" 
-            :disabled="!newCategory.name.trim()"
-            class="h-8 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-          >
-            {{ $t('todo.add') || 'Ekle' }}
-          </button>
-        </div>
-      </form>
-    </div>
-  </transition>
+﻿<template>
+  <Transition name="category">
+    <form v-if="open" ref="formContainerRef" @submit.prevent="handleSubmit" @keydown.esc.stop.prevent="closeModal" class="relative flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/60 p-2 shadow-sm">
+      <label class="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-border/50 focus-within:ring-2 focus-within:ring-primary/30" :title="t('todo.color')">
+        <input v-model="newCategory.color" type="color" :aria-label="t('todo.color')" :disabled="saving" class="absolute -left-2 -top-2 h-12 w-12 cursor-pointer border-0 bg-transparent" />
+      </label>
+      <input ref="nameInputRef" v-model="newCategory.name" type="text" required :disabled="saving" :aria-label="t('todo.categoryName')" :placeholder="t('todo.enterCategoryName')" class="h-8 min-w-28 flex-1 rounded-lg bg-transparent px-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20" />
+      <button type="submit" :disabled="saving || !newCategory.name.trim()" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"><Loader2 v-if="saving" class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('todo.createCategory') }}</button>
+      <button type="button" @click="closeModal" :disabled="saving" :aria-label="t('common.close')" class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-40"><X class="h-3.5 w-3.5" /></button>
+    </form>
+  </Transition>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onUnmounted } from 'vue'
+import { X, Loader2 } from 'lucide-vue-next'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
-
-const props = defineProps<{
-  open: boolean
-}>()
-
-const emit = defineEmits<{
-  'update:open': [value: boolean]
-}>()
-
-const todoStore = useTodoStore()
-const uiStore = useUIStore()
+const props = defineProps<{ open: boolean }>()
+const emit = defineEmits<{ 'update:open': [value: boolean] }>()
+const todoStore = useTodoStore(), uiStore = useUIStore()
 const { t } = useI18n()
-
-const nameInputRef = ref<HTMLInputElement | null>(null)
-const formContainerRef = ref<HTMLElement | null>(null)
-const newCategory = ref({ name: '', color: '#3B82F6', icon: 'folder' })
-
-const closeModal = () => {
-  emit('update:open', false)
-}
-
-// Dışarı tıklama kontrolü
+const nameInputRef = ref<HTMLInputElement | null>(null), formContainerRef = ref<HTMLElement | null>(null)
+const newCategory = ref({ name: '', color: '#3B82F6', icon: 'folder' }), saving = ref(false)
+function closeModal() { if (!saving.value) emit('update:open', false) }
 const handleClickOutside = (event: MouseEvent) => {
-  if (props.open && formContainerRef.value && !formContainerRef.value.contains(event.target as Node)) {
-    closeModal()
-  }
+  if (props.open && formContainerRef.value && !formContainerRef.value.contains(event.target as Node)) closeModal()
 }
-
-watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    nextTick(() => {
-      nameInputRef.value?.focus({ preventScroll: true })
-    })
+watch(() => props.open, (open, _, onCleanup) => {
+  if (open) {
+    nextTick(() => { if (props.open) nameInputRef.value?.focus({ preventScroll: true }) })
     document.addEventListener('click', handleClickOutside)
   } else {
     document.removeEventListener('click', handleClickOutside)
-    setTimeout(() => {
-      resetForm()
-    }, 300)
+    const timer = setTimeout(() => { newCategory.value = { name: '', color: '#3B82F6', icon: 'folder' } }, 160)
+    onCleanup(() => clearTimeout(timer))
   }
 })
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
-
-const resetForm = () => {
-  newCategory.value = { name: '', color: '#3B82F6', icon: 'folder' }
-}
-
-const handleSubmit = async () => {
-  if (!newCategory.value.name.trim()) return
-
-  const result = await todoStore.addCategory(newCategory.value)
-  if (result.success) {
-    closeModal() // Başarılı olunca otomatik kapanır
-    uiStore.addToast(t('todo.categoryAdded') || 'Kategori eklendi', 'success')
-  } else {
-    uiStore.addToast(result.message || t('todo.cannotDelete'), 'error')
-  }
+onUnmounted(() => document.removeEventListener('click', handleClickOutside))
+async function handleSubmit() {
+  if (saving.value || !newCategory.value.name.trim()) return
+  saving.value = true
+  try {
+    const result = await todoStore.addCategory({ ...newCategory.value, name: newCategory.value.name.trim() })
+    if (result.success) { emit('update:open', false); uiStore.addToast(t('todo.categoryAdded'), 'success') }
+    else uiStore.addToast(result.message || t('todo.saveFailed'), 'error')
+  } finally { saving.value = false }
 }
 </script>
 
 <style scoped>
-.expand-enter-active,
-.expand-leave-active {
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 60px;
-  opacity: 1;
-}
-.expand-enter-from,
-.expand-leave-to {
-  max-height: 0;
-  opacity: 0;
-  margin-bottom: 0;
-}
+.category-enter-active, .category-leave-active { transition: opacity 160ms ease, transform 160ms ease; }
+.category-enter-from, .category-leave-to { opacity: 0; transform: translateY(5px); }
+@media (prefers-reduced-motion: reduce) { .category-enter-active, .category-leave-active { transition: none; } }
 </style>

@@ -1,197 +1,70 @@
-<template>
-  <div class="relative w-full z-20 flex items-start gap-2.5" ref="containerRef">
-    
-    <div class="relative flex-1 group/draft">
-      <div 
-        class="flex flex-col sm:flex-row gap-2 bg-card/40 backdrop-blur-xl p-1.5 pl-4 border shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 relative z-20"
-        :class="isDraftingTodo ? 'rounded-t-xl border-primary/30 border-b-transparent' : 'rounded-xl border-border/50'"
-      >
-        <div class="relative flex-1 flex items-center">
-          <input
-            v-model="quickTodoTitle"
-            @focus="isDraftingTodo = true"
-            @keyup.enter="saveDraft"
-            type="text"
-            :placeholder="$t('todo.addTodo') + '...'"
-            class="w-full h-8 bg-transparent text-foreground placeholder:text-muted-foreground/60 focus:outline-none text-sm font-medium disabled:opacity-50"
-          />
-        </div>
-        
-        <div class="flex items-center gap-1.5 pr-0.5 border-t sm:border-t-0 sm:border-l border-border/50 pt-2 sm:pt-0 sm:pl-2 relative">
-          <CustomSelect
-            :modelValue="quickTodoPriority"
-            @update:modelValue="quickTodoPriority = $event as 'low'|'medium'|'high'"
-            :options="priorityOptionsLocalized"
-            variant="ghost"
-            size="sm"
-            :colorClass="priorityColorClass(quickTodoPriority)"
-          />
-
-          <div class="flex items-center gap-1">
-            <CustomSelect
-              :modelValue="quickTodoCategoryId ?? ''"
-              @update:modelValue="quickTodoCategoryId = $event || ''"
-              :options="categoryOptions"
-              :placeholder="$t('todo.selectCategory')"
-              variant="ghost"
-              size="sm"
-            />
-          </div>
-
-          <button
-            v-if="!isDraftingTodo"
-            @click="saveDraft"
-            class="h-8 px-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50 text-xs shrink-0"
-            :disabled="!quickTodoTitle.trim() || !quickTodoCategoryId"
-          >
-            {{ $t('todo.addTodo') }}
-          </button>
-          
-          <div v-else class="h-8 px-4 flex items-center text-xs font-semibold text-primary shrink-0">
-            {{ $t('todo.drafting') }}
-          </div>
+﻿<template>
+  <div ref="containerRef" :data-shared-editing="isDraftingTodo" class="relative z-40 min-w-0">
+    <div class="rounded-2xl border bg-card/65 shadow-[0_1px_3px_rgb(15,23,42,0.025)] transition-[border-color,box-shadow] duration-200 focus-within:border-muted-foreground/35 focus-within:ring-2 focus-within:ring-primary/[0.06] dark:bg-muted/[0.08]" :class="isDraftingTodo?'border-border/65':'border-border/45'">
+      <div class="flex flex-wrap items-center gap-2 p-1.5 sm:gap-2.5">
+        <input v-model="quickTodoTitle" @focus="isDraftingTodo=true" @keydown.enter.prevent="saveDraft" type="text" :maxlength="TODO_TITLE_MAX_LENGTH" :disabled="saving" :placeholder="t('todo.addTodo')+'…'" :aria-label="t('todo.title')" class="h-8 min-w-32 flex-1 bg-transparent px-2.5 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-50" />
+        <div class="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
+          <CustomSelect v-model="quickTodoCategoryId" :options="categoryOptions" :placeholder="t('todo.selectCategory')" :aria-label="t('todo.category')" :disabled="saving" variant="ghost" size="sm" class="w-36 min-w-0" />
+          <button type="button" @click.stop="$emit('open-category-dialog')" :disabled="saving" :aria-label="t('todo.addNewCategory')" :title="t('todo.addNewCategory')" class="composer-icon"><Layers class="h-4 w-4" /></button>
+          <button type="button" @click="saveDraft" :disabled="saving || mediaBusy || !quickTodoTitle.trim() || !quickTodoCategoryId" :aria-label="t('todo.addTodo')" :title="t('todo.addTodo')" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 disabled:opacity-40"><Loader2 v-if="saving" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-4 w-4" /></button>
         </div>
       </div>
-
-      <transition name="slide-fade">
-        <div v-if="isDraftingTodo" class="rounded-b-xl border border-t-0 border-primary/30 bg-card/40 backdrop-blur-xl shadow-lg flex flex-col z-10 relative overflow-hidden -mt-px">
-          <div class="p-3">
-            <RichTextEditor
-              v-model="quickTodoDescription"
-              :placeholder="$t('todo.descriptionPlaceholder')"
-            />
-          </div>
-          <div class="px-4 py-2.5 bg-black/5 dark:bg-black/20 border-t border-border/30 flex justify-end gap-2">
-            <button @click="cancelDraft" class="px-4 py-1.5 text-xs font-semibold rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-              {{ $t('common.cancel') }}
-            </button>
-            <button 
-              @click="saveDraft" 
-              :disabled="!quickTodoTitle.trim() || !quickTodoCategoryId"
-              class="px-5 py-1.5 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
-            >
-              {{ $t('common.save') }}
-            </button>
+      <Transition name="note-reveal">
+        <div v-if="isDraftingTodo" class="note-reveal">
+          <div class="note-reveal-inner">
+            <div class="note-reveal-body border-t border-border/40">
+              <div class="p-3"><RichTextEditor v-model="quickTodoDescription" :disabled="saving" :placeholder="t('todo.descriptionPlaceholder')" @busy-change="mediaBusy=$event" /></div>
+              <div class="flex items-center justify-end gap-1.5 border-t border-border/30 px-3 py-2.5">
+                <button type="button" @click="cancelDraft" :disabled="saving || mediaBusy" class="h-8 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-40">{{ t('common.cancel') }}</button>
+                <button type="button" @click="saveDraft" :disabled="saving || mediaBusy || !quickTodoTitle.trim() || !quickTodoCategoryId" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"><Loader2 v-if="saving" class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('common.save') }}</button>
+              </div>
+            </div>
           </div>
         </div>
-      </transition>
+      </Transition>
     </div>
-
-<button
-      @click.stop="$emit('open-category-dialog')"
-      class="shrink-0 w-[44px] h-[44px] flex items-center justify-center rounded-xl bg-card/40 backdrop-blur-xl border border-border/50 hover:bg-primary/10 hover:border-primary/30 text-muted-foreground hover:text-primary shadow-sm transition-all group/add"
-      :title="$t('todo.addNewCategory')"
-    >
-      <Layers class="w-5 h-5 transition-transform group-hover/add:scale-110" />
-    </button>
-    
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Layers } from 'lucide-vue-next'
-import { useTodoStore } from '@/features/todos/stores/todo'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { Layers, Plus, Loader2 } from 'lucide-vue-next'
+import { useTodoStore, TODO_TITLE_MAX_LENGTH } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import RichTextEditor from './RichTextEditor.vue'
-
-defineEmits<{
-  'open-category-dialog': []
-}>()
-
-const todoStore = useTodoStore()
-const uiStore = useUIStore()
-const { t } = useI18n()
-
-const containerRef = ref<HTMLElement | null>(null)
-const quickTodoTitle = ref('')
-const quickTodoPriority = ref<'low'|'medium'|'high'>('low')
-const quickTodoCategoryId = ref('')
-const isDraftingTodo = ref(false)
-const quickTodoDescription = ref('')
-
-watch(isDraftingTodo, async (isDrafting) => {
-  if (isDrafting) {
-    await nextTick() // DOM'un genişlemesini bekle
-    containerRef.value?.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'center' // Ekranın tam ortasına hizalar
-    })
-  }
-})
-
-// DIŞARI TIKLAMA (Click-Outside) MANTIĞI
-const handleClickOutside = (event: MouseEvent) => {
-  if (isDraftingTodo.value && containerRef.value && !containerRef.value.contains(event.target as Node)) {
-    isDraftingTodo.value = false
-  }
+const RichTextEditor=defineAsyncComponent(()=>import('./RichTextEditor.vue'))
+defineEmits<{'open-category-dialog':[]}>()
+const todoStore=useTodoStore(),uiStore=useUIStore(),{t}=useI18n()
+const containerRef=ref<HTMLElement|null>(null)
+const quickTodoTitle=useWorkspaceDraft('todo-title','')
+const quickTodoCategoryId=useWorkspaceDraft('todo-input-category','')
+const quickTodoDescription=useWorkspaceDraft('todo-description','')
+const isDraftingTodo=ref(false),saving=ref(false),mediaBusy=ref(false)
+const handleClickOutside=(event:MouseEvent)=>{if(!saving.value && !mediaBusy.value && isDraftingTodo.value && containerRef.value && !containerRef.value.contains(event.target as Node))isDraftingTodo.value=false}
+onMounted(()=>document.addEventListener('mousedown',handleClickOutside))
+onUnmounted(()=>document.removeEventListener('mousedown',handleClickOutside))
+watch(()=>todoStore.categories,categories=>{if(categories.length && !categories.some(category=>category.id===quickTodoCategoryId.value))quickTodoCategoryId.value=categories[0]!.id},{immediate:true})
+const categoryOptions=computed(()=>todoStore.categories.map(category=>({value:category.id,label:category.name})))
+function cancelDraft(){
+ if(saving.value || mediaBusy.value)return
+ isDraftingTodo.value=false;quickTodoTitle.value='';quickTodoDescription.value=''
 }
-
-onMounted(() => document.addEventListener('mousedown', handleClickOutside))
-onUnmounted(() => document.removeEventListener('mousedown', handleClickOutside))
-
-watch(() => todoStore.categories, (cats) => {
-  if (cats.length > 0 && !quickTodoCategoryId.value) {
-    quickTodoCategoryId.value = cats[0].id
-  }
-}, { immediate: true })
-
-const priorityOptionsLocalized = computed(() => [
-  { value: 'low', label: t('todo.low') },
-  { value: 'medium', label: t('todo.medium') },
-  { value: 'high', label: t('todo.high') }
-])
-
-const categoryOptions = computed(() =>
-  todoStore.categories.map(cat => ({ value: cat.id, label: cat.name }))
-)
-
-const priorityColorClass = (priority: string) => {
-  switch (priority) {
-    case 'low': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20'
-    case 'medium': return 'text-amber-500 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20'
-    case 'high': return 'text-rose-500 bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20'
-    default: return 'bg-muted/40 hover:bg-muted/60 border-transparent text-muted-foreground'
-  }
-}
-
-const cancelDraft = () => {
-  isDraftingTodo.value = false
-  quickTodoTitle.value = ''
-  quickTodoDescription.value = ''
-}
-
-const saveDraft = async () => {
-  if (!quickTodoTitle.value.trim() || !quickTodoCategoryId.value) return
-  
-  try {
-    const result = await todoStore.addTodo({
-      title: quickTodoTitle.value.trim(),
-      description: quickTodoDescription.value.trim(),
-      categoryId: quickTodoCategoryId.value,
-      priority: quickTodoPriority.value,
-      dueDate: null,
-      completed: false
-    })
-    
-    if (result && result.success) {
-      uiStore.addToast(t('todo.taskAdded'), 'success')
-      quickTodoTitle.value = ''
-      quickTodoDescription.value = ''
-      isDraftingTodo.value = false
-    } else {
-      uiStore.addToast(result?.message || t('todo.error'), 'error')
-    }
-  } catch (error) {
-    uiStore.addToast(t('todo.systemError'), 'error')
-  }
+async function saveDraft(){
+ if(saving.value || mediaBusy.value || !quickTodoTitle.value.trim() || !quickTodoCategoryId.value)return
+ if(quickTodoTitle.value.trim().length>TODO_TITLE_MAX_LENGTH){uiStore.addToast(t('todo.titleTooLong',{count:TODO_TITLE_MAX_LENGTH}),'error');return}
+ saving.value=true
+ try{
+  const result=await todoStore.addTodo({title:quickTodoTitle.value.trim(),description:quickTodoDescription.value.trim(),categoryId:quickTodoCategoryId.value,priority:'low',dueDate:null,completed:false})
+  if(!result.success){uiStore.addToast(result.message || t('todo.saveFailed'),'error');return}
+  uiStore.addToast(t('todo.taskAdded'),'success')
+  quickTodoTitle.value='';quickTodoDescription.value='';isDraftingTodo.value=false
+ }catch{uiStore.addToast(t('todo.saveFailed'),'error')}
+ finally{saving.value=false}
 }
 </script>
 
 <style scoped>
-.slide-fade-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.slide-fade-leave-active { transition: all 0.2s cubic-bezier(0.4, 0, 1, 1); }
-.slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
+.composer-icon { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40; }
 </style>

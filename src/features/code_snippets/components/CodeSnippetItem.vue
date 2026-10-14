@@ -1,13 +1,14 @@
 <template>
   <article
-    class="group rounded-xl border transition-all duration-300 bg-card/40 dark:bg-muted/5 relative z-10 select-custom"
+    class="workspace-card group bg-card/40 dark:bg-muted/5 relative z-10 select-custom"
     :class="[
       isExpanded 
-        ? 'border-primary/30 shadow-md bg-card/70' 
-        : 'border-border/40 hover:border-primary/20 hover:shadow-sm hover:bg-card/70 overflow-hidden'
+        ? 'is-expanded bg-card/70'
+        : 'hover:bg-card/70 overflow-hidden'
     ]"
   >
     <div 
+    :data-shared-editing="isEditing"
       @click="toggleExpanded"
       class="flex items-center justify-between py-2.5 px-4 cursor-pointer"
     >
@@ -29,10 +30,10 @@
           {{ formatDate(snippet.updatedAt) }}
         </span>
         <div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <button @click.stop="beginInlineEdit" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" :title="$t('code.edit')">
+          <button v-if="canWrite" @click.stop="beginInlineEdit" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" :title="$t('code.edit')">
             <Pencil class="w-3.5 h-3.5" />
           </button>
-          <button @click.stop="removeSnippet" class="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1" :title="$t('code.delete')">
+          <button v-if="canWrite" @click.stop="removeSnippet" class="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1" :title="$t('code.delete')">
             <Trash2 class="w-3.5 h-3.5" />
           </button>
         </div>
@@ -70,6 +71,7 @@
           />
 
           <div class="px-4 py-2.5 bg-black/40 border-t border-white/5 flex justify-end gap-2">
+            <button v-if="editConflict" @click="refreshDraft" class="mr-auto px-2 text-xs text-primary">{{ $t('sharing.refreshDraft') }}</button>
             <button @click="cancelInlineEdit" class="px-3 py-1.5 text-xs font-semibold rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">{{ $t('code.cancel') }}</button>
             <button @click="handleSave" :disabled="!canSave" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50">{{ $t('code.saveChanges') }}</button>
           </div>
@@ -80,7 +82,7 @@
             <div class="sticky top-0 flex justify-end p-3 overflow-hidden">
               <button
                 @click.stop="copySnippet"
-                class="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/10 text-zinc-300 hover:text-white hover:bg-primary/80 text-[10px] font-bold tracking-widest uppercase backdrop-blur-md transition-all shadow-lg opacity-0 group-hover/code:opacity-100"
+                class="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/10 text-zinc-300 hover:text-primary-foreground hover:bg-primary/80 text-[10px] font-bold tracking-widest uppercase backdrop-blur-md transition-all shadow-lg opacity-0 group-hover/code:opacity-100"
               >
                 <Copy class="w-3 h-3" />
                 {{ $t('code.copy') }}
@@ -97,7 +99,9 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { ref, computed } from 'vue'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { ChevronDown, Copy, Pencil, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { CodeSnippet } from '@/features/todos/stores/todo'
@@ -110,13 +114,16 @@ import { javascript } from '@codemirror/lang-javascript'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 
+const { canWrite } = useModuleAccess('code')
+
 const props = defineProps<{
   snippet: CodeSnippet
   languageOptions: { value: string, label: string }[]
 }>()
 
 const emit = defineEmits<{
-  update: [snippetId: string, data: Partial<CodeSnippet>]
+  update: [snippetId: string, data: Partial<CodeSnippet>, done: (success: boolean, conflict?: boolean) => void]
+  refresh: [snippetId: string, done: (version?: number) => void]
   delete: [snippetId: string]
   copy: [code: string]
 }>()
@@ -127,7 +134,8 @@ const cmExtensions = [oneDark, javascript()]
 // Local State
 const isExpanded = ref(false)
 const isEditing = ref(false)
-const editForm = ref({ title: '', language: 'plaintext', code: '' })
+const editConflict = ref(false), saving = ref(false), baseVersion = ref(props.snippet.version)
+const editForm = useWorkspaceDraft(`code-edit:${props.snippet.id}`, { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code })
 
 const canSave = computed(() => !!editForm.value.title.trim() && !!editForm.value.code.trim())
 
@@ -166,24 +174,27 @@ const toggleExpanded = () => {
 }
 
 const beginInlineEdit = () => {
-  editForm.value = { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code }
+  baseVersion.value = props.snippet.version; editConflict.value = false
   isEditing.value = true
   isExpanded.value = true
 }
 
 const cancelInlineEdit = () => {
+  editForm.value = { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code }
   isEditing.value = false
 }
 
 const handleSave = () => {
-  if (!canSave.value) return
+  if (saving.value || !canSave.value) return
+  saving.value = true
   emit('update', props.snippet.id, {
     title: editForm.value.title.trim(),
     language: editForm.value.language || 'plaintext',
-    code: editForm.value.code
-  })
-  isEditing.value = false
+    code: editForm.value.code,
+    version: baseVersion.value,
+  }, (success, conflict) => { saving.value = false; editConflict.value = Boolean(conflict); if (success) isEditing.value = false })
 }
+const refreshDraft = () => emit('refresh', props.snippet.id, version => { if (version !== undefined) baseVersion.value = version })
 
 const removeSnippet = () => emit('delete', props.snippet.id)
 const copySnippet = () => emit('copy', props.snippet.code)

@@ -1,294 +1,189 @@
 <template>
-  <div class="max-w-5xl mx-auto space-y-10 p-4 sm:p-6 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
-    
-    <div class="space-y-2 mb-8">
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight flex items-center gap-3">
-        {{ $t('workspace.title') }}
-      </h1>
-      <p class="text-base text-muted-foreground/80 max-w-2xl font-medium">
-        {{ $t('workspace.subtitle') }}
-      </p>
-    </div>
+  <div class="settings-page mx-auto w-full max-w-5xl space-y-5 pb-8">
+    <header class="flex flex-wrap items-center justify-between gap-2">
+      <h1 class="text-lg font-semibold tracking-tight">{{ t('app.settings') }}</h1>
+      <span class="text-xs text-muted-foreground">{{ t('settingsPage.autoSave') }}</span>
+    </header>
 
-    <section class="space-y-5 relative">
-      <h2 class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70 flex items-center gap-2.5">
-        <Settings class="w-4 h-4" /> {{ $t('workspace.general') }}
-      </h2>
-      
-      <div class="grid grid-cols-1 gap-4 sm:gap-6">
-        
-        <div class="group flex items-center justify-between p-5 rounded-[1.5rem] border border-border/40 bg-card/40 backdrop-blur-xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:bg-card/60 transition-all duration-500">
-          <div class="flex items-center gap-4">
-            <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/20 shadow-inner">
-              <Globe class="w-5 h-5" />
+    <div class="grid min-w-0 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <WorkspaceManager />
+
+      <section class="min-w-0 rounded-2xl border border-border/60 bg-card/60 shadow-sm" aria-labelledby="general-preferences">
+        <header class="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
+          <h2 id="general-preferences" class="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal class="h-4 w-4 text-muted-foreground" />{{ t('workspace.general') }}</h2>
+        </header>
+        <div class="divide-y divide-border/40 px-4">
+          <div class="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <Globe class="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span class="text-sm">{{ t('workspace.language') }}</span>
             </div>
-            <div>
-              <h3 class="font-bold text-foreground tracking-tight">{{ $t('workspace.language') }}</h3>
-              <p class="text-xs text-muted-foreground/80 mt-0.5">{{ $t('workspace.languageDesc') }}</p>
+            <CustomSelect :model-value="locale" :options="languageOptions" :aria-label="t('workspace.language')" size="sm" class="w-28 shrink-0" @update:model-value="handleLanguageChange" />
+          </div>
+          <div class="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <Palette class="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span class="text-sm">{{ t('settingsPage.appearance') }}</span>
+            </div>
+            <div class="flex shrink-0 gap-0.5 rounded-xl border border-border/50 bg-muted/40 p-0.5" role="group" :aria-label="t('settingsPage.appearance')">
+              <button v-for="option in themeOptions" :key="option.value" type="button" class="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors" :aria-pressed="themeStore.theme === option.value" :class="themeStore.theme === option.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="themeStore.theme = option.value">
+                <component :is="option.icon" class="h-3.5 w-3.5" />{{ t(option.label) }}
+              </button>
             </div>
           </div>
-          
-          <CustomSelect
-            :modelValue="locale"
-            @update:modelValue="handleLanguageChange"
-            :options="languageOptions"
-          />
+          <div class="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <span aria-hidden="true" class="h-4 w-4 shrink-0 rounded-full border border-primary/30 bg-primary/15" />
+              <span class="text-sm">{{ t('settingsPage.colorPalette') }}</span>
+            </div>
+            <CustomSelect :model-value="themeStore.palette" :options="paletteOptions" :aria-label="t('settingsPage.colorPalette')" size="sm" class="w-40 shrink-0" @update:model-value="handlePaletteChange">
+              <template #value="{ option }">
+                <span class="inline-flex min-w-0 items-center gap-2">
+                  <span aria-hidden="true" class="inline-flex shrink-0 -space-x-1"><span v-for="(color, index) in paletteSwatches(option?.value)" :key="index" class="h-3 w-3 rounded-full border border-foreground/15" :style="{ backgroundColor: `hsl(${color})` }" /></span>
+                  <span class="truncate">{{ option?.label }}</span>
+                </span>
+              </template>
+              <template #option="{ option }">
+                <span aria-hidden="true" class="inline-flex shrink-0 -space-x-1"><span v-for="(color, index) in paletteSwatches(option.value)" :key="index" class="h-3 w-3 rounded-full border border-foreground/15" :style="{ backgroundColor: `hsl(${color})` }" /></span>
+                <span class="truncate">{{ option.label }}</span>
+              </template>
+            </CustomSelect>
+          </div>
         </div>
+      </section>
+    </div>
 
-      </div>
-    </section>
-
-    <section class="space-y-5">
-      <h2 class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70 flex items-center gap-2.5">
-        <LayoutGrid class="w-4 h-4" /> {{ $t('workspace.activeModules') }}
-      </h2>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-        
+    <section aria-labelledby="workspace-tools">
+      <header class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 id="workspace-tools" class="text-sm font-semibold">{{ t('settingsPage.tools') }}</h2>
+          <span class="max-w-60 truncate rounded-lg bg-muted/60 px-2 py-1 text-xs text-muted-foreground" :title="workspaces.active?.name">{{ workspaces.active?.name }}</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-muted-foreground">
+          <button type="button" class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground" @click="sharing.showJoin()"><Link2 class="h-3.5 w-3.5" />{{ t('sharing.addShared') }}</button>
+          <span role="status" aria-live="polite" :class="saveStatus === 'error' ? 'text-destructive' : ''">
+            <span v-if="saveStatus === 'saving'" class="inline-flex items-center gap-1.5"><Loader2 class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('settingsPage.saving') }}</span>
+            <span v-else-if="saveStatus === 'saved'" class="inline-flex items-center gap-1"><Check class="h-3 w-3" />{{ t('settingsPage.saved') }}</span>
+            <span v-else-if="saveStatus === 'error'">{{ t('settingsPage.saveFailed') }}</span>
+          </span>
+          <span class="tabular-nums">{{ t('settingsPage.enabledCount', { count: enabledCount, total: availableModules.length }) }}</span>
+        </div>
+      </header>
+      <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="module in availableModules"
           :key="module.id"
-          class="group relative flex flex-col justify-between p-6 rounded-[2rem] border transition-all duration-500 ease-out overflow-hidden cursor-pointer"
-          :class="[
-            settingsStore.isModuleActive(module.id) 
-              ? `bg-card/60 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-1 ${module.theme.border}` 
-              : 'bg-card/20 backdrop-blur-sm border-border/40 opacity-75 hover:opacity-100 grayscale-[0.3] hover:grayscale-0'
-          ]"
-          @click="settingsStore.toggleModule(module.id, module.isRequired)"
+          class="relative isolate flex min-h-[96px] min-w-0 rounded-2xl border p-3.5 transition-colors"
+          :class="settingsStore.isModuleActive(module.id) ? [module.theme.border, 'bg-card/60 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:bg-card/70'] : 'border-border/50 bg-card/30 hover:bg-muted/40'"
         >
-          <div 
-            v-if="settingsStore.isModuleActive(module.id)"
-            class="absolute top-0 right-0 w-32 h-32 rounded-full blur-[60px] -mr-10 -mt-10 transition-all opacity-20 pointer-events-none"
-            :class="module.theme.glow"
-          ></div>
-
-          <div class="space-y-5 relative z-10">
-            <div class="flex items-start justify-between">
-              
-              <div 
-                class="flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-500 shadow-inner"
-                :class="settingsStore.isModuleActive(module.id) ? module.theme.iconBg : 'bg-muted/50 border border-border/50 text-muted-foreground'"
-              >
-                <component 
-                  :is="module.icon" 
-                  class="w-6 h-6 transition-colors duration-300"
-                />
-              </div>
-              
-              <button
-                type="button"
-                @click.stop="settingsStore.toggleModule(module.id, module.isRequired)"
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none"
-                :class="settingsStore.isModuleActive(module.id) ? module.theme.switch : 'bg-muted-foreground/30'"
-                role="switch"
-                :aria-checked="settingsStore.isModuleActive(module.id)"
-              >
-                <span
-                  aria-hidden="true"
-                  class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-300 ease-in-out"
-                  :class="settingsStore.isModuleActive(module.id) ? 'translate-x-5' : 'translate-x-0'"
-                />
-              </button>
-            </div>
-
-            <div class="space-y-1.5 pt-1">
-              <h3 class="font-bold text-lg text-foreground tracking-tight flex items-center gap-2">
-                {{ $t(`workspace.modules.${module.id}Name`) }}
-                <span 
-                  v-if="module.isRequired" 
-                  class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20"
-                >
-                  {{ $t('workspace.core') }}
-                </span>
-              </h3>
-              <p class="text-[13px] text-muted-foreground/80 leading-relaxed font-medium">
-                {{ $t(`workspace.modules.${module.id}Desc`) }}
-              </p>
-            </div>
-          </div>
-          
-          <div class="pt-6 mt-auto relative z-10">
-            <div 
-              class="flex items-center gap-2 text-xs font-semibold" 
-              :class="settingsStore.isModuleActive(module.id) ? module.theme.text : 'text-muted-foreground/60'"
-            >
-              <div 
-                class="w-1.5 h-1.5 rounded-full"
-                :class="settingsStore.isModuleActive(module.id) ? `${module.theme.glow} animate-pulse shadow-[0_0_8px_currentColor]` : 'bg-muted-foreground/30'"
-              ></div>
-              {{ settingsStore.isModuleActive(module.id) ? $t('workspace.activeInWorkspace') : $t('workspace.inactive') }}
-            </div>
-          </div>
+        <div v-if="settingsStore.isModuleActive(module.id)" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[inherit]">
+          <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-20 blur-[60px]" :class="module.theme.accent" />
         </div>
-
+        <button
+          type="button"
+          role="switch"
+          :aria-checked="settingsStore.isModuleActive(module.id)"
+          :aria-label="t(`workspace.modules.${module.id}Name`)"
+          :aria-describedby="`settings-module-${module.id}`"
+          :disabled="module.isRequired || Boolean(pendingModuleId) || workspaces.busy"
+          :title="module.isRequired ? t('settingsPage.required') : undefined"
+          class="flex w-full min-w-0 items-start gap-2.5 rounded-xl pr-11 text-left disabled:cursor-default"
+          @click="toggleModule(module.id, module.isRequired)"
+        >
+          <span :class="['flex h-8 w-8 shrink-0 items-center justify-center rounded-xl', settingsStore.isModuleActive(module.id) ? module.theme.icon : 'bg-muted/60 text-muted-foreground']"><component :is="module.icon" class="h-4 w-4" /></span>
+          <span class="min-w-0 flex-1">
+            <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-medium leading-5">
+              {{ t(`workspace.modules.${module.id}Name`) }}
+              <span v-if="module.isRequired" class="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">{{ t('workspace.core') }}</span>
+            </span>
+            <span :id="`settings-module-${module.id}`" class="mt-1 block text-xs leading-5 text-muted-foreground">{{ t(`settingsPage.modules.${module.id}`) }}</span>
+          </span>
+          <span aria-hidden="true" :class="['absolute right-3.5 top-3.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors', settingsStore.isModuleActive(module.id) ? module.theme.accent : 'bg-muted-foreground/25']">
+            <span :class="['h-4 w-4 rounded-full shadow-sm transition-transform', settingsStore.isModuleActive(module.id) ? 'translate-x-4 bg-white' : 'translate-x-0 bg-white/70']" />
+          </span>
+        </button>
+        <button v-if="canShare(module.id)" type="button" class="absolute bottom-2 right-3 inline-flex h-7 w-9 items-center justify-center rounded-lg transition-colors hover:bg-primary/10 disabled:opacity-40" :class="workspaces.binding(module.id)?.shared ? 'text-primary' : 'text-muted-foreground hover:text-foreground'" :aria-label="`${t('sharing.title')}: ${t(`workspace.modules.${module.id}Name`)}`" :title="workspaces.binding(module.id)?.shared ? t('sharing.manage') : t('sharing.shareTab')" :disabled="workspaces.busy" @click="sharing.showManage(module.id)"><Users v-if="workspaces.binding(module.id)?.shared" class="h-3.5 w-3.5" /><Link2 v-else class="h-3.5 w-3.5" /></button>
+        </div>
       </div>
+      <p class="mt-3 text-xs leading-5 text-muted-foreground">{{ t('settingsPage.toolsHint') }}</p>
     </section>
+
+    <AccountSettings :focus-request="focusAccount" @logout="emit('logout', $event)" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { 
-  CheckSquare, 
-  Zap, 
-  ShieldCheck, 
-  Code2, 
-  Timer,
-  Target,
-  Layers,
-  Dumbbell,
-  Globe,
-  Settings,
-  LayoutGrid,
-  Repeat,
-  Clapperboard,
-} from 'lucide-vue-next'
-import { useSettingsStore } from '@/stores/settings'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Check, CheckSquare, Clapperboard, Code2, Dumbbell, Globe, Layers, Link2, ListTodo, Loader2, Moon, Palette, Repeat, ShieldCheck, SlidersHorizontal, Sun, Target, Timer, Users, Wallet, Zap } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import WorkspaceManager from '@/components/WorkspaceManager.vue'
+import AccountSettings from '@/components/AccountSettings.vue'
+import { useSettingsStore } from '@/stores/settings'
+import { useThemeStore } from '@/stores/theme'
+import { useUIStore } from '@/stores/ui'
+import { useWorkspacesStore } from '@/stores/workspaces'
+import { useSharingStore } from '@/stores/sharing'
+import { shareableModules } from '@/lib/sharing'
+import { moduleCatalog } from '@/lib/moduleCatalog'
+import { getThemePalette, isThemePaletteId, themePalettes } from '@/lib/themePalettes'
 
 const settingsStore = useSettingsStore()
-const { locale } = useI18n()
-
-const languageOptions = [
-  { value: 'en', label: 'English' },
-  { value: 'tr', label: 'Türkçe' }
+withDefaults(defineProps<{ focusAccount?: number }>(), { focusAccount: 0 })
+const emit = defineEmits<{ logout: [scope: 'local' | 'global'] }>()
+const themeStore = useThemeStore()
+const workspaces = useWorkspacesStore()
+const sharing = useSharingStore()
+const canShare = (id: string) => shareableModules.some(module => module === id) && (!workspaces.sharingAvailable || Boolean(workspaces.binding(id)))
+const ui = useUIStore()
+const { t, locale } = useI18n()
+const pendingModuleId = ref('')
+const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+const languageOptions = [{ value: 'tr', label: 'Türkçe' }, { value: 'en', label: 'English' }]
+const themeOptions = [
+  { value: 'light' as const, label: 'settingsPage.light', icon: Sun },
+  { value: 'dark' as const, label: 'settingsPage.dark', icon: Moon },
 ]
+const paletteOptions = computed(() => themePalettes.map(palette => ({ value: palette.id, label: palette.name[locale.value === 'tr' ? 'tr' : 'en'] })))
+function paletteSwatches(id: unknown) {
+  const colors = getThemePalette(id).colors[themeStore.theme]
+  return [colors.background, colors.muted, colors.primary]
+}
+function handlePaletteChange(value: string) {
+  if (isThemePaletteId(value)) themeStore.palette = value
+}
+const moduleIcons = { ListTodo, CheckSquare, Zap, ShieldCheck, Code2, Timer, Target, Layers, Dumbbell, Repeat, Clapperboard, Wallet }
+const availableModules = moduleCatalog.map(module=>({ ...module, icon:moduleIcons[module.icon],isRequired:module.required }))
+const enabledCount = computed(() => availableModules.filter(module => settingsStore.isModuleActive(module.id)).length)
 
-const handleLanguageChange = (newLang: string) => {
-  locale.value = newLang
-  settingsStore.language = newLang
+function handleLanguageChange(language: string) {
+  if (!languageOptions.some(option => option.value === language)) return
+  locale.value = language
+  settingsStore.language = language as 'en' | 'tr'
 }
 
-const availableModules = [
-  {
-    id: 'plans', icon: CheckSquare, isRequired: false,
-    theme: { border: 'border-stone-400/30', glow: 'bg-stone-500', iconBg: 'bg-stone-500/15 border-stone-500/20 text-stone-500', switch: 'bg-stone-500', text: 'text-stone-500' }
-  },
-  {
-    id: 'detailed',
-    icon: CheckSquare,
-    isRequired: true,
-    theme: {
-      border: 'border-blue-500/30',
-      glow: 'bg-blue-500',
-      iconBg: 'bg-blue-500/15 border-blue-500/20 text-blue-500',
-      switch: 'bg-blue-500',
-      text: 'text-blue-500'
+async function toggleModule(id: string, required: boolean) {
+  if (required || pendingModuleId.value || workspaces.busy) return
+  const workspaceId = workspaces.activeId
+  pendingModuleId.value = id
+  saveStatus.value = 'saving'
+  try {
+    const saved = await settingsStore.toggleModule(id, required)
+    if (workspaces.activeId !== workspaceId) return
+    saveStatus.value = saved ? 'saved' : 'error'
+    if (!saved) ui.addToast(t('settingsPage.saveFailed'), 'error')
+  } catch {
+    if (workspaces.activeId === workspaceId) {
+      saveStatus.value = 'error'
+      ui.addToast(t('settingsPage.saveFailed'), 'error')
     }
-  },
-  {
-    id: 'quick',
-    icon: Zap,
-    isRequired: false,
-    theme: {
-      border: 'border-amber-500/30',
-      glow: 'bg-amber-500',
-      iconBg: 'bg-amber-500/15 border-amber-500/20 text-amber-500',
-      switch: 'bg-amber-500',
-      text: 'text-amber-500'
-    }
-  },
-  {
-    id: 'secure',
-    icon: ShieldCheck,
-    isRequired: false,
-    theme: {
-      border: 'border-emerald-500/30',
-      glow: 'bg-emerald-500',
-      iconBg: 'bg-emerald-500/15 border-emerald-500/20 text-emerald-500',
-      switch: 'bg-emerald-500',
-      text: 'text-emerald-500'
-    }
-  },
-  {
-    id: 'code',
-    icon: Code2,
-    isRequired: false,
-    theme: {
-      border: 'border-violet-500/30',
-      glow: 'bg-violet-500',
-      iconBg: 'bg-violet-500/15 border-violet-500/20 text-violet-500',
-      switch: 'bg-violet-500',
-      text: 'text-violet-500'
-    }
-  },
-  {
-    id: 'pomodoro',
-    icon: Timer,
-    isRequired: false,
-    theme: {
-      border: 'border-rose-500/30',
-      glow: 'bg-rose-500',
-      iconBg: 'bg-rose-500/15 border-rose-500/20 text-rose-500',
-      switch: 'bg-rose-500',
-      text: 'text-rose-500'
-    }
-  },
-  {
-    id: 'learning',
-    icon: Target,
-    isRequired: false,
-    theme: {
-      border: 'border-indigo-500/30',
-      glow: 'bg-indigo-500',
-      iconBg: 'bg-indigo-500/15 border-indigo-500/20 text-indigo-500',
-      switch: 'bg-indigo-500',
-      text: 'text-indigo-500'
-    }
-  },
-  {
-    id: 'flashcards',
-    icon: Layers,
-    isRequired: false,
-    theme: {
-      border: 'border-orange-500/30',
-      glow: 'bg-orange-500',
-      iconBg: 'bg-orange-500/15 border-orange-500/20 text-orange-500',
-      switch: 'bg-orange-500',
-      text: 'text-orange-500'
-    }
-  },
-  {
-    id: 'workout',
-    icon: Dumbbell,
-    isRequired: false,
-    theme: {
-      border: 'border-teal-500/30',
-      glow: 'bg-teal-500',
-      iconBg: 'bg-teal-500/15 border-teal-500/20 text-teal-500',
-      switch: 'bg-teal-500',
-      text: 'text-teal-500'
-    }
-  },
-  {
-    id: 'periodic',
-    icon: Repeat,
-    isRequired: false,
-    theme: {
-      border: 'border-pink-500/30',
-      glow: 'bg-pink-500',
-      iconBg: 'bg-pink-500/15 border-pink-500/20 text-pink-500',
-      switch: 'bg-pink-500',
-      text: 'text-pink-500'
-    }
-  },
-  {
-    id: 'activities',
-    icon: Clapperboard,
-    isRequired: false,
-    theme: {
-      border: 'border-cyan-500/30',
-      glow: 'bg-cyan-500',
-      iconBg: 'bg-cyan-500/15 border-cyan-500/20 text-cyan-500',
-      switch: 'bg-cyan-500',
-      text: 'text-cyan-500'
-    }
-  }
-]
+  } finally { pendingModuleId.value = '' }
+}
+
+watch(() => workspaces.activeId, () => { saveStatus.value = 'idle' })
 </script>
 
 <style scoped>
-button[role="switch"] span {
-  will-change: transform;
-}
+.settings-page :is(button, input):focus-visible { outline: 2px solid hsl(var(--primary) / 0.55); outline-offset: 3px; border-radius: 0.75rem; }
+@media (prefers-reduced-motion: reduce) { .settings-page *, .settings-page *::before, .settings-page *::after { transition-duration: 0s !important; animation: none !important; } }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-all duration-200">
+  <div class="workspace-card bg-card overflow-hidden" :class="{ 'is-expanded': isExpanded }">
     
     <div 
       @click="$emit('toggle')"
@@ -53,10 +53,12 @@
         <div 
           v-for="topic in subject.topics" 
           :key="topic.id"
+          :data-search-record="subject.id"
+          :data-search-child="topic.id"
           class="grid grid-cols-[1fr,auto] gap-4 px-6 py-3 border-b border-border/50 items-center hover:bg-muted/20 transition-colors group/topic"
         >
           <div class="flex items-center gap-3 overflow-hidden">
-            <button @click="learningStore.deleteTopic(subject.id, topic.id)" class="opacity-0 group-hover/topic:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
+            <button v-if="canWrite" @click="learningStore.deleteTopic(subject.id, topic.id)" class="opacity-0 group-hover/topic:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
               <Trash2 class="h-3.5 w-3.5" />
             </button>
             <span class="text-sm font-medium truncate" :class="{ 'line-through text-muted-foreground': isTopicFullyCompleted(topic) }">
@@ -65,21 +67,21 @@
           </div>
 
           <div class="flex items-center gap-2 sm:gap-6">
-            <button 
+            <button :disabled="!canWrite"
               @click="learningStore.toggleTopicStatus(subject.id, topic.id, 'learn')"
               class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200"
               :class="topic.learn ? 'bg-blue-500/15 text-blue-500 ring-1 ring-blue-500/30' : 'bg-muted text-muted-foreground hover:bg-accent'"
             >
               <BookOpen class="h-4 w-4" />
             </button>
-            <button 
+            <button :disabled="!canWrite"
               @click="learningStore.toggleTopicStatus(subject.id, topic.id, 'practice')"
               class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200"
               :class="topic.practice ? 'bg-amber-500/15 text-amber-500 ring-1 ring-amber-500/30' : 'bg-muted text-muted-foreground hover:bg-accent'"
             >
               <PenTool class="h-4 w-4" />
             </button>
-            <button 
+            <button :disabled="!canWrite"
               @click="learningStore.toggleTopicStatus(subject.id, topic.id, 'master')"
               class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200"
               :class="topic.master ? 'bg-emerald-500/15 text-emerald-500 ring-1 ring-emerald-500/30' : 'bg-muted text-muted-foreground hover:bg-accent'"
@@ -89,7 +91,7 @@
           </div>
         </div>
 
-        <div class="px-6 py-3 flex items-center gap-3">
+        <div v-if="canWrite" class="px-6 py-3 flex items-center gap-3">
           <Plus class="h-4 w-4 text-muted-foreground" />
           <input
             v-model="newTopicTitle"
@@ -101,7 +103,7 @@
         </div>
         
         <div class="px-6 py-3 border-t border-border/50 flex justify-end">
-          <button @click="handleDeleteSubject" class="text-xs text-destructive hover:underline flex items-center gap-1">
+          <button v-if="canWrite" @click="handleDeleteSubject" class="text-xs text-destructive hover:underline flex items-center gap-1">
             <Trash2 class="h-3 w-3" /> {{ $t('learning.deleteSubject') }}
           </button>
         </div>
@@ -111,10 +113,13 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { ref, computed } from 'vue'
 import { ChevronDown, BookOpen, PenTool, Award, Trash2, Plus } from 'lucide-vue-next'
 import { useLearningStore, type Subject, type Topic } from '@/features/learning/stores/learning'
 import { useI18n } from 'vue-i18n'
+
+const { canWrite } = useModuleAccess('learning')
 
 const props = defineProps<{
   subject: Subject
@@ -130,6 +135,7 @@ const { t } = useI18n()
 
 // Sadece bu karta ait Topic Title state'i
 const newTopicTitle = ref('')
+const addingTopic = ref(false)
 
 // Hesaplamalar
 const completedSteps = computed(() => {
@@ -154,10 +160,12 @@ const isTopicFullyCompleted = (topic: Topic) => {
 }
 
 // Aksiyonlar
-const handleAddTopic = () => {
-  if (!newTopicTitle.value.trim()) return
-  learningStore.addTopic(props.subject.id, newTopicTitle.value.trim())
-  newTopicTitle.value = '' 
+const handleAddTopic = async () => {
+  if (addingTopic.value || !newTopicTitle.value.trim()) return
+  addingTopic.value = true
+  const value = newTopicTitle.value
+  try { if (await learningStore.addTopic(props.subject.id, value.trim()) && newTopicTitle.value === value) newTopicTitle.value = '' }
+  finally { addingTopic.value = false }
 }
 
 const handleDeleteSubject = () => {

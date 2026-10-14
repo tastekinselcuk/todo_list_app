@@ -1,5 +1,5 @@
 <template>
-  <div class="workspace-content mx-auto space-y-6 animate-in fade-in duration-500">
+  <div class="workspace-content mx-auto space-y-6">
     <!-- Header -->
     <header class="space-y-1">
       <h2 class="text-xl font-bold tracking-tight text-foreground">
@@ -11,7 +11,7 @@
     </header>
 
     <!-- Search panel -->
-    <section class="rounded-2xl border border-border/40 bg-card/40 p-4 space-y-3">
+    <section v-if="canWrite" class="rounded-2xl border border-border/40 bg-card/40 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row gap-2.5">
         <select
           v-model="selectedType"
@@ -129,6 +129,7 @@
             v-for="item in group.items"
             :key="item.id"
             :item="item"
+            :data-search-record="item.id"
             @toggle="toggleItem"
             @delete="removeItem"
           />
@@ -149,6 +150,9 @@
 </template>
 
 <script setup lang="ts">
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { computed, onMounted, ref, watch } from 'vue'
 import { Search, Plus, Film, Tv, MapPin, BookOpen, Clapperboard } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -162,16 +166,18 @@ import {
 } from '../lib/providers'
 import ActivityCard from './ActivityCard.vue'
 
+const { canWrite } = useModuleAccess('activities')
+
 const { t } = useI18n()
 const uiStore = useUIStore()
 const store = useActivityListsStore()
 
-const selectedType = ref<ActivityType>('movie')
-const searchQuery = ref('')
+const selectedType = useWorkspaceDraft<ActivityType>('activity-type', 'movie')
+const searchQuery = useWorkspaceDraft('activity-search', '')
 const searchResults = ref<SearchResult[]>([])
 const isSearching = ref(false)
 const searched = ref(false)
-const statusFilter = ref<'all' | 'want' | 'done'>('all')
+const statusFilter = useWorkspaceDraft<'all' | 'want' | 'done'>('activity-status', 'all')
 
 const statusFilters = computed(() => [
   { id: 'all' as const, label: t('activities.filters.all') },
@@ -269,4 +275,5 @@ async function removeItem(id: string) {
   await store.deleteItem(id)
   if (!store.error) uiStore.addToast(t('activities.deleted'), 'info')
 }
+useSearchReveal('activities', async (hit, isCurrent) => { await store.loadItems(hit.record_id);if(!isCurrent())return;statusFilter.value='all' })
 </script>

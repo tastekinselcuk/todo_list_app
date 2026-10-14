@@ -1,38 +1,23 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { computed, watch } from 'vue'
+import { useSettingsStore } from './settings'
+import { applyThemeAppearance, type ThemePaletteId } from '@/lib/themePalettes'
 
 type Theme = 'light' | 'dark'
 
 export const useThemeStore = defineStore('theme', () => {
-  const theme = ref<Theme>('light')
+  const settings = useSettingsStore()
+  const theme = computed({ get: () => settings.theme, set: value => { settings.theme = value } })
+  const palette = computed({ get: () => settings.themePalette, set: (value: ThemePaletteId) => { settings.themePalette = value } })
 
-  // Initialize theme from localStorage
+  // Preferences hydrate locally first, then synchronize with the account.
   const initializeTheme = () => {
-    const savedTheme = localStorage.getItem('app-theme') as Theme | null
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-
-    if (savedTheme) {
-      theme.value = savedTheme
-    } else if (prefersDark) {
-      theme.value = 'dark'
-    } else {
-      theme.value = 'light'
-    }
-
     applyTheme(theme.value)
   }
 
   // Apply theme to DOM
   const applyTheme = (newTheme: Theme) => {
-    const html = document.documentElement
-    
-    if (newTheme === 'dark') {
-      html.classList.add('dark')
-    } else {
-      html.classList.remove('dark')
-    }
-
-    localStorage.setItem('app-theme', newTheme)
+    if (typeof document !== 'undefined') applyThemeAppearance(document.documentElement, newTheme, palette.value)
   }
 
   // Toggle theme
@@ -42,16 +27,15 @@ export const useThemeStore = defineStore('theme', () => {
     applyTheme(newTheme)
   }
 
-  // Watch for system theme changes
+  // Apply changes from either the controls or account synchronization.
   watch(
-    () => theme.value,
-    (newTheme) => {
-      applyTheme(newTheme)
-    }
+    [() => theme.value, () => palette.value],
+    () => { applyTheme(theme.value) }, { immediate: true, flush: 'sync' }
   )
 
   return {
     theme,
+    palette,
     initializeTheme,
     toggleTheme,
     applyTheme,

@@ -20,7 +20,7 @@
     --secondary-foreground: 222.2 47.4% 11.2%;
  
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted-foreground: 215.4 16.3% 45.5%;
  
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
@@ -75,9 +75,45 @@
   }
 }
 
+@layer components {
+  .finance-input {
+    @apply h-10 w-full min-w-0 rounded-xl border border-border/50 bg-background/50 pl-4 pr-3 text-sm text-foreground shadow-sm backdrop-blur-sm outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-background focus:ring-1 focus:ring-primary/30 disabled:opacity-50;
+  }
+  .finance-label { @apply block text-[11px] text-muted-foreground; }
+  .finance-icon { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40; }
+  .workspace-card {
+    @apply rounded-xl border border-border/70;
+    transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  }
+  .workspace-card:hover {
+    @apply border-border shadow-sm;
+  }
+  .workspace-card:focus-within, .workspace-card.is-expanded {
+    @apply border-border;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .workspace-card { transition: none; }
+  }
+}
+
 /* Module content follows the workspace width; dialogs keep their own limits. */
 .workspace-content {
   width: 100%;
   min-width: 0;
   max-width: var(--workspace-content-max, var(--workspace-default-max, 64rem));
+}
+
+/* A temporary search destination marker; card colors and dimensions stay intact. */
+.search-revealed { outline: 2px solid hsl(var(--primary) / .4);outline-offset: 3px;scroll-margin-top: 6rem; }
+
+/* Vue adds these transition classes at runtime; keep them outside purged layers. */
+.note-reveal { display: grid; grid-template-rows: 1fr; min-width: 0; }
+.note-reveal-inner { min-height: 0; }
+.note-reveal-body { transform: translateY(0); transition: transform 220ms cubic-bezier(.22,1,.36,1); }
+.note-reveal-enter-active, .note-reveal-leave-active { transition: grid-template-rows 220ms cubic-bezier(.22,1,.36,1), opacity 180ms ease; }
+.note-reveal-enter-active > .note-reveal-inner, .note-reveal-leave-active > .note-reveal-inner { overflow: hidden; }
+.note-reveal-enter-from, .note-reveal-leave-to { grid-template-rows: 0fr; opacity: 0; }
+.note-reveal-enter-from .note-reveal-body, .note-reveal-leave-to .note-reveal-body { transform: translateY(-6px); }
+@media (prefers-reduced-motion: reduce) {
+  .note-reveal-enter-active, .note-reveal-leave-active, .note-reveal-body { transition: none; }
 }

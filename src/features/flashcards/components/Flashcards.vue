@@ -1,8 +1,8 @@
 <template>
-  <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center min-h-[400px]">
+  <div class="space-y-5 relative z-10 w-full flex flex-col items-center min-h-[400px]">
     
     <div v-if="currentView === 'decks'" class="workspace-content space-y-6">
-      <div class="flex flex-col sm:flex-row gap-2.5 w-full relative z-[60]">
+      <div v-if="canWrite" class="flex flex-col sm:flex-row gap-2.5 w-full relative z-[60]">
         <div class="relative flex-1 group">
           <Layers class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input
@@ -18,7 +18,7 @@
           <div class="relative w-10 h-10 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm shadow-sm overflow-hidden cursor-pointer hover:border-primary/40 transition-colors">
             <input v-model="newDeckColor" type="color" class="absolute -top-2 -left-2 w-14 h-14 cursor-pointer" />
           </div>
-          <button
+          <button v-if="canWrite"
             @click="handleAddDeck"
             class="h-10 px-5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm hover:shadow-lg transition-all disabled:opacity-50 text-xs flex items-center gap-1.5 shrink-0"
             :disabled="!newDeckTitle.trim()"
@@ -32,9 +32,9 @@
         <div
           v-for="deck in store.decks"
           :key="deck.id"
+          :data-search-record="deck.id"
           @click="openDeck(deck)"
-          class="group flex flex-col p-5 rounded-[1.5rem] border transition-all duration-300 cursor-pointer overflow-hidden relative bg-card/40 backdrop-blur-xl hover:bg-card hover:border-primary/30 hover:shadow-md hover:-translate-y-1"
-          :style="{ borderColor: `${deck.color}40` }"
+          class="workspace-card group flex flex-col p-5 cursor-pointer overflow-hidden relative bg-card/40 backdrop-blur-xl hover:bg-card transition-all duration-300 hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
         >
           <div class="absolute top-0 right-0 w-24 h-24 blur-[40px] -mr-8 -mt-8 pointer-events-none opacity-0 transition-opacity duration-500" :style="{ backgroundColor: deck.color }"></div>
 
@@ -43,7 +43,7 @@
               <Layers class="w-4 h-4 opacity-70" :style="{ color: deck.color }" />
               <h3 class="font-bold text-sm text-foreground tracking-tight line-clamp-1 group-hover:text-primary transition-colors">{{ deck.title }}</h3>
             </div>
-            <button @click.stop="handleDeleteDeck(deck.id)" class="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-500 transition-all">
+            <button v-if="canWrite" @click.stop="handleDeleteDeck(deck.id)" class="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-500 transition-all">
               <Trash2 class="w-3.5 h-3.5" />
             </button>
           </div>
@@ -65,7 +65,7 @@
     </div>
 
     <div v-else-if="currentView === 'study' && activeDeck" class="workspace-content space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-card/40 backdrop-blur-2xl p-3 sm:p-4 rounded-2xl shadow-sm border border-white/10 dark:border-white/5 gap-4 relative overflow-hidden z-20">
+      <div :data-search-record="activeDeck.id" class="flex flex-col sm:flex-row sm:items-center justify-between bg-card/40 backdrop-blur-2xl p-3 sm:p-4 rounded-2xl shadow-sm border border-white/10 dark:border-white/5 gap-4 relative overflow-hidden z-20">
         <div class="flex items-center gap-3">
           <button @click="currentView = 'decks'" class="p-2 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border/50">
             <ArrowLeft class="w-4 h-4" />
@@ -92,7 +92,7 @@
         </div>
       </div>
 
-      <div class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-10">
+      <div v-if="canWrite" class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-10">
         <input 
           v-model="newCardFront" 
           @keyup.enter="focusBackInput" 
@@ -108,7 +108,7 @@
           :placeholder="$t('flashcards.backPlaceholder')" 
           class="flex-1 h-10 px-4 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all outline-none text-sm font-medium" 
         />
-        <button 
+        <button v-if="canWrite"
           @click="handleAddCard" 
           :disabled="!newCardFront.trim() || !newCardBack.trim()" 
           class="h-10 px-6 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50 text-xs shrink-0"
@@ -118,15 +118,15 @@
       </div>
 
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 perspective-1000 relative z-0">
-        <div v-for="card in activeDeck.cards" :key="card.id" class="relative w-full h-32 cursor-pointer group" @click="toggleCard(card.id)">
-          <div class="absolute inset-0 w-full h-full transition-all duration-500 transform-style-3d shadow-sm rounded-2xl" :class="{ 'rotate-y-180': flippedCards.includes(card.id) }">
-            <div class="absolute inset-0 w-full h-full bg-card/60 backdrop-blur-sm border border-border/50 rounded-2xl backface-hidden flex items-center justify-center p-4 text-center group-hover:border-primary/40 transition-colors">
-              <button @click.stop="handleDeleteCard(card.id)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all z-10">
+        <div v-for="card in activeDeck.cards" :key="card.id" :data-search-record="activeDeck.id" :data-search-child="card.id" class="relative w-full h-32 cursor-pointer group" @click="toggleCard(card.id)">
+          <div class="absolute inset-0 w-full h-full transition-all duration-500 transform-style-3d shadow-sm rounded-xl" :class="{ 'rotate-y-180': flippedCards.includes(card.id) }">
+            <div class="workspace-card absolute inset-0 w-full h-full bg-card/60 backdrop-blur-sm backface-hidden flex items-center justify-center p-4 text-center">
+              <button v-if="canWrite" @click.stop="handleDeleteCard(card.id)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all z-10">
                 <Trash2 class="w-3.5 h-3.5" />
               </button>
               <span class="font-semibold text-sm text-foreground line-clamp-3">{{ card.front }}</span>
             </div>
-            <div class="absolute inset-0 w-full h-full bg-primary/5 border border-primary/20 rounded-2xl backface-hidden rotate-y-180 flex items-center justify-center p-4 text-center shadow-inner">
+            <div class="workspace-card absolute inset-0 w-full h-full bg-primary/5 backface-hidden rotate-y-180 flex items-center justify-center p-4 text-center shadow-inner">
               <span class="font-bold text-sm text-primary line-clamp-3">{{ card.back }}</span>
             </div>
           </div>
@@ -180,7 +180,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Layers, Plus, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
 import { useFlashcardStore, type Deck } from '@/features/flashcards/stores/flashcards'
 import { useUIStore } from '@/stores/ui'
@@ -189,6 +192,8 @@ import { useI18n } from 'vue-i18n'
 import FlashcardTest from './FlashcardTest.vue'
 import FlashcardMemoryGame from './FlashcardMemoryGame.vue'
 
+const { canWrite } = useModuleAccess('flashcards')
+
 const store = useFlashcardStore()
 const uiStore = useUIStore()
 const { t } = useI18n()
@@ -196,10 +201,18 @@ const { t } = useI18n()
 // Base State
 const currentView = ref<'decks' | 'study' | 'test' | 'game' | 'results'>('decks')
 const activeDeck = ref<Deck | null>(null)
-const newDeckTitle = ref('')
+watch(() => store.decks, decks => {
+  if (!activeDeck.value || ['test', 'game', 'results'].includes(currentView.value)) return
+  activeDeck.value = decks.find(deck => deck.id === activeDeck.value!.id) || null
+  if (!activeDeck.value) currentView.value = 'decks'
+})
+watch(currentView, view => {
+  if (view === 'study' && activeDeck.value) activeDeck.value = store.decks.find(deck => deck.id === activeDeck.value!.id) || null
+})
+const newDeckTitle = useWorkspaceDraft('deck-title', '')
 const newDeckColor = ref('#f97316') 
-const newCardFront = ref('')
-const newCardBack = ref('')
+const newCardFront = useWorkspaceDraft('card-front', '')
+const newCardBack = useWorkspaceDraft('card-back', '')
 const flippedCards = ref<string[]>([]) 
 
 // Results State
@@ -211,21 +224,24 @@ onMounted(async () => {
   await store.fetchDecks()
 })
 
+const addingDeck = ref(false)
 const handleAddDeck = async () => {
-  if (!newDeckTitle.value.trim()) return
+  if (addingDeck.value || !newDeckTitle.value.trim()) return
+  const title = newDeckTitle.value
+  addingDeck.value = true
   try {
-    await store.addDeck(newDeckTitle.value.trim(), newDeckColor.value)
+    if (!await store.addDeck(title.trim(), newDeckColor.value)) { uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error'); return }
     uiStore.addToast('Deste eklendi', 'success')
-    newDeckTitle.value = ''
+    if (newDeckTitle.value === title) newDeckTitle.value = ''
   } catch (error) {
     uiStore.addToast('Hata', 'error')
-  }
+  } finally { addingDeck.value = false }
 }
 
 const handleDeleteDeck = async (id: string) => {
   const isConfirmed = await uiStore.showConfirm('Desteyi Sil', t('flashcards.deleteDeckConfirm'), 'Sil', 'İptal')
   if (isConfirmed) {
-    store.deleteDeck(id)
+    if (!await store.deleteDeck(id)) return
     uiStore.addToast('Deste silindi', 'info')
   }
 }
@@ -241,12 +257,19 @@ const focusBackInput = () => {
   if (el) el.focus()
 }
 
-const handleAddCard = () => {
-  if (!activeDeck.value || !newCardFront.value.trim() || !newCardBack.value.trim()) return
-  store.addCard(activeDeck.value.id, newCardFront.value.trim(), newCardBack.value.trim())
+const addingCard = ref(false)
+const handleAddCard = async () => {
+  if (addingCard.value || !activeDeck.value || !newCardFront.value.trim() || !newCardBack.value.trim()) return
+  const front = newCardFront.value, back = newCardBack.value
+  addingCard.value = true
+  let saved = false
+  try { saved = Boolean(await store.addCard(activeDeck.value.id, front.trim(), back.trim())) } finally { addingCard.value = false }
+  if (!saved) return
   uiStore.addToast('Kart eklendi', 'success')
-  newCardFront.value = ''
-  newCardBack.value = ''
+  if (newCardFront.value === front && newCardBack.value === back) {
+    newCardFront.value = ''
+    newCardBack.value = ''
+  }
   const frontInput = document.querySelector('input[type="text"]:first-of-type') as HTMLInputElement
   if (frontInput) frontInput.focus()
 }
@@ -254,7 +277,7 @@ const handleAddCard = () => {
 const handleDeleteCard = async (cardId: string) => {
   const isConfirmed = await uiStore.showConfirm('Kartı Sil', 'Bu kartı desteden silmek istiyor musunuz?', 'Sil', 'İptal')
   if (isConfirmed && activeDeck.value) {
-    store.deleteCard(activeDeck.value.id, cardId)
+    if (!await store.deleteCard(activeDeck.value.id, cardId)) return
     uiStore.addToast('Kart silindi', 'info')
   }
 }
@@ -296,6 +319,7 @@ const handleGameFinish = (payload: { score: number, errors: number }) => {
 const correctCount = computed(() => testResults.value.filter(r => r.isCorrect).length)
 const scorePercentage = computed(() => activeDeck.value && activeDeck.value.cards.length > 0 ? Math.round((correctCount.value / activeDeck.value.cards.length) * 100) : 0)
 
+useSearchReveal('flashcards', async (hit, isCurrent) => { await store.fetchDecks(hit.record_id);if(!isCurrent())return;const deck=store.decks.find(d=>d.id===hit.record_id);if(deck){activeDeck.value=deck;currentView.value='study';flippedCards.value=[]} })
 </script>
 
 <style scoped>

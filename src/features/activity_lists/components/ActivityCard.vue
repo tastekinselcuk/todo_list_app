@@ -1,7 +1,6 @@
 <template>
   <article
-    class="group relative flex flex-col overflow-hidden rounded-2xl border border-border/40 bg-card/50 transition-all duration-300 hover:border-primary/25 hover:shadow-md"
-    :class="{ 'opacity-70': item.status === 'done' }"
+    class="workspace-card group relative flex flex-col overflow-hidden bg-card/50"
   >
     <div class="relative aspect-[2/3] bg-muted overflow-hidden">
       <img
@@ -42,7 +41,7 @@
       </p>
 
       <div class="mt-auto flex items-center gap-1 pt-2">
-        <button
+        <button :disabled="!canWrite"
           type="button"
           class="flex-1 h-8 rounded-lg text-[11px] font-semibold border transition-all"
           :class="item.status === 'done'
@@ -52,7 +51,7 @@
         >
           {{ item.status === 'done' ? $t('activities.markWant') : $t('activities.markDone') }}
         </button>
-        <button
+        <button v-if="canWrite"
           type="button"
           class="h-8 w-8 rounded-lg border border-border/50 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex items-center justify-center"
           :title="$t('common.delete')"
@@ -66,9 +65,12 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { computed, ref, watch } from 'vue'
 import { Trash2, Film, Tv, MapPin, BookOpen } from 'lucide-vue-next'
 import type { ActivityItem } from '../stores/activityLists'
+
+const { canWrite } = useModuleAccess('activities')
 
 const props = defineProps<{
   item: ActivityItem

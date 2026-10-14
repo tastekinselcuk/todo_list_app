@@ -1,15 +1,20 @@
 <script setup lang="ts">
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { computed, ref, nextTick, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowUpRight, Check, Clock3, Copy, History, Trash2, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { usePlansStore, type Plan } from '../stores/plans'
 import { firstPopulatedPeriod, periodStart, periods, type Period } from '../lib/periods'
-import { useAuthStore } from '@/stores/auth'
+import { workspaceStorageKey } from '@/lib/workspaceScope'
 import { useUIStore } from '@/stores/ui'
+import { readStorage } from '@/lib/storage'
+
+const { canWrite } = useModuleAccess('plans')
 
 const store = usePlansStore()
-const auth = useAuthStore()
 const ui = useUIStore()
 const { locale } = useI18n()
 const tr = computed(() => locale.value === 'tr')
@@ -34,17 +39,17 @@ const copy = computed(() => tr.value ? {
   retry: 'Retry', complete: 'Complete', undo: 'Mark incomplete', progress: 'Period progress',
   copy: 'Copy', copied: 'Copied', copyFailed: 'Could not copy', delete: 'Delete', deleted: 'Plan deleted', deleteFailed: 'Could not delete plan',
 })
-const selected = ref<Period>('daily')
+const selected = useWorkspaceDraft<Period>('plan-period', 'daily')
+if (!periods.includes(selected.value)) selected.value = 'daily'
+let periodChosen = readStorage(workspaceStorageKey('plan-period')) !== null
 const emptyMessage = computed(() => tr.value
   ? `Henüz ${copy.value[selected.value].toLocaleLowerCase('tr-TR')} plan eklenmedi.`
   : `No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
-const inputPeriod = ref<Period>('daily')
+const inputPeriod = ref<Period>(selected.value)
 const periodOptions = computed(() => periods.map(value => ({ value, label: copy.value[value] })))
-const title = ref('')
-const historyKey = () => `plans-history:${auth.user?.id}`
-const showHistory = ref(localStorage.getItem(historyKey()) === 'true')
-watch(showHistory, value => localStorage.setItem(historyKey(), String(value)))
-watch(() => auth.user?.id, () => { showHistory.value = localStorage.getItem(historyKey()) === 'true' })
+const title = useWorkspaceDraft('plan-title', '')
+const historyKey = workspaceStorageKey('plans-history')
+const showHistory = useWorkspaceDraft('plans-history', readStorage(historyKey) === 'true')
 const editing = ref<Plan | null>(null)
 const dialog = ref<HTMLDialogElement | null>(null)
 watch(editing, async value => {
@@ -52,7 +57,7 @@ watch(editing, async value => {
 })
 const reason = ref('')
 const today = ref(new Date())
-const currentPlans = computed(() => store.plans.filter(p => p.period === selected.value && p.period_date === periodStart(p.period, today.value)))
+const currentPlans = computed(() => store.plans.filter(p => p.period === selected.value && p.period_date === periodStart(p.period, today.value, store.timezone)))
 const active = computed(() => currentPlans.value.filter(p => !p.reason && !p.completed).sort((a, b) => b.history.length - a.history.length))
 const completed = computed(() => currentPlans.value.filter(p => p.completed))
 const deferred = computed(() => currentPlans.value.filter(p => p.reason && !p.completed))
@@ -62,7 +67,7 @@ const archived = computed(() => {
   for (const plan of store.plans.filter(p => p.period === selected.value)) {
     const entries = [...plan.history, { date: plan.period_date, completed: plan.completed, reason: plan.reason }]
     for (const entry of entries) {
-      if (entry.date >= periodStart(selected.value, today.value)) continue
+      if (entry.date >= periodStart(selected.value, today.value, store.timezone)) continue
       const rows = groups.get(entry.date) || []
       rows.push({ id: plan.id, title: plan.title, completed: entry.completed, reason: entry.reason })
       groups.set(entry.date, rows)
@@ -80,12 +85,13 @@ function formatDate(value: string, period = selected.value) {
   date.setDate(date.getDate() + 6)
   return `${start} – ${date.toLocaleDateString(language, { day: 'numeric', month: 'long' })}`
 }
-function count(period: Period) { return store.plans.filter(p => p.period === period && p.period_date === periodStart(period, today.value)).length }
+function count(period: Period) { return store.plans.filter(p => p.period === period && p.period_date === periodStart(period, today.value, store.timezone)).length }
 async function refresh(choose = false) {
   today.value = new Date()
-  if (await store.load() && choose) {
-    selected.value = firstPopulatedPeriod(store.plans, today.value)
+  if (await store.load() && choose && !periodChosen) {
+    selected.value = firstPopulatedPeriod(store.plans, today.value, store.timezone)
     inputPeriod.value = selected.value
+    periodChosen = true
   }
 }
 async function add() {
@@ -99,7 +105,7 @@ async function add() {
 }
 async function toggle(plan: Plan) {
   if (store.isSaving(plan.id)) return
-  if (periodStart('daily') !== periodStart('daily', today.value) && !await store.load()) return
+  if (periodStart('daily', new Date(), store.timezone) !== periodStart('daily', today.value, store.timezone) && !await store.load()) return
   const current = store.plans.find(p => p.id === plan.id)
   if (current) await store.update(current, { completed: !current.completed, reason: '' })
   today.value = new Date()
@@ -134,16 +140,25 @@ async function resume(plan: Plan) {
   if (current && await store.update(current, { reason: '' })) editing.value = null
   today.value = new Date()
 }
-watch(selected, value => { inputPeriod.value = value })
+watch(selected, value => { inputPeriod.value = value; periodChosen = true })
 let timer: ReturnType<typeof setInterval> | undefined
-onActivated(() => { void refresh(true); timer = setInterval(() => { if (periodStart('daily') !== periodStart('daily', today.value)) void refresh() }, 30000) })
+onActivated(() => { void refresh(true); timer = setInterval(() => { if (periodStart('daily', new Date(), store.timezone) !== periodStart('daily', today.value, store.timezone)) void refresh() }, 30000) })
 onDeactivated(() => { clearInterval(timer); editing.value = null })
 onUnmounted(() => clearInterval(timer))
+useSearchReveal('plans', async (hit, isCurrent) => {
+  if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period
+  periodChosen=true;today.value=new Date()
+  showHistory.value=Boolean(hit.meta.date&&hit.meta.date<periodStart(selected.value,today.value,store.timezone))
+  await store.load(hit.record_id)
+  if(!isCurrent())return
+  const plan=store.plans.find(p=>p.id===hit.record_id)
+  if(plan){selected.value=plan.period;showHistory.value=plan.period_date<periodStart(plan.period,today.value,store.timezone)}
+})
 </script>
 
 <template>
   <section class="plans-shell" :aria-busy="store.busy">
-    <form class="capture" @submit.prevent="add">
+    <form v-if="canWrite" class="capture" @submit.prevent="add">
       <div class="capture-field">
         <input v-model="title" type="text" :aria-label="copy.placeholder" :placeholder="copy.placeholder" maxlength="1000" />
         <div class="period-select">
@@ -173,36 +188,36 @@ onUnmounted(() => clearInterval(timer))
 
     <div v-if="!currentPlans.length && !store.busy && !store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
     <div class="task-list">
-      <article v-for="plan in [...active, ...completed]" :key="plan.id" class="task-row" :class="{ completed: plan.completed }" @click="toggle(plan)">
-        <button class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="plan.completed ? copy.undo : copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
-        <button class="task-content" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.history.length && !plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
+      <article v-for="plan in [...active, ...completed]" :key="plan.id" :data-search-record="plan.id" class="workspace-card task-row" :class="{ completed: plan.completed }" @click="canWrite && toggle(plan)">
+        <button :disabled="!canWrite" class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="plan.completed ? copy.undo : copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
+        <button :disabled="!canWrite" class="task-content" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.history.length && !plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
         <div class="task-actions" @click.stop>
           <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
-          <button type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
-          <button type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
+          <button v-if="canWrite" type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
+          <button v-if="canWrite" type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
         </div>
       </article>
     </div>
 
     <section v-if="deferred.length" class="deferred-section"><h3><Clock3 :size="15" />{{ copy.deferred }}<span>{{ deferred.length }}</span></h3>
-      <article v-for="plan in deferred" :key="plan.id" class="task-row deferred-row" @click="toggle(plan)">
-        <button class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.complete" @click.stop="toggle(plan)"></button>
-        <div class="task-content"><button class="task-title" :aria-disabled="store.busy || store.isSaving(plan.id)" @click.stop="toggle(plan)">{{ plan.title }}</button><button class="reason-text" @click.stop="startDefer(plan)">{{ plan.reason }}</button></div>
+      <article v-for="plan in deferred" :key="plan.id" class="workspace-card task-row deferred-row" @click="canWrite && toggle(plan)">
+        <button :disabled="!canWrite" class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.complete" @click.stop="toggle(plan)"></button>
+        <div class="task-content"><button :disabled="!canWrite" class="task-title" :aria-disabled="store.busy || store.isSaving(plan.id)" @click.stop="toggle(plan)">{{ plan.title }}</button><button :disabled="!canWrite" class="reason-text" @click.stop="startDefer(plan)">{{ plan.reason }}</button></div>
         <div class="task-actions" @click.stop>
           <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
-          <button type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
-          <button type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
+          <button v-if="canWrite" type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
+          <button v-if="canWrite" type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
         </div>
       </article>
     </section>
 
     <section v-if="showHistory" class="archive-section"><h3><History :size="16" />{{ copy.history }}</h3>
       <p v-if="!archived.length" class="archive-empty">{{ copy.historyEmpty }}</p>
-      <details v-for="[date, rows] in archived" :key="date" class="archive-group"><summary>{{ formatDate(date) }}<span>{{ rows.filter(r => r.completed).length }} / {{ rows.length }} {{ copy.done }}</span></summary><div v-for="row in rows" :key="row.id" class="archive-row"><Check v-if="row.completed" :size="15" /><Clock3 v-else :size="15" /><div><span :class="{ 'past-done': row.completed }">{{ row.title }}</span><small>{{ row.reason || (row.completed ? copy.done : copy.pending) }}</small></div></div></details>
+      <details v-for="[date, rows] in archived" :key="date" class="workspace-card archive-group"><summary>{{ formatDate(date) }}<span>{{ rows.filter(r => r.completed).length }} / {{ rows.length }} {{ copy.done }}</span></summary><div v-for="row in rows" :key="row.id" :data-search-record="row.id" class="archive-row"><Check v-if="row.completed" :size="15" /><Clock3 v-else :size="15" /><div><span :class="{ 'past-done': row.completed }">{{ row.title }}</span><small>{{ row.reason || (row.completed ? copy.done : copy.pending) }}</small></div></div></details>
     </section>
 
     <Teleport to="body"><dialog v-if="editing" ref="dialog" aria-labelledby="defer-title" class="plan-native-dialog" @cancel.prevent="editing = null" @click.self="editing = null">
-      <section class="defer-dialog"><button class="close-dialog" :aria-label="copy.cancel" @click="editing = null"><X :size="18" /></button><Clock3 :size="23" /><h2 id="defer-title">{{ copy.reason }}</h2><p>{{ editing.title }}</p><form @submit.prevent="saveReason"><textarea v-model="reason" :aria-label="copy.reason" :placeholder="copy.reasonHint" rows="3" maxlength="1000" autofocus required></textarea><button v-if="editing.reason" type="button" class="resume-button" :disabled="store.busy || store.isSaving(editing.id)" @click="resume(editing)">{{ copy.resume }}</button><div class="dialog-actions"><button type="button" @click="editing = null">{{ copy.cancel }}</button><button class="add-button" :disabled="!reason.trim() || store.busy">{{ copy.save }}</button></div></form></section>
+      <section class="defer-dialog"><button class="close-dialog" :aria-label="copy.cancel" @click="editing = null"><X :size="18" /></button><Clock3 :size="23" /><h2 id="defer-title">{{ copy.reason }}</h2><p>{{ editing.title }}</p><form @submit.prevent="saveReason"><textarea v-model="reason" :aria-label="copy.reason" :placeholder="copy.reasonHint" rows="3" maxlength="1000" autofocus required></textarea><button v-if="canWrite && (editing.reason)" type="button" class="resume-button" :disabled="store.busy || store.isSaving(editing.id)" @click="resume(editing)">{{ copy.resume }}</button><div class="dialog-actions"><button type="button" @click="editing = null">{{ copy.cancel }}</button><button class="add-button" :disabled="!reason.trim() || store.busy">{{ copy.save }}</button></div></form></section>
     </dialog></Teleport>
   </section>
 </template>
@@ -390,19 +405,15 @@ onUnmounted(() => clearInterval(timer))
   align-items:center;
   gap:13px;
   padding:10px 12px;
-  border:1px solid hsl(var(--border)/.4);
-  border-radius:12px;
   background:hsl(var(--card)/.4);
-  cursor:pointer;
-  transition:background .18s,border-color .18s
+  cursor:pointer
 }
 .task-list {
   display:grid;
   gap:6px
 }
 .task-row:hover,.task-row:focus-within {
-  background:hsl(var(--muted)/.5);
-  border-color:hsl(var(--primary)/.15)
+  background:hsl(var(--muted)/.5)
 }
 .task-row.completed {
   background:hsl(var(--muted)/.25)
@@ -545,8 +556,6 @@ onUnmounted(() => clearInterval(timer))
   margin:10px 0 16px
 }
 .archive-group {
-  border:1px solid hsl(var(--border));
-  border-radius:10px;
   margin-top:10px;
   overflow:hidden
 }
@@ -565,7 +574,7 @@ onUnmounted(() => clearInterval(timer))
   gap:12px;
   padding:12px 18px;
   font-size:12px;
-  border-top:1px solid hsl(var(--border)/.5);
+  border-top:1px solid hsl(var(--border)/.7);
   transition:background .18s
 }
 .archive-row:hover {

@@ -1,9 +1,9 @@
 <template>
-  <div class="space-y-5 animate-in fade-in zoom-in-95 duration-500 relative z-10 w-full flex flex-col items-center">
+  <div class="space-y-5 relative z-10 w-full flex flex-col items-center">
     
     <div v-if="!isAuthenticated" style="--workspace-default-max:72rem" class="workspace-content mx-auto space-y-6">
       
-      <div class="flex flex-col md:flex-row gap-2.5 w-full relative z-[60]" style="overflow: visible;">
+      <div v-if="canWrite" class="flex flex-col md:flex-row gap-2.5 w-full relative z-[60]" style="overflow: visible;">
         <div class="relative flex-1 group">
           <Shield class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input
@@ -95,16 +95,16 @@
         </div>
         
         <div class="flex flex-wrap items-center justify-center gap-2 relative z-10">
-          <button @click="openAddNoteDialog" class="h-9 px-4 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors">
+          <button v-if="canWrite" @click="openAddNoteDialog" class="h-9 px-4 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors">
             <Plus class="h-4 w-4" /> {{ $t('secure.addNote') }}
           </button>
           
           <div class="w-px h-6 bg-border/50 mx-1 hidden sm:block"></div>
 
-          <button @click="editSession(currentSession!)" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-muted text-foreground border border-border/50 transition-colors" :title="$t('secure.editSession')">
+          <button v-if="canWrite" @click="editSession(currentSession!)" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-muted text-foreground border border-border/50 transition-colors" :title="$t('secure.editSession')">
             <Edit class="h-4 w-4" />
           </button>
-          <button @click="deleteCurrentSession" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 border border-border/50 hover:border-rose-500/20 transition-colors" :title="$t('secure.deleteSession')">
+          <button v-if="canWrite" @click="deleteCurrentSession" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 border border-border/50 hover:border-rose-500/20 transition-colors" :title="$t('secure.deleteSession')">
             <Trash2 class="h-4 w-4" />
           </button>
           <button @click="logout" class="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50 transition-colors" :title="$t('secure.logout')">
@@ -172,7 +172,7 @@
         <button @click="closeNoteDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
       </div>
 
-      <form @submit.prevent="saveNote" class="space-y-5">
+      <form @submit.prevent="saveNote" :data-shared-editing="showAddNoteDialog" class="space-y-5">
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-1.5 col-span-2 sm:col-span-1">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.title') }}</label>
@@ -273,7 +273,7 @@
         <button @click="closeSessionDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
       </div>
 
-      <form @submit.prevent="saveSession" class="space-y-5">
+      <form @submit.prevent="saveSession" :data-shared-editing="showSessionDialog" class="space-y-5">
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionName') }}</label>
           <input v-model="editingSession.name" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
@@ -281,8 +281,8 @@
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionPasswordLabel') }}</label>
           <div class="relative">
-            <input v-model="editingSession.password_hash" :type="showEditSessionPassword ? 'text' : 'password'" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono tracking-wide transition-all" required autocomplete="new-password" />
-            <button type="button" @click="showEditSessionPassword = !showEditSessionPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors">
+            <input v-model="editingSession.password" :placeholder="$t('secure.keepPassword')" :type="showEditSessionPassword ? 'text' : 'password'" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono tracking-wide transition-all" autocomplete="new-password" />
+            <button v-if="canWrite" type="button" @click="showEditSessionPassword = !showEditSessionPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors">
               <Eye v-if="showEditSessionPassword" class="h-4 w-4" />
               <EyeOff v-else class="h-4 w-4" />
             </button>
@@ -301,340 +301,257 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, onDeactivated, watch } from 'vue'
 import { Lock, Shield, Eye, EyeOff, Plus, Edit, Trash2, X, LogOut, Loader2 } from 'lucide-vue-next'
-import { supabase } from '@/lib/supabase'
+import { useWorkspaceClient } from '@/lib/workspaceScope'
+import { createVaultKey, unlockVaultKey, encryptVaultValue, decryptVaultValue, isSealedVault, vaultKeyId } from '@/lib/vaultCrypto'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import SecureNoteItem from './SecureNoteItem.vue' // YENİ EKLENDİ
+import SecureNoteItem from './SecureNoteItem.vue'
 
 interface SecureNote {
-  id: string
-  title: string
-  description?: string
-  type: 'password' | 'secret'
-  username?: string
-  password_encrypted?: string
-  url?: string
-  content?: string
-  created_at: string
-  updated_at: string
-  session_id: string
+  id: string; title: string; description?: string; type: 'password' | 'secret'; username?: string
+  password_encrypted?: string; url?: string; content?: string; created_at: string; updated_at: string
+  session_id: string; version?: number; encrypted_payload?: Awaited<ReturnType<typeof encryptVaultValue>> & { key_id?: string }
 }
+interface PasswordSession { id: string; name: string; password_hash: string; created_at: string; updated_at?: string; version?: number }
+const { canWrite } = useModuleAccess('secure')
 
-interface PasswordSession {
-  id: string
-  name: string
-  password_hash: string
-  created_at: string
-  updated_at?: string
-}
-
-const { t } = useI18n() 
-const authStore = useAuthStore()
-const uiStore = useUIStore()
-
+const { t } = useI18n()
+const authStore = useAuthStore(), supabase = useWorkspaceClient(), uiStore = useUIStore()
 const noteTypeOptions = computed(() => [
-  { value: 'password', label: t('secure.typePassword') },
-  { value: 'secret', label: t('secure.typeSecret') }
+  { value: 'password', label: t('secure.typePassword') }, { value: 'secret', label: t('secure.typeSecret') }
 ])
-
-const isAuthenticated = ref(false)
-const currentSession = ref<PasswordSession | null>(null)
-const passwordSessions = ref<PasswordSession[]>([])
-const secureNotes = ref<SecureNote[]>([])
-
-const showInlinePassword = ref(false)
-const showUnlockPassword = ref(false)
-const showDialogPassword = ref(false)
-const showVerificationPassword = ref(false)
-const showEditSessionPassword = ref(false)
-
-const inlineSessionName = ref('')
-const inlineSessionPassword = ref('')
-
-const unlockDialog = ref<HTMLDialogElement | null>(null)
-const selectedSessionForUnlock = ref<PasswordSession | null>(null)
-const unlockPassword = ref('')
-
-const isLoading = ref(false)
-const showAddNoteDialog = ref(false)
-const noteDialog = ref<HTMLDialogElement | null>(null)
-const showSessionDialog = ref(false)
-const sessionDialog = ref<HTMLDialogElement | null>(null)
-const passwordVerificationDialog = ref<HTMLDialogElement | null>(null)
-const showPasswordVerification = ref(false)
-
-const verificationPassword = ref('')
-const isVerifyingPassword = ref(false)
-const verificationError = ref('')
-
-const editingNote = ref<{
-  id?: string
-  title: string
-  description?: string
-  type: 'password' | 'secret'
-  username?: string
-  password_encrypted?: string
-  url?: string
-  content?: string
-}>({
-  title: '',
-  type: 'password',
+const isAuthenticated = ref(false), currentSession = ref<PasswordSession | null>(null)
+const passwordSessions = ref<PasswordSession[]>([]), secureNotes = ref<SecureNote[]>([])
+const vaultKey = shallowRef<CryptoKey | null>(null)
+let lockEpoch = 0
+const showInlinePassword = ref(false), showUnlockPassword = ref(false), showDialogPassword = ref(false)
+const showVerificationPassword = ref(false), showEditSessionPassword = ref(false)
+const inlineSessionName = ref(''), inlineSessionPassword = ref('')
+const unlockDialog = ref<HTMLDialogElement | null>(null), selectedSessionForUnlock = ref<PasswordSession | null>(null), unlockPassword = ref('')
+const isLoading = ref(false), showAddNoteDialog = ref(false), noteDialog = ref<HTMLDialogElement | null>(null)
+const showSessionDialog = ref(false), sessionDialog = ref<HTMLDialogElement | null>(null)
+const passwordVerificationDialog = ref<HTMLDialogElement | null>(null), showPasswordVerification = ref(false)
+const verificationPassword = ref(''), isVerifyingPassword = ref(false), verificationError = ref('')
+const editingNote = ref<Partial<SecureNote> & { title: string; type: 'password' | 'secret' }>({ title: '', type: 'password' })
+const editingSession = ref<Partial<PasswordSession> & { password?: string }>({ name: '', password: '' })
+const sensitive = (note: Partial<SecureNote>) => ({
+  title: note.title || '', description: note.description || '', type: note.type || 'secret',
+  username: note.username || '', password_encrypted: note.password_encrypted || '', url: note.url || '', content: note.content || ''
 })
-const editingSession = ref<Partial<PasswordSession> & { password?: string }>({ name: '', password_hash: '', password: '' })
-
+const payloadFor = async (key: CryptoKey, note: Partial<SecureNote>, session: PasswordSession, metadata = session.password_hash) => ({
+  ...await encryptVaultValue(key, sensitive(note), session.id + ':' + note.id), key_id: vaultKeyId(metadata)
+})
+const lockVault = () => {
+  lockEpoch++; vaultKey.value = null; isAuthenticated.value = false; currentSession.value = null; secureNotes.value = []
+  editingNote.value = { title: '', type: 'password' }; editingSession.value = { name: '', password: '' }
+  inlineSessionPassword.value = ''; unlockPassword.value = ''; verificationPassword.value = ''
+  selectedSessionForUnlock.value = null; unlockDialog.value?.close()
+  showAddNoteDialog.value = false; showSessionDialog.value = false; showPasswordVerification.value = false
+}
+const showFailure = (err: unknown) => {
+  const message = (err as Error)?.message || ''
+  uiStore.addToast(t(message.includes('SHARING_CONFLICT') ? 'sharing.conflict'
+    : message.includes('VAULT_HTTPS_REQUIRED') ? 'secure.httpsRequired' : 'sharing.errors.SAVE_FAILED'), 'error')
+}
+const fetchRows = async (sessionId: string): Promise<SecureNote[]> => {
+  const { data, error } = await supabase.from('secure_notes').select('*').eq('session_id', sessionId).order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
 const loadPasswordSessions = async () => {
-  isLoading.value = true
+  const epoch = lockEpoch
   try {
     const { data, error } = await supabase.from('password_sessions').select('*').order('created_at', { ascending: false })
     if (error) throw error
+    if (epoch !== lockEpoch) return
     passwordSessions.value = data || []
-  } catch (err) {
-    console.error('Failed to load password sessions:', err)
-  } finally {
-    isLoading.value = false
-  }
+    if (currentSession.value) {
+      const latest = passwordSessions.value.find(s => s.id === currentSession.value!.id)
+      if (!latest || latest.password_hash !== currentSession.value.password_hash) {
+        lockVault(); uiStore.addToast(t('secure.passwordChanged'), 'info')
+      } else currentSession.value = latest
+    }
+  } catch (err) { showFailure(err) }
 }
-
 const loadSecureNotes = async () => {
-  if (!currentSession.value) return
-  isLoading.value = true
-  try {
-    const { data, error } = await supabase.from('secure_notes').select('*').eq('session_id', currentSession.value.id).order('created_at', { ascending: false })
-    if (error) throw error
-    secureNotes.value = data || []
-  } catch (err) {
-    console.error('Failed to load secure notes:', err)
-  } finally {
-    isLoading.value = false
-  }
+  const session = currentSession.value, key = vaultKey.value, epoch = lockEpoch
+  if (!session) return
+  const rows = await fetchRows(session.id)
+  const decoded = key ? await Promise.all(rows.map(async row => {
+    if (!row.encrypted_payload) throw new Error('VAULT_INVALID_DATA')
+    return { ...row, ...await decryptVaultValue<ReturnType<typeof sensitive>>(key, row.encrypted_payload, session.id + ':' + row.id) }
+  })) : rows
+  if (epoch === lockEpoch && currentSession.value?.id === session.id) secureNotes.value = decoded
 }
-
 const handleInlineAddSession = async () => {
-  if (!inlineSessionName.value.trim() || !inlineSessionPassword.value.trim()) return
+  if (isLoading.value || !inlineSessionName.value.trim() || !inlineSessionPassword.value.trim()) return
+  if (!supabase.collection('secure')) { uiStore.addToast(t('sharing.errors.SETUP_REQUIRED'), 'error'); return }
+  const name = inlineSessionName.value.trim(), password = inlineSessionPassword.value, epoch = lockEpoch
   isLoading.value = true
-  
   try {
-    const existing = passwordSessions.value.find(s => s.name.toLowerCase().trim() === inlineSessionName.value.toLowerCase().trim())
-    if (existing) {
-      uiStore.addToast(t('secure.sessionExists', { name: inlineSessionName.value }), 'error')
-      return
+    if (passwordSessions.value.some(s => s.name.toLowerCase().trim() === name.toLowerCase())) {
+      uiStore.addToast(t('secure.sessionExists', { name }), 'error'); return
     }
-    
-    const userId = authStore.user?.id || null
-    const { data, error } = await supabase.from('password_sessions')
-      .insert([{ created_by: userId, name: inlineSessionName.value, password_hash: inlineSessionPassword.value }])
-      .select()
-    
+    const { metadata } = await createVaultKey(password)
+    if (epoch !== lockEpoch) return
+    const { data, error } = await supabase.from('password_sessions').insert([{ created_by: authStore.user?.id, name, password_hash: metadata }]).select()
     if (error) throw error
-    if (data && data[0]) {
-      passwordSessions.value.unshift(data[0])
-      uiStore.addToast('Kasa başarıyla oluşturuldu.', 'success')
-      inlineSessionName.value = ''
-      inlineSessionPassword.value = ''
-      showInlinePassword.value = false
+    if (epoch !== lockEpoch) return
+    if (data?.[0]) passwordSessions.value.unshift(data[0])
+    if (inlineSessionName.value.trim() === name && inlineSessionPassword.value === password) {
+      inlineSessionName.value = ''; inlineSessionPassword.value = ''; showInlinePassword.value = false
     }
-  } catch (err) {
-    uiStore.addToast('Kasa oluşturulurken hata oluştu.', 'error')
-  } finally {
-    isLoading.value = false
-  }
+    uiStore.addToast(t('secure.sessionCreated'), 'success')
+  } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
-
 const promptSessionUnlock = (session: PasswordSession) => {
-  selectedSessionForUnlock.value = session
-  unlockPassword.value = ''
-  showUnlockPassword.value = false 
-  unlockDialog.value?.showModal()
+  selectedSessionForUnlock.value = session; unlockPassword.value = ''; showUnlockPassword.value = false; unlockDialog.value?.showModal()
 }
-
-const closeUnlockDialog = () => {
-  selectedSessionForUnlock.value = null
-  unlockPassword.value = ''
-  unlockDialog.value?.close()
-}
-
+const closeUnlockDialog = () => { selectedSessionForUnlock.value = null; unlockPassword.value = ''; unlockDialog.value?.close() }
 const authenticate = async () => {
-  if (!unlockPassword.value.trim() || !selectedSessionForUnlock.value) return
-  
+  if (isLoading.value || !unlockPassword.value || !selectedSessionForUnlock.value) return
+  let session = { ...selectedSessionForUnlock.value }
+  const password = unlockPassword.value, epoch = lockEpoch
   isLoading.value = true
   try {
-    if (selectedSessionForUnlock.value.password_hash === unlockPassword.value.trim()) {
-      currentSession.value = selectedSessionForUnlock.value
-      isAuthenticated.value = true
-      await loadSecureNotes()
-      uiStore.addToast(t('secure.accessSessionTitle', { name: currentSession.value.name }) + ' açıldı', 'success')
-      closeUnlockDialog()
-    } else {
-      uiStore.addToast(t('secure.invalidPassword'), 'error')
+    let key: CryptoKey | null = null
+    if (isSealedVault(session.password_hash)) key = await unlockVaultKey(password, session.password_hash)
+    else {
+      if (session.password_hash !== password.trim()) { uiStore.addToast(t('secure.invalidPassword'), 'error'); return }
+      if (supabase.collection('secure')) {
+        const sealed = await createVaultKey(password.trim()), rows = await fetchRows(session.id)
+        const notes = await Promise.all(rows.map(async row => ({
+          id: row.id, version: row.version, encrypted_payload: await payloadFor(sealed.key, row, session, sealed.metadata)
+        })))
+        if (epoch !== lockEpoch) return
+        session = await supabase.sealVault(session.id, session.password_hash, sealed.metadata, notes, session.version!, session.name)
+        key = sealed.key
+      }
     }
+    if (epoch !== lockEpoch || selectedSessionForUnlock.value?.id !== session.id) return
+    currentSession.value = session; vaultKey.value = key; isAuthenticated.value = true
+    await loadSecureNotes()
+    const index = passwordSessions.value.findIndex(s => s.id === session.id)
+    if (index !== -1) passwordSessions.value[index] = session
+    closeUnlockDialog()
   } catch (err) {
-    uiStore.addToast(t('secure.authFailed'), 'error')
-  } finally {
-    isLoading.value = false
-  }
+    if (isAuthenticated.value) lockVault()
+    if ((err as Error).name === 'OperationError') uiStore.addToast(t('secure.invalidPassword'), 'error')
+    else showFailure(err)
+  } finally { isLoading.value = false }
 }
-
-const logout = () => {
-  isAuthenticated.value = false
-  currentSession.value = null
-  secureNotes.value = []
-  uiStore.addToast(t('secure.logout') + ' yapıldı', 'info')
-}
-
+const logout = () => { lockVault(); uiStore.addToast(t('secure.logout'), 'info') }
 const openAddNoteDialog = () => {
-  editingNote.value = { id: '', title: '', description: '', type: 'password', username: '', password_encrypted: '', url: '', content: '' }
-  showDialogPassword.value = false 
-  showAddNoteDialog.value = true
+  editingNote.value = { title: '', description: '', type: 'password', username: '', password_encrypted: '', url: '', content: '' }
+  showDialogPassword.value = false; showAddNoteDialog.value = true
 }
-
-const closeSessionDialog = () => {
-  showSessionDialog.value = false
-  sessionDialog.value?.close()
-}
-
+const closeSessionDialog = () => { showSessionDialog.value = false; editingSession.value.password = ''; sessionDialog.value?.close() }
 const saveSession = async () => {
+  if (isLoading.value || !currentSession.value || !editingSession.value.name?.trim()) return
+  const session = currentSession.value, epoch = lockEpoch
   isLoading.value = true
   try {
-    if (editingSession.value.id) {
-      const { error } = await supabase.from('password_sessions').update({ name: editingSession.value.name, password_hash: editingSession.value.password_hash }).eq('id', editingSession.value.id)
+    let updated: PasswordSession
+    let nextKey = vaultKey.value
+    if (editingSession.value.password) {
+      const sealed = await createVaultKey(editingSession.value.password)
+      const rows = await fetchRows(session.id)
+      const decoded = await Promise.all(rows.map(async row => ({
+        ...row, ...await decryptVaultValue<ReturnType<typeof sensitive>>(vaultKey.value!, row.encrypted_payload!, session.id + ':' + row.id)
+      })))
+      const notes = await Promise.all(decoded.map(async row => ({
+        id: row.id, version: row.version, encrypted_payload: await payloadFor(sealed.key, row, session, sealed.metadata)
+      })))
+      if (epoch !== lockEpoch) return
+      updated = await supabase.sealVault(session.id, session.password_hash, sealed.metadata, notes, editingSession.value.version!, editingSession.value.name)
+      nextKey = sealed.key
+    } else {
+      const { data, error } = await supabase.from('password_sessions').update({ name: editingSession.value.name, version: editingSession.value.version }).eq('id', session.id).select().single()
       if (error) throw error
-      const index = passwordSessions.value.findIndex(s => s.id === editingSession.value.id)
-      if (index !== -1) passwordSessions.value[index] = { ...passwordSessions.value[index], ...editingSession.value } as PasswordSession
-      if (currentSession.value?.id === editingSession.value.id) currentSession.value = passwordSessions.value[index]
-      uiStore.addToast('Kasa güncellendi', 'success')
+      updated = data
     }
-    closeSessionDialog()
-  } catch (err) {
-    uiStore.addToast((err as Error).message, 'error')
-  } finally {
-    isLoading.value = false
-  }
+    if (epoch !== lockEpoch) return
+    vaultKey.value = nextKey
+    const index = passwordSessions.value.findIndex(s => s.id === session.id)
+    if (index !== -1) passwordSessions.value[index] = updated
+    currentSession.value = updated; await loadSecureNotes(); closeSessionDialog()
+    uiStore.addToast(t('secure.sessionUpdated'), 'success')
+  } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
-
 const deleteCurrentSession = async () => {
-  if (!currentSession.value) return
-  const isConfirmed = await uiStore.showConfirm(t('secure.deleteSession'), t('secure.deleteSessionConfirm', { name: currentSession.value.name }), 'Kasayı Sil', t('secure.cancel'))
-  if (!isConfirmed) return 
-  
+  const session = currentSession.value
+  if (!session) return
+  if (!await uiStore.showConfirm(t('secure.deleteSession'), t('secure.deleteSessionConfirm', { name: session.name }), t('secure.deleteSession'), t('secure.cancel'))) return
   isLoading.value = true
   try {
-    const { error } = await supabase.from('password_sessions').delete().eq('id', currentSession.value.id)
+    const { error } = await supabase.from('password_sessions').delete().eq('id', session.id)
     if (error) throw error
-    passwordSessions.value = passwordSessions.value.filter(s => s.id !== currentSession.value!.id)
+    passwordSessions.value = passwordSessions.value.filter(s => s.id !== session.id)
     logout()
-    uiStore.addToast('Kasa başarıyla silindi', 'info')
-  } catch (err) {
-    uiStore.addToast('Kasa silinirken hata oluştu', 'error')
-  } finally {
-    isLoading.value = false
-  }
+  } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
-
-const editNote = (note: SecureNote) => {
-  editingNote.value = { ...note }
-  showDialogPassword.value = false 
-  showAddNoteDialog.value = true
-}
-
+const editNote = (note: SecureNote) => { editingNote.value = { ...note }; showDialogPassword.value = false; showAddNoteDialog.value = true }
 const editSession = (session: PasswordSession) => {
-  editingSession.value = { ...session }
-  showEditSessionPassword.value = false
-  showPasswordVerification.value = true
+  editingSession.value = { ...session, password: '' }; showEditSessionPassword.value = false
+  verificationPassword.value = ''; verificationError.value = ''; showPasswordVerification.value = true
 }
-
 const verifyPassword = async () => {
-  if (!verificationPassword.value.trim()) return
-  isVerifyingPassword.value = true
-  verificationError.value = ''
+  if (!verificationPassword.value || isVerifyingPassword.value || !currentSession.value) return
+  isVerifyingPassword.value = true; verificationError.value = ''
+  const epoch = lockEpoch, sessionId = currentSession.value.id
   try {
-    if (verificationPassword.value.trim() === currentSession.value?.password_hash) {
-      showPasswordVerification.value = false
-      showSessionDialog.value = true
-      verificationPassword.value = ''
-    } else {
-      verificationError.value = t('secure.invalidVerification')
-    }
-  } finally {
-    isVerifyingPassword.value = false
-  }
+    if (isSealedVault(currentSession.value.password_hash)) await unlockVaultKey(verificationPassword.value, currentSession.value.password_hash)
+    else if (verificationPassword.value.trim() !== currentSession.value.password_hash) throw new Error('Incorrect password')
+    if (epoch !== lockEpoch || currentSession.value?.id !== sessionId) return
+    showPasswordVerification.value = false; showSessionDialog.value = true; verificationPassword.value = ''
+  } catch { verificationError.value = t('secure.invalidVerification') } finally { isVerifyingPassword.value = false }
 }
-
-const closePasswordVerification = () => {
-  showPasswordVerification.value = false
-  verificationPassword.value = ''
-  verificationError.value = ''
-}
-
-const closeNoteDialog = () => {
-  showAddNoteDialog.value = false
-  noteDialog.value?.close()
-}
-
+const closePasswordVerification = () => { showPasswordVerification.value = false; verificationPassword.value = ''; verificationError.value = '' }
+const closeNoteDialog = () => { showAddNoteDialog.value = false; editingNote.value = { title: '', type: 'password' }; noteDialog.value?.close() }
 const saveNote = async () => {
+  const session = currentSession.value, key = vaultKey.value, epoch = lockEpoch
+  if (isLoading.value || !session) return
   isLoading.value = true
   try {
-    if (editingNote.value.id) {
-      const { error } = await supabase.from('secure_notes').update({
-        title: editingNote.value.title, description: editingNote.value.description, type: editingNote.value.type,
-        username: editingNote.value.username, password_encrypted: editingNote.value.password_encrypted,
-        url: editingNote.value.url, content: editingNote.value.content
-      }).eq('id', editingNote.value.id)
-      
-      if (error) throw error
-      const index = secureNotes.value.findIndex(n => n.id === editingNote.value.id)
-      if (index !== -1) secureNotes.value[index] = { ...editingNote.value } as SecureNote
-      uiStore.addToast('Kayıt güncellendi', 'success')
-    } else {
-      const userId = authStore.user?.id || null
-      const { data, error } = await supabase.from('secure_notes').insert([{
-        created_by: userId, title: editingNote.value.title, description: editingNote.value.description, type: editingNote.value.type,
-        username: editingNote.value.username, password_encrypted: editingNote.value.password_encrypted, url: editingNote.value.url,
-        content: editingNote.value.content, session_id: currentSession.value?.id
-      }]).select()
-      
-      if (error) throw error
-      if (data && data[0]) secureNotes.value.unshift(data[0])
-      uiStore.addToast('Kayıt eklendi', 'success')
-    }
-    closeNoteDialog()
-  } catch (err) {
-    uiStore.addToast('Kayıt sırasında hata oluştu', 'error')
-  } finally {
-    isLoading.value = false
-  }
+    const draft = { ...editingNote.value }, id = draft.id || crypto.randomUUID()
+    const fields = key ? {
+      id, title: 'Encrypted note', type: 'secret', encrypted_payload: await payloadFor(key, { ...draft, id }, session)
+    } : sensitive(draft)
+    if (epoch !== lockEpoch) return
+    const query = draft.id ? supabase.from('secure_notes').update({ ...fields, version: draft.version }).eq('id', draft.id)
+      : supabase.from('secure_notes').insert([{ ...fields, created_by: authStore.user?.id, session_id: session.id }])
+    const { error } = await query.select()
+    if (error) throw error
+    if (epoch !== lockEpoch) return
+    await loadSecureNotes(); closeNoteDialog()
+    uiStore.addToast(t('secure.noteSaved'), 'success')
+  } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
-
 const deleteNote = async (id: string) => {
-  const isConfirmed = await uiStore.showConfirm('Kaydı Sil', t('secure.deleteNoteConfirm'), 'Sil', t('secure.cancel'))
-  if (!isConfirmed) return 
-  
+  if (!await uiStore.showConfirm(t('secure.deleteNoteTitle'), t('secure.deleteNoteConfirm'), t('secure.deleteNoteTitle'), t('secure.cancel'))) return
   isLoading.value = true
   try {
     const { error } = await supabase.from('secure_notes').delete().eq('id', id)
     if (error) throw error
     secureNotes.value = secureNotes.value.filter(n => n.id !== id)
-    uiStore.addToast('Kayıt başarıyla silindi', 'info')
-  } catch (err) {
-    uiStore.addToast('Silinirken bir hata oluştu', 'error')
-  } finally {
-    isLoading.value = false
-  }
+  } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
-
-const formatDate = (date: string) => {
-  const currentLang = t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US'
-  return new Date(date).toLocaleDateString(currentLang, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-watch(showAddNoteDialog, (show) => { if (show) noteDialog.value?.showModal(); else noteDialog.value?.close() })
-watch(showSessionDialog, (show) => { if (show) sessionDialog.value?.showModal(); else sessionDialog.value?.close() })
-watch(showPasswordVerification, (show) => { if (show) passwordVerificationDialog.value?.showModal(); else passwordVerificationDialog.value?.close() })
-
-onMounted(() => { loadPasswordSessions() })
+const formatDate = (date: string) => new Date(date).toLocaleDateString(t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+watch(showAddNoteDialog, show => { if (show) noteDialog.value?.showModal(); else noteDialog.value?.close() })
+watch(showSessionDialog, show => { if (show) sessionDialog.value?.showModal(); else sessionDialog.value?.close() })
+watch(showPasswordVerification, show => { if (show) passwordVerificationDialog.value?.showModal(); else passwordVerificationDialog.value?.close() })
+supabase.listen({
+  password_sessions: loadPasswordSessions,
+  secure_notes: async () => { try { await loadSecureNotes() } catch (err) { lockVault(); showFailure(err) } }
+}, () => isLoading.value || isVerifyingPassword.value)
+onMounted(loadPasswordSessions)
+onDeactivated(lockVault)
+onBeforeUnmount(lockVault)
 </script>
 
 <style scoped>
