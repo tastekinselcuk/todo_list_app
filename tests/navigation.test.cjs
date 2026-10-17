@@ -9,7 +9,7 @@ const vue = require('vue')
 function load(source, dependencies = {}, globals = {}) {
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
   const exports = {}
-  vm.runInNewContext(code, { exports, require: name => dependencies[name] || (name === '@/features/finance/lib/finance' ? load(fs.readFileSync('src/features/finance/lib/finance.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), Date, console, ...globals })
+  vm.runInNewContext(code, { exports, require: name => dependencies[name] || (['@/lib/workspaceTrash','./workspaceTrash'].includes(name) ? load(fs.readFileSync('src/lib/workspaceTrash.ts','utf8'), {'./supabase':dependencies['./supabase']||dependencies['@/lib/supabase']||{supabase:{}}}, globals) : null) || (name === '@/features/finance/lib/finance' ? load(fs.readFileSync('src/features/finance/lib/finance.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), Date, console, ...globals })
   return exports
 }
 const scroll = load(fs.readFileSync('src/lib/navigationScroll.ts', 'utf8'))
@@ -22,6 +22,21 @@ test('navigation hides after downward scrolling and reappears on small upward sc
   assert.equal(scroll.updateNavigationScroll(state, 120), false)
   assert.equal(scroll.updateNavigationScroll(state, 116), true)
 })
+test('workspace navigation ignores short scroll reversals and reveals after deliberate upward travel', () => {
+  const state=scroll.createNavigationScrollState(500)
+  const distances={reveal:40,hide:56}
+  assert.equal(scroll.updateNavigationScroll(state,560,false,distances),false)
+  for(const y of [552,560,550,558,548,556]) {
+    assert.equal(scroll.updateNavigationScroll(state,y,false,distances),false)
+  }
+  assert.equal(scroll.updateNavigationScroll(state,516,false,distances),true)
+  for(const y of [524,516,526,518]) {
+    assert.equal(scroll.updateNavigationScroll(state,y,false,distances),true)
+  }
+  assert.equal(scroll.updateNavigationScroll(state,578,false,distances),false)
+  assert.equal(scroll.updateNavigationScroll(state,576,true,distances),true)
+})
+
 test('navigation remains visible at the top and when its controls have keyboard focus', () => {
   const state = scroll.createNavigationScrollState(100)
   scroll.updateNavigationScroll(state, 150)
@@ -61,7 +76,8 @@ function harness(authOverride) {
     '@/stores/workspaces': { useWorkspacesStore: () => workspaces },
     '@/stores/sharing': { useSharingStore: () => ({ start() {}, stop() {} }) },
     '@/components/SharingDialog.vue': { default: placeholder('Sharing') },
-    '@/stores/ui': { useUIStore: () => ({ resolveConfirm() {}, async showConfirm() { return false }, addToast() {} }) },
+    '@/stores/ui': { useUIStore: () => ({ clearUndoToasts() {}, resolveConfirm() {}, async showConfirm() { return false }, addToast() {} }) },
+    '@/lib/workspaceScroll': { createWorkspaceScroll: () => ({refresh(){},reset(){},settle(){},reveal(){},dispose(){}}) },
     '@/lib/navigationScroll': scroll, '@/lib/workspaceReminders': { startWorkspaceReminders: () => () => {} },
     '@/lib/accountProfile': account,
     '@/features/analytics/lib/focusService': { focusJournal: () => undefined },
@@ -268,6 +284,42 @@ test('disabling Pomodoro while docked restores the regular navigation layout', a
   app.unmount()
 })
 
+test('toast notifications stay above the most recently opened modal and return to the page when it closes',async()=>{
+  class FakeElement { constructor(){this.isConnected=true}matches(){return false}querySelector(){return null} }
+  class FakeDialog extends FakeElement { constructor(){super();this.open=false}matches(selector){return selector===':modal' && this.open} }
+  const first=new FakeDialog(),second=new FakeDialog(),body=new FakeElement()
+  const document={body,querySelectorAll:()=>[first,second].filter(dialog=>dialog.open)}
+  let callback,disconnected=false
+  class Observer { constructor(cb){callback=cb}observe(){}disconnect(){disconnected=true} }
+  const ui=vue.reactive({toasts:[]})
+  const descriptor=parse(fs.readFileSync('src/components/ui/ToastContainer.vue','utf8')).descriptor
+  const component=load(compileScript(descriptor,{id:'toast-layers'}).content,{
+    '@/stores/ui':{useUIStore:()=>ui},'vue-i18n':{useI18n:()=>({t:key=>key})},
+  },{document,Element:FakeElement,HTMLDialogElement:FakeDialog,MutationObserver:Observer}).default
+  let state
+  const renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})
+  const app=renderer.createApp({setup(){state=component.setup({}, {expose(){}});return()=>vue.h('div')}})
+  app.mount({})
+  const host={isConnected:true,open:false,shown:0,matches(){return this.open},showPopover(){this.open=true;this.shown++},hidePopover(){this.open=false}}
+  state.toastHost.value=host;state.supportsPopover.value=true
+  const settle=async()=>{await vue.nextTick();await vue.nextTick()}
+  try{
+    ui.toasts.push({id:'one',message:'Wrong password',type:'error'});await settle()
+    assert.equal(host.open,true)
+    second.open=true;callback([{type:'attributes',target:second}]);await settle()
+    assert.equal(vue.toRaw(state.toastTarget.value),second)
+    first.open=true;callback([{type:'attributes',target:first}]);await settle()
+    assert.equal(vue.toRaw(state.toastTarget.value),first,'opening order must take precedence over DOM order')
+    first.open=false;callback([{type:'attributes',target:first}]);await settle()
+    assert.equal(vue.toRaw(state.toastTarget.value),second)
+    second.open=false;callback([{type:'attributes',target:second}]);await settle()
+    assert.equal(vue.toRaw(state.toastTarget.value),body)
+    assert.ok(host.shown>=4,'existing toasts are promoted again as modal layers change')
+    ui.toasts=[];await settle();state.hideWhenEmpty();assert.equal(host.open,false)
+  }finally{app.unmount()}
+  assert.equal(disconnected,true)
+})
+
 test('compact dock controls can change session, start, reset and restore the timer card', async () => {
   const h = harness()
   const app = h.renderer.createApp(h.component('src/App.vue'))
@@ -326,11 +378,129 @@ test('content search chooses only enabled safe modules and passes the specific d
   app.unmount();assert.equal(h.listeners.size,0)
 })
 
+test('workspace transfers document scrolling into a pinned viewport and preserves focus, search, resize and tab changes', () => {
+  const events=new Map(), viewportEvents=new Map(), documentEvents=new Map(), frames=new Map(), observers=[]
+  let frameId=0, position=0, writes=0, toolbarHeight=120, loading=false
+  const calls=[], attributes=new Set()
+  const window={innerHeight:900,scrollY:0,
+    addEventListener(name,fn){events.set(name,fn)},removeEventListener(name){events.delete(name)},
+    scrollTo(options){this.scrollY=options.top;calls.push(options);events.get('scroll')?.()}}
+  const document={addEventListener(name,fn){documentEvents.set(name,fn)},removeEventListener(name){documentEvents.delete(name)}}
+  const navigation={offsetHeight:82}
+  const toolbar={get offsetHeight(){return toolbarHeight},contains(){return false}}
+  const content={offsetHeight:1800,querySelector(selector){return selector.includes('data-module-loading') ? loading || null : toolbar}}
+  const frame={get offsetHeight(){return parseFloat(this.style.height)},style:{height:'',setProperty(){}},toggleAttribute(name,value){value?attributes.add(name):attributes.delete(name)},hasAttribute(name){return attributes.has(name)}}
+  const stage={style:{height:''},getBoundingClientRect:()=>({top:320-window.scrollY})}
+  const viewport={
+    get clientHeight(){return parseFloat(frame.style.height)-130},
+    get scrollTop(){return position},
+    set scrollTop(value){position=Math.max(0,Math.min(content.offsetHeight-this.clientHeight,value));writes++},
+    addEventListener(name,fn){viewportEvents.set(name,fn)},removeEventListener(name){viewportEvents.delete(name)},
+    getBoundingClientRect(){return {top:105}},
+  }
+  const globals={window,document,getComputedStyle:()=>({paddingTop:'12px',paddingBottom:'24px',borderTopWidth:'1px',borderBottomWidth:'1px',rowGap:'10px'}),
+    ResizeObserver:class {constructor(callback){this.callback=callback;observers.push(this)}observe(){}unobserve(){}disconnect(){this.disconnected=true}},
+    MutationObserver:class {constructor(callback){this.callback=callback;observers.push(this)}observe(){}disconnect(){this.disconnected=true}},
+    requestAnimationFrame:callback=>{const id=++frameId;frames.set(id,callback);return id},cancelAnimationFrame:id=>frames.delete(id)}
+  const {createWorkspaceScroll}=load(fs.readFileSync('src/lib/workspaceScroll.ts','utf8'),{},globals)
+  const controller=createWorkspaceScroll(stage,frame,navigation,viewport,content)
+  const flush=()=>{for(const [id,callback] of [...frames]){frames.delete(id);callback()}}
+  const scrollTo=top=>{window.scrollY=top;events.get('scroll')();flush()}
+  try {
+    assert.equal(stage.style.height,'1930px')
+    assert.equal(frame.style.height,'900px')
+    assert.equal(position,0)
+    scrollTo(200);assert.equal(position,0,'the page scrolls normally before the frame reaches its top boundary')
+    const before=writes
+    window.scrollY=700
+    events.get('scroll')();events.get('scroll')();events.get('scroll')()
+    assert.equal(frames.size,1);assert.equal(writes,before)
+    flush();assert.equal(position,380)
+    scrollTo(1350);assert.equal(position,1030,'the last card remains reachable using the document scrollbar')
+    scrollTo(900);assert.equal(position,580)
+    viewport.scrollTop=730;viewportEvents.get('scroll')()
+    assert.equal(calls.at(-1).top,1050,'native focus and browser-find scrolling share the document position')
+    flush()
+    const callCount=calls.length
+    viewportEvents.get('scroll')()
+    assert.equal(calls.length,callCount,'synchronization must not feed back into another page scroll')
+    controller.reset();flush()
+    assert.equal(window.scrollY,320);assert.equal(position,0)
+    content.offsetHeight=120;controller.refresh();flush()
+    assert.equal(stage.style.height,'900px','a replacement tab keeps the frame stable during its transition')
+    loading=true;controller.settle();flush()
+    assert.equal(stage.style.height,'900px','pending data retains the frame until loading finishes')
+    loading=false;observers[1].callback();flush()
+    assert.equal(stage.style.height,'250px','short lists shrink to their last card once loaded')
+    assert.equal(frame.style.height,'250px')
+    content.offsetHeight=80;controller.refresh();flush()
+    assert.equal(stage.style.height,'210px','deleting the last row also removes its empty space')
+    assert.equal(window.scrollY,320)
+    content.offsetHeight=2400;toolbarHeight=1000;controller.refresh();flush()
+    assert.equal(attributes.has('data-long-toolbar'),true,'long editors can scroll out of the way on small viewports')
+    toolbarHeight=120;window.innerHeight=660;controller.refresh();flush()
+    assert.equal(frame.style.height,'660px');assert.equal(attributes.has('data-long-toolbar'),false)
+    const card={getBoundingClientRect:()=>({top:105+1200-position,height:80})}
+    controller.reveal(card,'smooth');flush()
+    assert.equal(calls.at(-1).behavior,'smooth')
+    assert.equal(window.scrollY,1235)
+    assert.equal(position,915,'search centers the result below the pinned module tools')
+    assert.equal(events.has('wheel'),false);assert.equal(events.has('touchmove'),false)
+    events.get('scroll')();assert.equal(frames.size,1)
+  } finally { controller.dispose() }
+  assert.equal(frames.size,0)
+  assert.equal(events.size,0);assert.equal(viewportEvents.size,0);assert.equal(documentEvents.size,0)
+  assert.ok(observers.every(observer=>observer.disconnected))
+})
+
+test('async plans load on first mount and refresh once on reactivation without duplicate requests',async()=>{
+  const h=harness(),drafts=new Map()
+  const scope=load(fs.readFileSync('src/lib/workspaceScope.ts','utf8'),{
+    './supabase':{},'@/stores/workspaces':h.dependencies['@/stores/workspaces'],
+    './sharing':{},'./storage':{},'./moduleCatalog':{},
+  })
+  h.dependencies['@/lib/workspaceScope']={...scope,useModuleAccess:()=>({canWrite:vue.ref(true)}),
+    workspaceStorageKey:key=>key,useWorkspaceDraft:(key,value)=>{const draft=vue.ref(value);drafts.set(key,draft);return draft}}
+  h.dependencies['@/components/ui/CustomSelect.vue']={default:{setup:()=>()=>vue.h('div')}}
+  h.dependencies['../lib/periods']=load(fs.readFileSync('src/features/plans/lib/periods.ts','utf8'))
+  let loads=0,release,resolveComponent
+  const store=vue.reactive({plans:[],busy:false,timezone:'Europe/Istanbul',isSaving:()=>false,
+    async load(){loads++;this.busy=true;await new Promise(resolve=>release=resolve);this.plans=[{
+      id:'plan',title:'Loaded plan',period:'daily',period_date:h.dependencies['../lib/periods'].periodStart('daily',new Date(),this.timezone),
+      completed:false,reason:'',history:[],
+    }];this.busy=false;return true}})
+  h.dependencies['../stores/plans']={usePlansStore:()=>store}
+  const Plans=h.component('src/features/plans/components/Plans.vue')
+  const AsyncPlans=vue.defineAsyncComponent(()=>new Promise(resolve=>resolveComponent=resolve))
+  const Pane=h.component('src/components/ui/WorkspaceModulePane.vue'),visible=vue.ref(true)
+  const Other={setup:()=>()=>vue.h('div','Other')}
+  const app=h.renderer.createApp({setup:()=>()=>vue.h(vue.KeepAlive,null,{default:()=>visible.value
+    ?vue.h(Pane,{key:'plans',tabId:'plans',moduleComponent:AsyncPlans}):vue.h(Other,{key:'other'})})})
+  app.mount(h.root)
+  try{
+    await settle();assert.equal(loads,0)
+    resolveComponent(Plans);await settle();await settle()
+    assert.equal(loads,1,'an async child loads even after its pane was already activated')
+    assert.equal(h.find(node=>node.props.role==='tabpanel').props['aria-busy'],true)
+    visible.value=false;await settle();visible.value=true;await settle()
+    assert.equal(loads,1,'returning while a request is pending reuses it')
+    assert.equal(h.intervals.size,1,'the day watcher restarts when returning during a fetch')
+    release();await settle()
+    assert.ok(h.text(h.root).includes('Loaded plan'))
+    assert.equal(h.find(node=>node.props.role==='tabpanel').props['aria-busy'],false)
+    visible.value=false;await settle();assert.equal(h.intervals.size,0)
+    visible.value=true;await settle()
+    assert.equal(loads,2,'a cached tab refreshes after being opened again')
+    release();await settle();assert.equal(h.intervals.size,1)
+  }finally{release?.();await settle();app.unmount()}
+  assert.equal(h.intervals.size,0)
+})
+
 test('module transitions retain each tab instance and its unsaved local state', async () => {
   const h = harness()
   const drafts = new Map()
   const mounted = { plans: 0, quick: 0 }
-  h.dependencies['@/lib/workspaceScope'] = { useWorkspaceDraft: (key, value) => { const draft = vue.ref(value); drafts.set(key, draft); return draft } }
+  h.dependencies['@/lib/workspaceScope'] = { moduleLoadKey:Symbol('module-load'), useWorkspaceDraft: (key, value) => { const draft = vue.ref(value); drafts.set(key, draft); return draft } }
   h.dependencies['@/components/ui/WorkspaceTabStrip.vue'] = { default: { setup: () => () => vue.h('div') } }
   h.dependencies['@/components/ui/WorkspacePicker.vue'] = { default: { setup: () => () => vue.h('div') } }
   h.dependencies['@/components/ui/WorkspaceModulePane.vue'] = { default: h.component('src/components/ui/WorkspaceModulePane.vue') }

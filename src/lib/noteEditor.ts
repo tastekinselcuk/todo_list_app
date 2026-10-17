@@ -66,7 +66,7 @@ export function createNoteExtensions(options:NoteEditorOptions={}):Extensions {
     if(disposed || !editor.isEditable || typeof position!=='number')return
     const found=editor.state.doc.nodeAt(position)
     if(found?.type!==current.type || found.attrs.src!==current.attrs.src || found.attrs.storagePath!==current.attrs.storagePath)return
-    editor.view.dispatch(closeHistory(editor.state.tr).setNodeMarkup(position,undefined,{...found.attrs,displayWidth:width}))
+    editor.view.dispatch(closeHistory(editor.state.tr).setNodeAttribute(position,'displayWidth',width))
    }
    resize.onpointerdown=event=>{
     if(!editor.isEditable || disposed)return

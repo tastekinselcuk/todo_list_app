@@ -151,9 +151,6 @@ async function handleDeleteCategory(id: string) {
   closeCategoryMenu()
   deleting.value = true
   try {
-    const count = todoStore.getTodosInCategory(id)
-    const confirmed = await uiStore.showConfirm(t('todo.deleteCategory'), t(count > 0 ? 'todo.deleteCategoryWarning' : 'todo.deleteCategoryConfirm', { count }), t('todo.delete'), t('todo.cancel'))
-    if (!confirmed) return
     const result = await todoStore.deleteCategory(id)
     if (!result.success) { uiStore.addToast(result.message || t('todo.cannotDelete'), 'error'); return }
     uiStore.addToast(t('todo.categoryDeleted'), 'success')

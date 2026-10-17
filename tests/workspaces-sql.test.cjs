@@ -5,6 +5,8 @@ const { PGlite } = require('@electric-sql/pglite')
 const migration = fs.readFileSync('supabase/migrations/workspaces.sql', 'utf8')
 const preferencesMigration = fs.readFileSync('supabase/migrations/202610120002_user_preferences.sql','utf8')
 const palettesMigration = fs.readFileSync('supabase/migrations/202610120004_theme_palettes.sql','utf8')
+const paletteExtensionsMigration = fs.readFileSync('supabase/migrations/202610170002_theme_palette_extensions.sql','utf8')
+const deletionMigration = fs.readFileSync('supabase/migrations/202610170003_workspace_deletion.sql','utf8')
 const owner = '10000000-0000-0000-0000-000000000001'
 const other = '20000000-0000-0000-0000-000000000002'
 const category = '30000000-0000-0000-0000-000000000003'
@@ -127,6 +129,7 @@ test('account preferences validate patches, merge different fields, isolate user
  try{
   await db.exec(preferencesMigration)
   await db.exec(palettesMigration)
+  await db.exec(paletteExtensionsMigration)
   await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated')
   const save=async(id,patch)=>(await db.query('select save_user_preferences($1,$2::jsonb) as result',[id,JSON.stringify(patch)])).rows[0].result
   await save(owner,{workspaceWide:true,pomodoroPlacement:'navbar',theme:'dark',language:'tr',pomodoroDurations:{focus:40,shortBreak:8,longBreak:20}})
@@ -134,7 +137,7 @@ test('account preferences validate patches, merge different fields, isolate user
   const updated=await save(owner,{language:'en'})
   assert.equal(updated.workspaceWide,true);assert.equal(updated.pomodoroPlacement,'navbar');assert.equal(updated.theme,'light')
   assert.equal(updated.pomodoroDurations.focus,40)
-  for (const themePalette of ['classic','ocean','forest','sand','lavender','amber']) {
+  for (const themePalette of ['classic','ocean','forest','sand','lavender','amber','ruby','cobalt','graphite']) {
    const saved = await save(owner,{themePalette})
    assert.equal(saved.themePalette,themePalette);assert.equal(saved.workspaceWide,true);assert.equal(saved.theme,'light')
   }
@@ -149,10 +152,76 @@ test('account preferences validate patches, merge different fields, isolate user
   assert.equal((await db.query('select * from user_preferences')).rows.length,1)
   await db.exec('reset role');await db.exec(preferencesMigration)
   await db.exec(palettesMigration);await db.exec(palettesMigration)
-  assert.equal((await db.query('select preferences from user_preferences where user_id=$1',[owner])).rows[0].preferences.themePalette,'amber')
+  await db.exec(paletteExtensionsMigration);await db.exec(paletteExtensionsMigration)
+  assert.equal((await db.query('select preferences from user_preferences where user_id=$1',[owner])).rows[0].preferences.themePalette,'graphite')
   assert.equal((await db.query('select count(*)::int as n from user_preferences')).rows[0].n,2)
   await db.exec('set role anon')
   await assert.rejects(save(other,{theme:'dark'}),/permission denied/)
   await assert.rejects(db.query('select * from user_preferences'),/permission denied/)
  }finally{await db.close()}
+})
+
+test('workspace deletion checks ownership/name/last-workspace, removes personal content and leaves foreign shared notes intact',async()=>{
+ const {projectDB}=require('./helpers/project-db.cjs')
+ const f=await projectDB(['202610110002_pomonotes','202610110003_focus_repair','202610110001_reminder_delivery'])
+ const {db,owner,guest,wid,gwid,as,rpc}=f
+ try {
+  await db.exec('alter table todos add column description text;alter table code_snippets add column title text;alter table activity_items add column title text,add column subtitle text,add column notes text')
+  await db.exec(fs.readFileSync('supabase/migrations/202610120003_workspace_search.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202610170001_workspace_trash.sql','utf8'))
+  await db.exec(deletionMigration);await db.exec(deletionMigration)
+  const original=(await db.query('select * from workspaces where id=$1',[wid])).rows[0]
+  await as(guest);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/WORKSPACE_ACCESS_DENIED/)
+  await as(owner);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/LAST_WORKSPACE/)
+  const extra=(await db.query("insert into workspaces(user_id,name) values($1,'Keep') returning *",[owner])).rows[0]
+  await rpc('select ensure_module_bindings($1) as result',[extra.id])
+  await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,'Old name']),/WORKSPACE_CHANGED/)
+  await as(owner,'postgres')
+  const ownQuick=(await db.query("select personal_collection_id id from workspace_module_bindings where workspace_id=$1 and module='quick'",[wid])).rows[0].id
+  const foreignQuick=(await db.query("select collection_id id from workspace_module_bindings where workspace_id=$1 and module='quick'",[gwid])).rows[0].id
+  await db.query("update workspace_module_bindings set collection_id=$1 where workspace_id=$2 and module='quick'",[ownQuick,extra.id])
+  await as(owner);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/WORKSPACE_SHARED/)
+  await as(owner,'postgres')
+  await db.query("update workspace_module_bindings set collection_id=personal_collection_id where workspace_id=$1 and module='quick'",[extra.id])
+  await db.query("update workspace_module_bindings set collection_id=$1 where workspace_id=$2 and module='quick'",[foreignQuick,wid])
+  await db.query("insert into collection_members(collection_id,user_id,role) values($1,$2,'editor')",[foreignQuick,owner])
+  const detailed=(await db.query("select collection_id id from workspace_module_bindings where workspace_id=$1 and module='detailed'",[wid])).rows[0].id
+  const image=`${detailed}/${wid}/10000000-0000-0000-0000-000000000009.png`
+  await db.query("insert into todos(created_by,workspace_id,collection_id,title,description) values($1,$2,$3,'Remove',$4)",[owner,wid,detailed,`<img data-note-image="${image}">`])
+  const trashed=(await db.query("insert into todos(created_by,workspace_id,collection_id,title) values($1,$2,$3,'Trashed') returning id",[owner,wid,detailed])).rows[0].id
+  await as(owner);await rpc("select trash_change($1,'detailed',$2,'move',1) as result",[wid,trashed]);await as(owner,'postgres')
+  const learning=(await db.query("select collection_id id from workspace_module_bindings where workspace_id=$1 and module='learning'",[wid])).rows[0].id
+  const subject=(await db.query("insert into learning_subjects(user_id,workspace_id,collection_id,title) values($1,$2,$3,'Subject') returning id",[owner,wid,learning])).rows[0].id
+  await db.query("insert into learning_subjects_items(parent_id,collection_id,id,data,position) values($1,$2,'topic','{}',0)",[subject,learning])
+  const pomo=(await db.query("select collection_id id from workspace_module_bindings where workspace_id=$1 and module='pomodoro'",[wid])).rows[0].id
+  const task=(await db.query("insert into pomo_tasks(created_by,workspace_id,collection_id,title) values($1,$2,$3,'Task') returning id",[owner,wid,pomo])).rows[0].id
+  await db.query('insert into pomo_task_member_preferences(task_id,user_id,estimated_sessions,focus_seconds) values($1,$2,2,1500)',[task,owner])
+  const focus=(await db.query("insert into analytics_focus_sessions(id,user_id,workspace_id,started_at,planned_seconds,revision,status) values(gen_random_uuid(),$1,$2,now(),1500,1,'running') returning id",[owner,wid])).rows[0].id
+  await db.query('insert into focus_ownership(user_id,session_id,client_id) values($1,$2,gen_random_uuid())',[owner,focus])
+  await as(owner);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/WORKSPACE_FOCUS_ACTIVE/)
+  await as(owner,'postgres');await db.query('delete from focus_ownership where session_id=$1',[focus])
+  await db.exec("create function test_delete_failure() returns trigger language plpgsql as 'begin raise exception ''TEST_ROLLBACK'';end';create trigger test_delete_failure before delete on workspaces for each row execute function test_delete_failure()")
+  await as(owner);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/TEST_ROLLBACK/)
+  await as(owner,'postgres')
+  assert.equal((await db.query('select count(*)::int n from todos where workspace_id=$1',[wid])).rows[0].n,2,'a late failure rolls back active and trashed content deletion')
+  assert.equal((await db.query('select count(*)::int n from trash_image_cleanup')).rows[0].n,0,'cleanup is transactional')
+  await db.exec('drop trigger test_delete_failure on workspaces')
+  await as(owner)
+  const result=await rpc('select delete_workspace($1,$2) as result',[wid,original.name])
+  assert.equal(result.id,wid);assert.equal(result.next_workspace.id,extra.id);assert.equal(result.next_workspace.is_default,true)
+  await assert.rejects(rpc('select delete_workspace($1,$2) as result',[extra.id,extra.name]),/LAST_WORKSPACE/)
+  await as(owner,'postgres')
+  for(const table of ['workspaces','workspace_module_bindings','todos','quick_notes','analytics_focus_sessions']) {
+   const column=table==='workspaces'?'id':'workspace_id'
+   assert.equal((await db.query(`select count(*)::int n from ${table} where ${column}=$1`,[wid])).rows[0].n,0,table)
+  }
+  assert.equal((await db.query('select count(*)::int n from module_collections where origin_workspace_id=$1',[wid])).rows[0].n,0)
+  assert.equal((await db.query('select count(*)::int n from learning_subjects_items where parent_id=$1',[subject])).rows[0].n,0)
+  assert.equal((await db.query('select count(*)::int n from pomo_task_member_preferences where task_id=$1',[task])).rows[0].n,0)
+  assert.equal((await db.query('select count(*)::int n from quick_notes where collection_id=$1',[foreignQuick])).rows[0].n,1)
+  assert.equal((await db.query('select count(*)::int n from collection_members where collection_id=$1 and user_id=$2',[foreignQuick,owner])).rows[0].n,0)
+  assert.equal((await db.query('select path from trash_image_cleanup')).rows[0].path,image)
+  await as(guest);assert.equal((await db.query('select * from quick_notes')).rows.length,1)
+  await as('', 'anon');await assert.rejects(rpc('select delete_workspace($1,$2) as result',[extra.id,extra.name]),/permission denied/)
+ } finally {await db.close()}
 })

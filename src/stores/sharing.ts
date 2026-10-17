@@ -163,7 +163,15 @@ export const useSharingStore = defineStore('sharing', () => {
   function handleHash() {
     if (parseInviteLink(window.location.href, window.location.origin)) showJoin(window.location.href)
   }
+  let workspaceReloadPending = false
+  function flushWorkspaceReload() {
+    if (!workspaceReloadPending || workspaces.busy || !auth.user) return
+    workspaceReloadPending = false
+    void workspaces.load()
+  }
+  watch(() => workspaces.busy, flushWorkspaceReload)
   function stop() {
+    workspaceReloadPending = false
     if (channel) void supabase.removeChannel(channel)
     channel = undefined
     if (timer) clearInterval(timer)
@@ -174,7 +182,10 @@ export const useSharingStore = defineStore('sharing', () => {
     stop()
     if (workspaces.sharingAvailable) {
       channel = supabase.channel(`sharing-user:${auth.user!.id}`, { config: { private: true } })
-        .on('broadcast', { event: 'changed' }, () => { void refresh() })
+        .on('broadcast', { event: 'changed' }, message => {
+          if (message?.payload?.operation === 'workspace_deleted') { workspaceReloadPending = true; flushWorkspaceReload() }
+          else void refresh()
+        })
         .subscribe(status => { if (status==='SUBSCRIBED') void refresh() })
       timer = setInterval(() => { void refresh() }, 15_000)
     }

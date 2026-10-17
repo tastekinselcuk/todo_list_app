@@ -270,7 +270,7 @@ test('program creation keeps failed drafts and opens exercise selection after su
   const { app, state } = setupState('src/features/workout/components/WorkoutTracker.vue', {}, {
     '../stores/workout': { useWorkoutStore: () => h.store },
     '@/stores/ui': { useUIStore: () => ({ addToast: (...message) => toasts.push(message) }) },
-    '@/lib/workspaceScope': { useModuleAccess: () => ({ canWrite: vue.computed(() => true) }), useWorkspaceDraft: (key, value) => { const draft = vue.ref(value); drafts.set(key, draft); return draft } },
+    '@/lib/workspaceScope': { useModuleLoad: callback => vue.onMounted(callback), useModuleAccess: () => ({ canWrite: vue.computed(() => true) }), useWorkspaceDraft: (key, value) => { const draft = vue.ref(value); drafts.set(key, draft); return draft } },
     './WorkoutRoutineCard.vue': { default: {} }, './WorkoutExerciseRow.vue': { default: {} }, './ExerciseLibraryModal.vue': { default: {} },
   })
   await settle()

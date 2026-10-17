@@ -3,7 +3,7 @@
     <div class="note-summary">
       <button type="button" :disabled="!canWrite || disabled || saving" :aria-label="`${t('todo.toggleCompletion')}: ${todo.title}`" :aria-pressed="todo.completed" @click.stop="$emit('toggle')" class="note-check" :class="{ checked:todo.completed }"><Check v-if="todo.completed" class="h-3 w-3" /></button>
       <div class="note-content" :class="{ 'drag-handle':canWrite && !isExpanded && !disabled }">
-        <button type="button" class="note-heading" :class="{ 'line-through text-muted-foreground':todo.completed }" :aria-label="`${t('todo.viewNote')}: ${todo.title}`" :aria-expanded="isExpanded" :disabled="disabled || saving || mediaBusy" :title="todo.title" @click.stop="isExpanded ? closeEdit() : onCardClick()">{{ todo.title }}</button>
+        <button type="button" class="note-heading" :class="{ 'line-through text-muted-foreground':todo.completed }" :aria-label="`${t('todo.viewNote')}: ${todo.title}`" :aria-expanded="isExpanded" :disabled="disabled || saving || mediaBusy" :title="todo.title" @click.stop="onCardClick()">{{ todo.title }}</button>
         <p v-if="descriptionPreview" class="note-preview">{{ descriptionPreview }}</p>
       </div>
       <div class="note-actions" @click.stop>
@@ -14,7 +14,7 @@
       </div>
     </div>
     <Transition name="note-reveal">
-      <div v-if="isExpanded" class="note-reveal" @click.stop>
+      <div v-if="isExpanded" class="note-reveal">
         <div class="note-reveal-inner">
           <div class="note-reveal-body mt-3 border-t border-border/50 pt-3">
             <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-muted-foreground">
@@ -22,34 +22,43 @@
               <time v-if="todo.createdAt" :datetime="todo.createdAt">{{ t('todo.createdOn',{date:formatDate(todo.createdAt)}) }}</time>
               <button v-if="canWrite && !isEditing" type="button" class="note-edit-button ml-auto" :disabled="disabled" @click="startEdit"><Pencil class="h-3 w-3" />{{ t('common.edit') }}</button>
             </div>
-            <RichTextEditor v-if="!isEditing" key="reader" :model-value="todo.description || ''" :disabled="true" />
-            <form v-else class="space-y-3" @submit.prevent="saveEdit">
-              <div class="flex flex-wrap items-center gap-2">
-                <input ref="titleInputRef" v-model="editForm.title" type="text" required :maxlength="TODO_TITLE_MAX_LENGTH" :disabled="saving" :aria-label="t('todo.title')" class="note-input h-9 min-w-36 flex-1" />
-                <CustomSelect :model-value="editForm.categoryId ?? ''" @update:model-value="editForm.categoryId=$event || ''" :options="categoryOptions" :disabled="saving" :aria-label="t('todo.category')" size="sm" class="w-40 min-w-0" />
-              </div>
-              <RichTextEditor key="writer" v-model="editForm.description" :disabled="saving" :placeholder="t('todo.descriptionPlaceholder')" @busy-change="mediaBusy=$event" />
-              <div v-if="editConflict" role="alert" class="rounded-xl border border-border/50 bg-muted/30 p-3 text-xs">
-                <p class="text-muted-foreground">{{ t('sharing.conflict') }}</p>
-                <p v-if="draftRefreshed" class="mt-2 truncate">{{ todo.title }}</p>
-                <button type="button" :disabled="saving" class="mt-2 font-medium text-primary" @click="refreshDraftVersion">{{ t('sharing.refreshDraft') }}</button>
-              </div>
-              <div class="flex justify-end gap-1.5 border-t border-border/30 pt-3">
-                <button type="button" :disabled="saving || mediaBusy" class="h-8 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-40" @click="cancelEdit">{{ t('common.cancel') }}</button>
-                <button type="submit" :disabled="saving || mediaBusy || !isFormChanged || !editForm.title.trim()" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"><Loader2 v-if="saving" class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('todo.saveChanges') }}</button>
-              </div>
-            </form>
+            <RichTextEditor key="reader" :model-value="todo.description || ''" :disabled="true" />
+
           </div>
         </div>
       </div>
     </Transition>
+    <Teleport to="body">
+      <dialog ref="editDialogRef" class="note-edit-dialog" :aria-label="t('todo.editTask')" @cancel.prevent="leaveEditing" @close="onEditDialogClosed" @click="event=>{if(event.target===editDialogRef)leaveEditing()}">
+            <form v-if="isEditing" class="note-edit-form" @submit.prevent="saveEdit">
+              <div class="flex shrink-0 items-center justify-between gap-3">
+                <span class="text-xs font-medium text-muted-foreground">{{ t('todo.editTask') }}</span>
+                <button type="button" class="note-icon" :disabled="saving || mediaBusy" :aria-label="t('common.close')" @click="leaveEditing"><X class="h-4 w-4" /></button>
+              </div>
+              <div class="flex shrink-0 flex-wrap items-center gap-2">
+                <input ref="titleInputRef" v-model="editForm.title" type="text" required :maxlength="TODO_TITLE_MAX_LENGTH" :disabled="saving" :aria-label="t('todo.title')" class="note-input h-9 min-w-36 flex-1" />
+                <CustomSelect :model-value="editForm.categoryId ?? ''" @update:model-value="editForm.categoryId=$event || ''" :options="categoryOptions" :disabled="saving" :aria-label="t('todo.category')" size="sm" class="w-40 min-w-0" />
+              </div>
+              <RichTextEditor :fit-height="true" key="writer" v-model="editForm.description" :disabled="saving" :placeholder="t('todo.descriptionPlaceholder')" @busy-change="mediaBusy=$event" />
+              <div v-if="editConflict" role="alert" class="shrink-0 rounded-xl border border-border/50 bg-muted/30 p-3 text-xs">
+                <p class="text-muted-foreground">{{ t('sharing.conflict') }}</p>
+                <p v-if="draftRefreshed" class="mt-2 truncate">{{ todo.title }}</p>
+                <button type="button" :disabled="saving" class="mt-2 font-medium text-primary" @click="refreshDraftVersion">{{ t('sharing.refreshDraft') }}</button>
+              </div>
+              <div class="flex shrink-0 justify-end gap-1.5 border-t border-border/30 pt-3">
+                <button type="button" :disabled="saving || mediaBusy" class="h-8 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-40" @click="cancelEdit">{{ t('common.cancel') }}</button>
+                <button type="submit" :disabled="saving || mediaBusy || !isFormChanged || !editForm.title.trim()" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"><Loader2 v-if="saving" class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('todo.saveChanges') }}</button>
+              </div>
+            </form>
+      </dialog>
+    </Teleport>
   </article>
 </template>
 <script setup lang="ts">
 import { useModuleAccess } from '@/lib/workspaceScope'
-import { ref, watch, computed, nextTick, defineAsyncComponent } from 'vue'
+import { ref, watch, computed, nextTick, defineAsyncComponent, onBeforeUnmount, onDeactivated } from 'vue'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { Check, ChevronUp, Trash2, Pencil, Copy, Loader2 } from 'lucide-vue-next'
+import { Check, ChevronUp, Trash2, Pencil, Copy, Loader2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { Todo } from '@/features/todos/stores/todo'
 import { useTodoStore, TODO_TITLE_MAX_LENGTH } from '@/features/todos/stores/todo'
@@ -79,6 +88,21 @@ const uiStore = useUIStore()
 
 const itemRef = ref<HTMLElement | null>(null)
 const titleInputRef = ref<HTMLInputElement | null>(null)
+const editDialogRef=ref<HTMLDialogElement|null>(null)
+let dialogEpoch=0,dialogDisposed=false
+let scrollLock:{body:string;root:string;gutter:string}|null=null
+function releaseEditorScroll(){
+  if(!scrollLock)return
+  document.body.style.overflow=scrollLock.body
+  document.documentElement.style.overflow=scrollLock.root
+  document.documentElement.style.scrollbarGutter=scrollLock.gutter
+  scrollLock=null
+}
+function closeEditorDialog(){editDialogRef.value?.close();releaseEditorScroll()}
+function leaveEditing(){if(!saving.value && !mediaBusy.value)isEditing.value=false}
+function onEditDialogClosed(){if(!editDialogRef.value?.open){releaseEditorScroll();if(isEditing.value)isEditing.value=false}}
+onBeforeUnmount(()=>{dialogDisposed=true;dialogEpoch++;closeEditorDialog()})
+onDeactivated(()=>{dialogEpoch++;isEditing.value=false;closeEditorDialog()})
 
 const isExpanded = ref(false), isEditing = ref(false)
 const editConflict = ref(false), draftRefreshed = ref(false), saving = ref(false), mediaBusy = ref(false)
@@ -111,9 +135,17 @@ const descriptionPreview = computed(() => {
 const categoryOptions = computed(() => todoStore.categories.map(cat => ({ value: cat.id, label: cat.name })))
 
 watch(isEditing, async editing => {
-  if(!editing)return
+  const epoch=++dialogEpoch
+  if(!editing){closeEditorDialog();return}
   await nextTick()
-  if(isEditing.value)titleInputRef.value?.focus({preventScroll:true})
+  if(dialogDisposed || epoch!==dialogEpoch || !isEditing.value || !editDialogRef.value)return
+  if(!editDialogRef.value.open){
+    scrollLock={body:document.body.style.overflow,root:document.documentElement.style.overflow,gutter:document.documentElement.style.scrollbarGutter}
+    document.body.style.overflow='hidden';document.documentElement.style.overflow='hidden'
+    document.documentElement.style.scrollbarGutter='stable'
+    try{editDialogRef.value.showModal()}catch{releaseEditorScroll();isEditing.value=false;return}
+  }
+  titleInputRef.value?.focus({preventScroll:true})
 })
 
 watch(() => props.todo, (newTodo) => {
@@ -125,10 +157,16 @@ watch(() => props.todo, (newTodo) => {
   }
 }, { deep: true })
 
-const onCardClick = () => {
-  if (props.disabled || saving.value) return
-  if (isExpanded.value) return
-  isExpanded.value = true
+const onCardClick = (event?: MouseEvent) => {
+  if (props.disabled || saving.value || mediaBusy.value || isEditing.value) return
+  if (event) {
+    const target = event.target as HTMLElement | null
+    if (isExpanded.value && target?.closest?.('.note-reveal')) return
+    if (target?.closest?.('button,a,input,textarea,select,label,summary,dialog,img,.note-image-node,[role="button"],[role="checkbox"],[role="switch"],[contenteditable="true"]')) return
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed && (itemRef.value?.contains(selection.anchorNode) || itemRef.value?.contains(selection.focusNode))) return
+  }
+  isExpanded.value = !isExpanded.value
 }
 
 const startEdit = () => {
@@ -195,10 +233,16 @@ const formatDate = (date: string | null) => date ? new Date(date).toLocaleDateSt
 </script>
 
 <style scoped>
+.note-edit-dialog { width:calc(100vw - 32px); max-width:1100px; height:min(820px,calc(100dvh - 48px)); max-height:calc(100dvh - 48px); margin:auto; padding:0; overflow:hidden; overscroll-behavior:contain; border:1px solid hsl(var(--border)/.6); border-radius:18px; background:hsl(var(--card)); color:hsl(var(--foreground)); box-shadow:0 24px 80px rgb(0 0 0 / .2); }
+.note-edit-dialog::backdrop { background:hsl(var(--background)/.8); backdrop-filter:blur(6px); }
+.note-edit-form { display:flex; flex-direction:column; height:100%; min-height:0; gap:12px; padding:16px; }
+@media(max-width:639px){.note-edit-dialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);border-radius:14px}.note-edit-form{padding:12px;gap:10px}}
+
 .note-card { padding:10px 12px; background:hsl(var(--card)/.4); cursor:pointer; }
 .note-card:hover,.note-card:focus-within { background:hsl(var(--muted)/.5); }
 .note-card.is-complete { background:hsl(var(--muted)/.25); }
 .note-card.is-expanded { @apply z-20; }
+.note-card > .note-reveal { cursor:auto; }
 .note-summary { display:flex; align-items:center; gap:13px; min-height:44px; }
 .note-check { height:19px; width:19px; border:1px solid hsl(var(--muted-foreground)/.4); border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .note-check.checked { background:hsl(var(--primary)); border-color:hsl(var(--primary)); color:hsl(var(--primary-foreground)); }

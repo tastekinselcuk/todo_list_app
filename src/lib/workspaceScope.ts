@@ -1,10 +1,11 @@
 import { defineStore, getActivePinia, type StoreGeneric } from 'pinia'
-import { ref, computed, watch, onScopeDispose, getCurrentScope, type Ref } from 'vue'
+import { ref, computed, watch, onScopeDispose, getCurrentScope, inject, onMounted, onActivated, onDeactivated, type InjectionKey, type Ref } from 'vue'
 import { supabase } from './supabase'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { tableModules } from './sharing'
 import { readStorage, writeStorage, storageKeys, readStoredJSON, writeStoredJSON } from './storage'
 import { moduleTableOwners } from './moduleCatalog'
+import { moveToTrash, trashTables, onTrashChange, type TrashModule } from './workspaceTrash'
 
 const scopedStores = new Set<StoreGeneric>()
 
@@ -52,7 +53,36 @@ export function useWorkspaceClient() {
     assertCurrent()
     if (workspaces.binding(module, workspaceId)?.role === 'viewer') throw new Error('READ_ONLY')
   }
+  function trackReads(table:string,builder:any):any {
+    return new Proxy(builder,{get(target,property){
+      if(property==='then')return(resolve:any,reject:any)=>Promise.resolve(target).then(result=>{
+        for(const row of Array.isArray(result.data)?result.data:result.data?[result.data]:[])
+          if(row.id&&row.version!==undefined)versions.set(`${table}:${row.id}`,row.version)
+        return result
+      }).then(resolve,reject)
+      const value=Reflect.get(target,property)
+      return typeof value==='function'?(...args:unknown[])=>{const next=value.apply(target,args);return trackReads(table,next)}:value
+    }})
+  }
+  function softDelete(table:string,announce=true){
+    const module=tableModules[table] as TrashModule,snapshot=new Map(versions)
+    let id='',version:number|undefined,single=false
+    const query={
+      eq(column:string,value:unknown){if(column==='id')id=String(value);if(column==='version')version=Number(value);return query},
+      select(){return query},single(){single=true;return query},maybeSingle(){single=true;return query},
+      then(resolve:any,reject:any){return (async()=>{
+        try{assertWritable(module);if(!id)throw Error('INVALID_TRASH_INPUT')
+          const row=await moveToTrash(workspaceId,module,id,version??snapshot.get(`${table}:${id}`)!,userId,announce)
+          return {data:single?row:[row],error:null}
+        }catch(error){return {data:null,error}}
+      })().then(resolve,reject)}
+    }
+    return query
+  }
+  const supportsTrash=(table:string)=>!!trashTables[table]
+  function personalRead(table:string,builder:any){return trackReads(table,builder)}
   return {
+    trash(module:TrashModule,id:string,version:number){assertWritable(module);return moveToTrash(workspaceId,module,id,version,userId)},
     canWrite(module: string) { return workspaces.binding(module, workspaceId)?.role !== 'viewer' },
     collection(module: string) { return workspaces.binding(module, workspaceId)?.collection_id },
     timezone(module: string) { return workspaces.binding(module, workspaceId)?.timezone },
@@ -175,23 +205,40 @@ export function useWorkspaceClient() {
             const { version, ...changes } = values
             return observed(supabase.from(table).update(personalReminders(changes)).eq('collection_id', binding.collection_id).select('*'), 'update', version === undefined ? undefined : Number(version))
           },
-          delete() { assertWritable(tableModules[table]!); return observed(supabase.from(table).delete().eq('collection_id', binding.collection_id).select('*'), 'delete') },
+          delete(options?:{silent?:boolean}) { assertWritable(tableModules[table]!); return supportsTrash(table)?softDelete(table,!options?.silent):observed(supabase.from(table).delete().eq('collection_id', binding.collection_id).select('*'), 'delete') },
         }
       }
       return {
-        select(columns: '*' = '*') { return supabase.from(table).select(columns).eq('workspace_id', workspaceId).eq(owner, userId) },
+        select(columns: '*' = '*') { return personalRead(table,supabase.from(table).select(columns).eq('workspace_id', workspaceId).eq(owner, userId)) },
         insert(values: Record<string, unknown> | Record<string, unknown>[]) {
           const stamp = (value: Record<string, unknown>) => ({ ...value, workspace_id: workspaceId, [owner]: userId })
-          return supabase.from(table).insert(Array.isArray(values) ? values.map(stamp) : stamp(values))
+          return personalRead(table,supabase.from(table).insert(Array.isArray(values) ? values.map(stamp) : stamp(values)))
         },
         update(values: Record<string, unknown>) {
           if ('workspace_id' in values || owner in values) throw new Error('Record ownership cannot be changed')
-          return supabase.from(table).update(values).eq('workspace_id', workspaceId).eq(owner, userId)
+          return personalRead(table,supabase.from(table).update(values).eq('workspace_id', workspaceId).eq(owner, userId).select('*'))
         },
-        delete() { return supabase.from(table).delete().eq('workspace_id', workspaceId).eq(owner, userId) },
+        delete(options?:{silent?:boolean}) { return supportsTrash(table)?softDelete(table,!options?.silent):supabase.from(table).delete().eq('workspace_id', workspaceId).eq(owner, userId) },
       }
     },
     listen(callbacks: Record<string, () => unknown | Promise<unknown>>, busy: () => boolean = () => false) {
+      let refreshTimer:ReturnType<typeof setTimeout>|undefined
+      const localPending=new Set<string>()
+      function flushLocal(){
+        if(workspaces.sessionKey!==sessionKey||busy())return
+        const modules=[...localPending];localPending.clear()
+        void Promise.allSettled(Object.entries(callbacks).filter(([table])=>modules.includes(tableModules[table]!)).map(([,callback])=>Promise.resolve().then(callback)))
+      }
+      const stopLocal=onTrashChange(change=>{
+        if(change.owner!==userId||change.workspace!==workspaceId||workspaces.sessionKey!==sessionKey)return
+        localPending.add(change.module)
+        if(refreshTimer)clearTimeout(refreshTimer)
+        refreshTimer=setTimeout(flushLocal,0)
+      })
+      if(getCurrentScope()){
+        const stopBusy=watch(busy,value=>{if(!value&&localPending.size)flushLocal()})
+        onScopeDispose(()=>{stopLocal();stopBusy();if(refreshTimer)clearTimeout(refreshTimer);localPending.clear()})
+      }
       if (!workspaces.sharingAvailable || typeof supabase.channel !== 'function') return
       const pending = new Set<string>()
       let running = false
@@ -271,4 +318,25 @@ export function useWorkspaceDraft<T>(key: string, initial: T): Ref<T> {
     writeStoredJSON(storageKey, next)
   }, { deep: true, flush: 'sync' })
   return draft
+}
+
+
+export const moduleLoadKey: InjectionKey<(delta: number) => void> = Symbol('workspace-module-load')
+
+/** Load once on first mount, then once per reactivation, including async children. */
+export function useModuleLoad(load: () => unknown) {
+  const pending = inject(moduleLoadKey, null)
+  let active = false
+  let inFlight: Promise<unknown> | undefined
+  function activate() {
+    if (active) return
+    active = true
+    if (inFlight) return inFlight
+    pending?.(1)
+    inFlight = Promise.resolve().then(load).finally(() => { pending?.(-1); inFlight = undefined })
+    return inFlight
+  }
+  onMounted(activate)
+  onActivated(activate)
+  onDeactivated(() => { active = false })
 }

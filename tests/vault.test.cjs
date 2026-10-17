@@ -70,7 +70,7 @@ function vaultView() {
   const descriptor=parse(fs.readFileSync('src/features/secure_notes/components/SecureNotes.vue','utf8')).descriptor
   const code=ts.transpileModule(compileScript(descriptor,{id:'vault-view-test'}).content,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText
   const quietConsole={...console,warn(){}}
-  const dependencies={vue,'lucide-vue-next':{},'@/lib/workspaceScope':{useWorkspaceClient:()=>client,useModuleAccess:()=>({canWrite:vue.ref(true)})},'@/lib/vaultCrypto':cryptoApi,
+  const dependencies={vue,'lucide-vue-next':{},'@/lib/workspaceScope':{useModuleLoad:callback=>vue.onMounted(callback),useWorkspaceClient:()=>client,useModuleAccess:()=>({canWrite:vue.ref(true)})},'@/lib/vaultCrypto':cryptoApi,
     '@/stores/auth':{useAuthStore:()=>({user:{id:'owner'}})},'@/stores/ui':{useUIStore:()=>({addToast:(...args)=>toasts.push(args),showConfirm:async()=>true})},
     'vue-i18n':{useI18n:()=>({t:key=>key})},'@/components/ui/CustomSelect.vue':{default:{}},'./SecureNoteItem.vue':{default:{}}}
   vm.runInNewContext(code,{exports,require:name=>dependencies[name]||require(name),console:quietConsole,crypto:webcrypto,Date})
@@ -106,6 +106,23 @@ test('vault screen upgrades a legacy vault on unlock and retains the draft when 
     assert.equal(f.state.secureNotes.value.length,0)
     assert.equal(f.state.editingNote.value.content,undefined)
   } finally { f.close() }
+})
+
+test('vault quick entry prefills the protected form and switching vaults clears all decrypted drafts before requesting unlock',async()=>{
+  const f=vaultView()
+  try{
+    await openLegacy(f)
+    f.state.noteDraftTitle.value='  Private draft title  ';f.state.noteDraftType.value='secret'
+    f.state.openAddNoteDialog()
+    assert.equal(f.state.editingNote.value.title,'Private draft title');assert.equal(f.state.editingNote.value.type,'secret')
+    const next={id:'another',name:'Work',password_hash:'metadata',created_at:'2026-01-02'}
+    f.state.passwordSessions.value=[...f.sessions,next]
+    f.state.switchVault('another')
+    assert.equal(f.state.isAuthenticated.value,false);assert.equal(f.state.currentSession.value,null)
+    assert.equal(f.state.vaultKey.value,null);assert.equal(f.state.secureNotes.value.length,0)
+    assert.equal(f.state.noteDraftTitle.value,'');assert.equal(f.state.editingNote.value.title,'')
+    assert.equal(f.state.selectedSessionForUnlock.value.id,'another')
+  }finally{f.close()}
 })
 test('a completed password rotation cannot put a key back into a vault that was locked meanwhile', async () => {
   const f=vaultView()

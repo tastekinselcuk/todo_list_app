@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5 relative z-10 w-full flex flex-col items-center">
     
-    <div v-if="canWrite" class="flex gap-2.5 workspace-content">
+    <div v-if="canWrite" class="workspace-toolbar flex gap-2.5 workspace-content">
       <div class="relative flex-1 group">
         <input
           v-model="quickNote"
@@ -57,9 +57,9 @@
 
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess } from '@/lib/workspaceScope'
+import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
@@ -134,24 +134,16 @@ const addQuickNote = async () => {
   }
 }
 
+const deletingQuickNotes = new Set<string>()
 const handleDeleteQuickNote = async (noteId: string) => {
-  // DÜZELTME: Confirm modal metinleri artık dil dosyasından (i18n) çekiliyor
-  const isConfirmed = await uiStore.showConfirm(
-    t('quickNotes.deleteConfirmTitle') || 'Delete Note', 
-    t('quickNotes.deleteConfirmDesc') || 'Are you sure you want to delete this quick note?', 
-    t('common.delete') || 'Delete', 
-    t('common.cancel') || 'Cancel'
-  )
-  
-  if (isConfirmed) {
-    if (!await todoStore.deleteQuickNote(noteId)) return
-    // DÜZELTME: Toast mesajı artık dil dosyasından (i18n) çekiliyor
-    uiStore.addToast(t('quickNotes.noteDeleted') || 'Note deleted', 'info')
-  }
+  if (!canWrite.value || deletingQuickNotes.has(noteId)) return
+  deletingQuickNotes.add(noteId)
+  try {
+    const saved = await todoStore.deleteQuickNote(noteId)
+    if (!saved) uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
+  } finally { deletingQuickNotes.delete(noteId) }
 }
 
-onMounted(() => {
-  todoStore.fetchQuickNotes()
-})
+useModuleLoad(() => todoStore.fetchQuickNotes())
 useSearchReveal('quick', async hit => { await todoStore.fetchQuickNotes(hit.record_id) })
 </script>

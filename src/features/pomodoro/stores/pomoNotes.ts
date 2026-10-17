@@ -52,6 +52,7 @@ export const usePomoNotesStore=defineWorkspaceStore('pomo-notes',()=>{
     if(saving.value||!current())return false
     saving.value=true;error.value=''
     try {
+      if(operation==='delete'&&task){await client.trash('pomodoro',task.id,task.version);if(current())await load();return current()}
       const result=await supabase.rpc('pomonotes_mutate',{wid,operation,tid:task?.id||null,title:values.title??null,
         estimate:values.estimate??task?.estimated_sessions??1,focus_seconds:values.seconds??task?.focus_seconds??1500,expected_version:task?.version??null})
       if(!current())return false

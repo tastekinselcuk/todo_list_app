@@ -4,6 +4,7 @@ import type { SearchHit } from './workspaceSearch'
 export interface SearchDestination extends SearchHit { sequence: number }
 export const searchDestinationKey: InjectionKey<Ref<SearchDestination | null>> = Symbol('workspace-search-destination')
 export const searchRevealErrorKey: InjectionKey<() => void> = Symbol('workspace-search-unavailable')
+export const searchScrollKey: InjectionKey<(element: HTMLElement, behavior: ScrollBehavior) => void> = Symbol('workspace-search-scroll')
 
 // A destination is an explicit user action. Revealing a card never clicks it,
 // starts a timer, completes a task, or opens an editor.
@@ -11,6 +12,7 @@ export function useSearchReveal(module: string, prepare: (hit: SearchDestination
   const destination = inject(searchDestinationKey, null)
   if (!destination) return
   const unavailable = inject(searchRevealErrorKey, () => {})
+  const scrollToCard = inject(searchScrollKey, null)
   let handled = -1, generation = 0, alive = true
   let marked: HTMLElement | undefined
   let observer: MutationObserver | undefined, timeout: ReturnType<typeof setTimeout> | undefined
@@ -35,7 +37,9 @@ export function useSearchReveal(module: string, prepare: (hit: SearchDestination
         card.closest('details')?.setAttribute('open', '')
         card.tabIndex = -1
         card.focus({ preventScroll: true })
-        card.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+        if (scrollToCard) scrollToCard(card, behavior)
+        else card.scrollIntoView({ block: 'center', behavior })
         marked = card;card.classList.add('search-revealed')
         timeout = setTimeout(clear, 1800)
         return true

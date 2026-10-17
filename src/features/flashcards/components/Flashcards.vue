@@ -2,7 +2,7 @@
   <div class="space-y-5 relative z-10 w-full flex flex-col items-center min-h-[400px]">
     
     <div v-if="currentView === 'decks'" class="workspace-content space-y-6">
-      <div v-if="canWrite" class="flex flex-col sm:flex-row gap-2.5 w-full relative z-[60]">
+      <div v-if="canWrite" class="workspace-toolbar flex flex-col sm:flex-row gap-2.5 w-full relative z-[60]">
         <div class="relative flex-1 group">
           <Layers class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input
@@ -65,7 +65,7 @@
     </div>
 
     <div v-else-if="currentView === 'study' && activeDeck" class="workspace-content space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <div :data-search-record="activeDeck.id" class="flex flex-col sm:flex-row sm:items-center justify-between bg-card/40 backdrop-blur-2xl p-3 sm:p-4 rounded-2xl shadow-sm border border-white/10 dark:border-white/5 gap-4 relative overflow-hidden z-20">
+      <div :data-search-record="activeDeck.id" class="workspace-toolbar flex flex-col sm:flex-row sm:items-center justify-between bg-card/40 backdrop-blur-2xl p-3 sm:p-4 rounded-2xl shadow-sm border border-white/10 dark:border-white/5 gap-4 relative z-20">
         <div class="flex items-center gap-3">
           <button @click="currentView = 'decks'" class="p-2 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border/50">
             <ArrowLeft class="w-4 h-4" />
@@ -181,9 +181,9 @@
 
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess } from '@/lib/workspaceScope'
+import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Layers, Plus, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
 import { useFlashcardStore, type Deck } from '@/features/flashcards/stores/flashcards'
 import { useUIStore } from '@/stores/ui'
@@ -220,9 +220,7 @@ const testResults = ref<{cardId: string, isCorrect: boolean}[]>([])
 const gameScore = ref(0)
 const gameErrors = ref(0)
 
-onMounted(async () => {
-  await store.fetchDecks()
-})
+useModuleLoad(() => store.fetchDecks())
 
 const addingDeck = ref(false)
 const handleAddDeck = async () => {
@@ -239,10 +237,8 @@ const handleAddDeck = async () => {
 }
 
 const handleDeleteDeck = async (id: string) => {
-  const isConfirmed = await uiStore.showConfirm('Desteyi Sil', t('flashcards.deleteDeckConfirm'), 'Sil', 'İptal')
-  if (isConfirmed) {
+  if (canWrite.value) {
     if (!await store.deleteDeck(id)) return
-    uiStore.addToast('Deste silindi', 'info')
   }
 }
 
@@ -275,8 +271,7 @@ const handleAddCard = async () => {
 }
 
 const handleDeleteCard = async (cardId: string) => {
-  const isConfirmed = await uiStore.showConfirm('Kartı Sil', 'Bu kartı desteden silmek istiyor musunuz?', 'Sil', 'İptal')
-  if (isConfirmed && activeDeck.value) {
+  if (canWrite.value && activeDeck.value) {
     if (!await store.deleteCard(activeDeck.value.id, cardId)) return
     uiStore.addToast('Kart silindi', 'info')
   }

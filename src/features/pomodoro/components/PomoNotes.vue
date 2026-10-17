@@ -68,7 +68,7 @@ async function copy(task:PomoTask) {
 }
 async function remove(task:PomoTask) {
   menu.value=null
-  if(await store.mutate('delete',task)){timer.forgetTask(task.id);ui.addToast(t('pomoNotes.deleted'),'success')}
+  if(await store.mutate('delete',task)){timer.forgetTask(task.id)}
 }
 async function showHistory(task:PomoTask) {
   historyGeneration++;historyBusy.value=false
@@ -128,27 +128,30 @@ useSearchReveal('pomodoro', async (hit, isCurrent) => {
 </script>
 
 <template>
-  <div class="workspace-content space-y-4">
-    <form v-if="canWrite" class="flex flex-wrap items-center gap-2" @submit.prevent="add">
-      <input ref="input" v-model="title" type="text" maxlength="500" autocomplete="off" :aria-label="t('pomoNotes.placeholder')" :placeholder="t('pomoNotes.placeholder')" class="h-10 min-w-0 basis-full rounded-xl border border-border/50 bg-background/50 px-4 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-background focus:ring-1 focus:ring-primary/30 sm:flex-1 sm:basis-0" />
-      <div class="flex h-10 items-center gap-1 rounded-xl border border-border/50 bg-background/50 px-1.5">
-        <button type="button" class="pomo-icon" :aria-label="t('pomoNotes.less')" :disabled="estimate<=1" @click="estimate=Math.max(1,estimate-1)"><span aria-hidden="true">−</span></button>
-        <input v-model.number="estimate" type="number" min="1" max="999" :aria-label="t('pomoNotes.goal')" class="w-8 bg-transparent text-center text-xs tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-        <span class="text-xs text-muted-foreground">{{ t('pomoNotes.sessions') }}</span>
-        <button type="button" class="pomo-icon" :aria-label="t('pomoNotes.more')" :disabled="estimate>=999" @click="estimate=Math.min(999,estimate+1)"><Plus class="h-3 w-3" /></button>
-      </div>
-      <button type="submit" :disabled="!title.trim()||store.saving||store.status!=='ready'" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-40" :aria-label="t('pomoNotes.add')"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-4 w-4" /></button>
-    </form>
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
-      <CustomSelect v-model="store.filter" :options="options" :aria-label="t('pomoNotes.filter')" class="w-36" />
-      <div class="ml-auto flex items-center gap-3">
-        <span v-if="store.status==='ready'" class="whitespace-nowrap text-[11px] text-muted-foreground">{{ t('pomoNotes.taskCount',{count:store.total}) }}</span>
+  <div class="workspace-content space-y-4" :data-module-loading="store.loading || undefined">
+    <div class="workspace-toolbar space-y-4">
+      <form v-if="canWrite" class="flex flex-wrap items-center gap-2" @submit.prevent="add">
+        <input ref="input" v-model="title" type="text" maxlength="500" autocomplete="off" :aria-label="t('pomoNotes.placeholder')" :placeholder="t('pomoNotes.placeholder')" class="h-10 min-w-0 basis-full rounded-xl border border-border/50 bg-background/50 px-4 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-background focus:ring-1 focus:ring-primary/30 sm:flex-1 sm:basis-0" />
+        <div class="flex h-10 items-center gap-1 rounded-xl border border-border/50 bg-background/50 px-1.5">
+          <button type="button" class="pomo-icon" :aria-label="t('pomoNotes.less')" :disabled="estimate<=1" @click="estimate=Math.max(1,estimate-1)"><span aria-hidden="true">−</span></button>
+          <input v-model.number="estimate" type="number" min="1" max="999" :aria-label="t('pomoNotes.goal')" class="w-8 bg-transparent text-center text-xs tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+          <span class="text-xs text-muted-foreground">{{ t('pomoNotes.sessions') }}</span>
+          <button type="button" class="pomo-icon" :aria-label="t('pomoNotes.more')" :disabled="estimate>=999" @click="estimate=Math.min(999,estimate+1)"><Plus class="h-3 w-3" /></button>
+        </div>
+        <button type="submit" :disabled="!title.trim()||store.saving||store.status!=='ready'" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-40" :aria-label="t('pomoNotes.add')"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-4 w-4" /></button>
+      </form>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
+        <CustomSelect v-model="store.filter" :options="options" :aria-label="t('pomoNotes.filter')" class="w-36" />
+        <div class="ml-auto flex items-center gap-3">
+          <span v-if="store.status==='ready'" class="whitespace-nowrap text-[11px] text-muted-foreground">{{ t('pomoNotes.taskCount',{count:store.total}) }}</span>
+        </div>
       </div>
     </div>
+
     <p v-if="timer.queuedTarget" class="flex items-center gap-2 text-xs text-muted-foreground"><Target class="h-3.5 w-3.5" /><span class="truncate">{{ t('pomoNotes.next',{title:timer.queuedTarget.title}) }}</span><button type="button" class="pomo-icon" :aria-label="t('pomoNotes.cancelNext')" @click="timer.cancelQueued()"><X class="h-3.5 w-3.5" /></button></p>
     <p v-if="timer.provisional" class="text-[11px] text-muted-foreground" role="status">{{ t('pomoNotes.provisional') }}</p>
     <div v-if="store.status==='setup'" class="rounded-xl border border-dashed border-border/60 p-5 text-center text-sm text-muted-foreground"><p>{{ t('pomoNotes.setup') }}</p><button type="button" class="mt-3 text-xs text-foreground underline underline-offset-4" @click="store.load()">{{ t('pomoNotes.retry') }}</button></div>
-    <div v-else-if="store.status==='error' || (store.error && !editing)" class="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-4 py-3 text-xs text-muted-foreground" role="alert"><span>{{ t(store.error.includes('CONFLICT')?'pomoNotes.conflict':'pomoNotes.loadFailed') }}</span><button type="button" class="shrink-0 text-foreground" @click="store.load()">{{ t('pomoNotes.retry') }}</button></div>
+    <div v-else-if="store.status==='error' || (store.error && !editing)" class="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-4 py-3 text-xs text-muted-foreground" role="alert"><span>{{ t(store.error==='TRASH_FOCUS_ACTIVE'?'trash.focusActive':store.error.includes('CONFLICT')?'pomoNotes.conflict':'pomoNotes.loadFailed') }}</span><button type="button" class="shrink-0 text-foreground" @click="store.load()">{{ t('pomoNotes.retry') }}</button></div>
     <div v-if="store.loading&&!store.items.length" class="flex justify-center py-8" role="status" :aria-label="t('pomoNotes.loading')"><Loader2 class="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none" /></div>
     <p v-else-if="store.status==='ready'&&!store.items.length" class="py-9 text-center text-sm text-muted-foreground">{{ t(store.search?'pomoNotes.noResults':store.filter==='completed'?'pomoNotes.noCompleted':'pomoNotes.empty') }}</p>
     <div class="space-y-2">

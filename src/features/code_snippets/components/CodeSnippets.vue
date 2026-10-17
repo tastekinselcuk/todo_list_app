@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5 relative z-10 w-full flex flex-col items-center">
     
-    <div v-if="canWrite" class="flex flex-col sm:flex-row gap-2.5 workspace-content relative z-30">
+    <div v-if="canWrite" class="workspace-toolbar flex flex-col sm:flex-row gap-2.5 workspace-content relative z-30">
       <div class="relative flex-1 min-w-0 group">
         <Code2 class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50 pointer-events-none" />
         <input
@@ -26,50 +26,7 @@
 
     <div class="space-y-4 pt-2 workspace-content relative z-20" style="overflow: visible;">
       
-      <transition name="slide-fade">
-        <div v-if="canWrite && isDrafting" class="rounded-xl border border-primary/30 bg-[#0d1117] shadow-lg flex flex-col animate-in slide-in-from-top-4 relative z-20">
-          <div class="px-4 py-2 border-b border-white/5 bg-white/5 flex items-center justify-between rounded-t-xl">
-            <div class="flex items-center gap-3 w-full">
-              <div class="flex gap-1.5 opacity-50 shrink-0">
-                <div class="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
-                <div class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-              </div>
-              <div class="flex-1 truncate font-mono text-[11px] text-zinc-400 pl-2">
-                {{ snippetForm.title }} • {{ formatLanguageLabel(snippetForm.language) }}
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <button @click="cancelDraft" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
-                  {{ $t('code.cancel') }}
-                </button>
-                <button
-                  @click="handleSaveSnippet"
-                  :disabled="!snippetForm.code.trim()"
-                  class="px-4 py-1.5 rounded-lg text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 transition-all"
-                >
-                  {{ $t('code.saveSnippet') }}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="relative group flex-1 rounded-b-xl overflow-hidden">
-            <codemirror
-              v-model="snippetForm.code"
-              :placeholder="$t('code.codePlaceholder')"
-              :style="{ minHeight: '200px', fontSize: '13px' }"
-              :autofocus="true"
-              :indent-with-tab="true"
-              :tab-size="2"
-              :extensions="cmExtensions"
-              class="w-full custom-cm"
-            />
-            <div class="absolute bottom-2 right-3 text-[10px] font-bold tracking-widest uppercase text-zinc-500 pointer-events-none">
-              {{ $t('code.lines', { count: getLineCount(snippetForm.code) }) }}
-            </div>
-          </div>
-        </div>
-      </transition>
+      <CodeSnippetEditor v-if="canWrite && isDrafting" v-model="snippetForm" :language-options="languageSelectOptions" :label="t('code.newSnippet')" :submit-label="t('code.saveSnippet')" :saving="saving" @save="handleSaveSnippet" @cancel="cancelDraft" @close="isDrafting = false" />
 
       <div class="grid grid-cols-1 gap-2 w-full">
         
@@ -99,21 +56,18 @@
 
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess } from '@/lib/workspaceScope'
+import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { computed, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { Code2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n' 
 import { useUIStore } from '@/stores/ui' 
 import { useTodoStore, type CodeSnippet } from '@/features/todos/stores/todo'
 
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import CodeSnippetItem from './CodeSnippetItem.vue' // YENİ EKLENDİ
+import CodeSnippetItem from './CodeSnippetItem.vue'
+import CodeSnippetEditor from './CodeSnippetEditor.vue'
 
-// Sadece yeni snippet ekleme kısmı için Codemirror ve Highlightjs listesi
-import { Codemirror } from 'vue-codemirror'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { javascript } from '@codemirror/lang-javascript'
 import hljs from 'highlight.js'
 
 const { canWrite } = useModuleAccess('code')
@@ -122,7 +76,7 @@ const todoStore = useTodoStore()
 const uiStore = useUIStore() 
 const { t } = useI18n()
 
-const cmExtensions = [oneDark, javascript()]
+const saving = ref(false)
 
 const isDrafting = useWorkspaceDraft('code-drafting', false)
 const snippetForm = useWorkspaceDraft('code-draft', {
@@ -145,46 +99,42 @@ const languageSelectOptions = computed(() =>
   availableLanguages.value.map(lang => ({ value: lang, label: formatLanguageLabel(lang) }))
 )
 
-const getLineCount = (code: string) => {
-  if (!code) return 0
-  return code.split(/\r?\n/).length
-}
-
 const handleInitNewSnippet = () => {
-  if (!snippetForm.value.title.trim()) return
-  snippetForm.value.code = ''
+  if (!canWrite.value || saving.value || !snippetForm.value.title.trim()) return
   isDrafting.value = true
 }
 
 const cancelDraft = () => {
+  if (saving.value) return
   isDrafting.value = false
   snippetForm.value.title = ''
   snippetForm.value.code = ''
 }
 
 const handleSaveSnippet = async () => {
-  if (!snippetForm.value.title.trim() || !snippetForm.value.code.trim()) return
-
-  const result = await todoStore.addCodeSnippet({
-    title: snippetForm.value.title.trim(),
-    language: snippetForm.value.language || 'plaintext',
-    code: snippetForm.value.code,
-  })
-  
-  if (result.success) {
-    uiStore.addToast('Kod bloğu eklendi', 'success')
-    isDrafting.value = false
-    snippetForm.value.title = ''
-    snippetForm.value.code = ''
-  } else {
-    uiStore.addToast(result.message || t('code.errorSaving'), 'error')
-  }
+  if (!canWrite.value || saving.value || !snippetForm.value.title.trim() || !snippetForm.value.code.trim()) return
+  saving.value = true
+  try {
+    const result = await todoStore.addCodeSnippet({
+      title: snippetForm.value.title.trim(),
+      language: snippetForm.value.language || 'plaintext',
+      code: snippetForm.value.code,
+    })
+    if (result.success) {
+      uiStore.addToast('Kod bloğu eklendi', 'success')
+      isDrafting.value = false
+      snippetForm.value.title = ''
+      snippetForm.value.code = ''
+    } else {
+      uiStore.addToast(result.message || t('code.errorSaving'), 'error')
+    }
+  } finally { saving.value = false }
 }
 
 // Item'dan (Alt bileşenden) gelen Update Event'ini karşıla
 const refreshSnippetDraft = async (snippetId: string, done: (version?: number) => void) => {
-  if (!await todoStore.fetchCodeSnippets()) return
-  const latest = todoStore.codeSnippets.find(snippet => snippet.id === snippetId)
+  const loaded = await todoStore.fetchCodeSnippets()
+  const latest = loaded ? todoStore.codeSnippets.find(snippet => snippet.id === snippetId) : undefined
   done(latest?.version)
   if (latest) uiStore.addToast(t('sharing.draftReady'), 'info')
 }
@@ -199,22 +149,14 @@ const handleUpdateSnippet = async (snippetId: string, data: Partial<CodeSnippet>
 }
 
 // Item'dan gelen Delete Event'ini karşıla
+const deletingSnippets = new Set<string>()
 const handleDeleteSnippet = async (snippetId: string) => {
-  const isConfirmed = await uiStore.showConfirm(
-    'Kod Bloğunu Sil', 
-    t('code.deleteConfirm'), 
-    'Sil', 
-    t('code.cancel')
-  )
-
-  if (!isConfirmed) return
-
-  const result = await todoStore.deleteCodeSnippet(snippetId)
-  if (result.success) {
-    uiStore.addToast('Kod bloğu silindi', 'info')
-  } else {
-    uiStore.addToast(result.message || t('code.errorDeleting'), 'error')
-  }
+  if (!canWrite.value || deletingSnippets.has(snippetId)) return
+  deletingSnippets.add(snippetId)
+  try {
+    const result = await todoStore.deleteCodeSnippet(snippetId)
+    if (!result.success) uiStore.addToast(result.message || t('code.errorDeleting'), 'error')
+  } finally { deletingSnippets.delete(snippetId) }
 }
 
 // Item'dan gelen Copy Event'ini karşıla
@@ -227,9 +169,7 @@ const handleCopySnippet = async (code: string) => {
   }
 }
 
-onMounted(async () => {
-  await todoStore.fetchCodeSnippets()
-})
+useModuleLoad(() => todoStore.fetchCodeSnippets())
 useSearchReveal('code', async hit => { await todoStore.fetchCodeSnippets(hit.record_id) })
 </script>
 
@@ -245,13 +185,4 @@ useSearchReveal('code', async hit => { await todoStore.fetchCodeSnippets(hit.rec
   border-color: hsl(var(--border) / 0.5);
 }
 
-.slide-fade-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.slide-fade-leave-active { transition: all 0.2s cubic-bezier(0.4, 0, 1, 1); }
-.slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
-
-:deep(.custom-cm .cm-editor) { background-color: #0d1117; outline: none !important; }
-:deep(.custom-cm .cm-scroller) { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; padding: 10px 0; }
-:deep(.custom-cm .cm-gutters) { background-color: #0d1117; border-right: 1px solid rgba(255,255,255,0.05); color: #484f58; }
-:deep(.custom-cm .cm-activeLine), :deep(.custom-cm .cm-activeLineGutter) { background-color: rgba(255,255,255,0.03); }
-:deep(.custom-cm .cm-focused) { outline: none !important; }
 </style>

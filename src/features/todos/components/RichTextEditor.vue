@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootRef" class="note-editor relative flex min-w-0 flex-col" :class="disabled ? 'editor-reader' : 'editor-writer rounded-xl border border-border/50 bg-background/40 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20'" @keydown.esc.stop="menu=null">
+  <div ref="rootRef" class="note-editor relative flex min-w-0 flex-col" :class="[fitHeight && 'editor-fitted', disabled && !fitHeight ? 'editor-reader' : 'editor-writer rounded-xl border border-border/50 bg-background/40 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20']" @keydown.esc="handleEscape">
     <div v-if="!disabled" class="flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-border/40 bg-muted/10 p-1">
       <CustomSelect ref="textSelectRef" :preserve-focus="true" @open-change="selectOpened('text', $event)" :model-value="textMode" :options="textOptions" :aria-label="t('noteEditor.textStyle')" variant="ghost" size="sm" class="w-fit" @update:model-value="setTextMode" />
       <button v-for="tool in formatTools" :key="tool.name" type="button" class="editor-tool" :class="[isActive(tool.name) && 'is-active',['underline','strike'].includes(tool.name) && 'editor-secondary']" :title="t('noteEditor.'+tool.name)" :aria-label="t('noteEditor.'+tool.name)" :aria-pressed="isActive(tool.name)" @mousedown.prevent @click="run(tool.name)"><component :is="tool.icon" class="h-3.5 w-3.5" /></button>
@@ -57,7 +57,7 @@
       <input v-model="imageAlt" :aria-label="t('noteEditor.imageAlt')" :placeholder="t('noteEditor.imageAlt')" maxlength="200" class="editor-field ml-1 min-w-24 flex-1" @input="updateImageAlt" />
       <button type="button" class="editor-tool" :title="t('common.delete')" :aria-label="t('common.delete')" @mousedown.prevent @click="deleteImage"><Trash2 class="h-3.5 w-3.5" /></button>
     </div>
-    <EditorContent :editor="editor" class="min-w-0" :class="disabled?'editor-readonly':'editor-editable'" />
+    <EditorContent :editor="editor" class="editor-content min-w-0" :class="disabled?'editor-readonly':'editor-editable'" />
     <Teleport to="body">
       <dialog ref="imageDialogRef" class="note-image-viewer" :aria-label="t('noteEditor.imagePreview')" @cancel.prevent="closeImagePreview" @close="onPreviewClosed" @click="event=>{if(event.target===imageDialogRef)closeImagePreview()}">
         <div v-if="imagePreview" class="image-viewer-shell">
@@ -78,7 +78,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
-import type { SelectionBookmark } from '@tiptap/pm/state'
+import { NodeSelection, type SelectionBookmark } from '@tiptap/pm/state'
 import { Bold, Italic, Strikethrough, Underline, List, ListOrdered, ListTodo, ChevronRight, Table2, ImagePlus, Link2, Palette, MoreHorizontal, Undo2, Redo2, Quote, Code2, Minus, RemoveFormatting, Upload, Loader2, X, Trash2, Plus, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
@@ -86,7 +86,7 @@ import { createNoteExtensions } from '@/lib/noteEditor'
 import { sanitizeNoteHtml, safeNoteImageUrl, safeNoteLink } from '@/lib/noteContent'
 import { uploadNoteImage, resolveNoteImage, discardNoteImage } from '@/lib/noteImages'
 
-const props=defineProps<{modelValue:string;placeholder?:string;disabled?:boolean}>()
+const props=defineProps<{modelValue:string;placeholder?:string;disabled?:boolean;fitHeight?:boolean}>()
 const emit=defineEmits<{'update:modelValue':[value:string];'busy-change':[value:boolean]}>()
 const {t}=useI18n()
 const rootRef=ref<HTMLElement|null>(null),fileRef=ref<HTMLInputElement|null>(null),panelRef=ref<HTMLElement|null>(null)
@@ -213,8 +213,16 @@ function tableAction(name:string){
   case 'toggleHeaderRow':chain.toggleHeaderRow().run();break;case 'deleteTable':chain.deleteTable().run();break
  }
 }
-function resizeImage(width:number){if(!props.disabled)editor.value?.chain().focus().updateAttributes('image',{displayWidth:width}).run()}
-function updateImageAlt(){if(!props.disabled)editor.value?.commands.updateAttributes('image',{alt:imageAlt.value})}
+function updateImageAttribute(name:'alt'|'displayWidth',value:string|number){
+ const current=editor.value
+ if(!current || props.disabled)return
+ const selection=current.state.selection
+ if(!(selection instanceof NodeSelection) || selection.node.type.name!=='image')return
+ // Attribute steps preserve node selection and the focus/caret in the caption input.
+ current.view.dispatch(current.state.tr.setNodeAttribute(selection.from,name,value))
+}
+function resizeImage(width:number){updateImageAttribute('displayWidth',width)}
+function updateImageAlt(){updateImageAttribute('alt',imageAlt.value)}
 function deleteImage(){if(!props.disabled)editor.value?.chain().focus().deleteSelection().run()}
 function applyLink(){
  if(props.disabled || !editor.value)return
@@ -279,6 +287,7 @@ watch(()=>props.modelValue,value=>{
  current.commands.setContent(cleaned,{emitUpdate:false})
 })
 watch(()=>props.disabled,value=>{editor.value?.setEditable(!value,false);if(value)menu.value=null})
+function handleEscape(event:KeyboardEvent){if(menu.value){event.preventDefault();event.stopPropagation();menu.value=null}}
 function clickOutside(event:Event){
  if(!menu.value)return
  const target=event.target as Node
@@ -321,6 +330,10 @@ onBeforeUnmount(()=>{
 .editor-confirm { @apply rounded-lg bg-primary px-2.5 text-xs font-medium text-primary-foreground disabled:opacity-40; }
 :deep(.note-prose) { @apply min-w-0 break-words p-3 text-sm leading-relaxed outline-none; overflow-wrap:anywhere; }
 .editor-editable :deep(.note-prose) { min-height:112px; max-height:60vh; overflow-y:auto; resize:vertical; }
+.editor-fitted { flex:1; min-height:0; }
+.editor-fitted .editor-panel { max-height:min(360px,45dvh); }
+.editor-fitted .editor-content { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+.editor-fitted .editor-content :deep(.note-prose) { flex:1; min-height:0; max-height:none; overflow-y:auto; overscroll-behavior:contain; resize:none; }
 :deep(.note-prose > * + *) { margin-top:.6em; }
 :deep(.note-prose p) { margin:.25em 0; }
 :deep(.note-prose h1) { font-size:1.5em; font-weight:600; line-height:1.4; }

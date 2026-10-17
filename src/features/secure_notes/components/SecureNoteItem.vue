@@ -1,107 +1,55 @@
 <template>
-  <div class="workspace-card group bg-card/40 backdrop-blur-md text-card-foreground p-5 flex flex-col">
-    
-    <div class="flex items-start justify-between mb-4">
-      <div class="space-y-1.5 pr-4">
-        <div class="flex items-center gap-2">
-          <span
-            class="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border"
-            :class="{
-              'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20': note.type === 'password',
-              'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20': note.type === 'secret'
-            }"
-          >
-            {{ note.type === 'password' ? $t('secure.typePassword') : $t('secure.typeSecret') }}
-          </span>
-        </div>
-        <h3 class="font-bold text-base tracking-tight text-foreground line-clamp-1">{{ note.title }}</h3>
-        <p v-if="note.description" class="text-xs font-medium text-muted-foreground/80 line-clamp-2">
-          {{ note.description }}
-        </p>
-      </div>
-      
-      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button v-if="canWrite" @click="$emit('edit', note)" class="p-1.5 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors" :title="$t('secure.editNoteTitle')">
-          <Edit class="h-3.5 w-3.5" />
-        </button>
-        <button v-if="canWrite" @click="$emit('delete', note.id)" class="p-1.5 hover:bg-rose-500/10 rounded-xl text-muted-foreground hover:text-rose-500 transition-colors" :title="$t('secure.deleteNoteTitle')">
-          <Trash2 class="h-3.5 w-3.5" />
-        </button>
-      </div>
+  <article class="workspace-card vault-note" :class="{'is-expanded':isExpanded}">
+    <div class="vault-note-summary">
+      <button type="button" class="min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :aria-expanded="isExpanded" @click="isExpanded=!isExpanded">
+        <span class="flex min-w-0 items-center justify-between gap-3"><span class="truncate text-[13px] font-medium leading-5 text-foreground">{{ note.title }}</span><Lock class="h-3.5 w-3.5 shrink-0 text-muted-foreground/55" /></span>
+        <span v-if="note.description || note.username" class="mt-1 block truncate text-xs leading-4 text-muted-foreground">{{ note.description || note.username }}</span>
+        <span class="mt-3 block font-mono text-sm tracking-[0.15em] text-muted-foreground/65" aria-hidden="true">••••••••</span>
+      </button>
+      <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-muted-foreground">{{ $t(note.type==='password'?'secure.typePassword':'secure.typeSecret') }}</span><div class="flex shrink-0 items-center gap-0.5">
+        <button type="button" class="vault-note-icon" :title="$t(note.type==='password'?'secure.copyPassword':'secure.copySecret')" :aria-label="$t(note.type==='password'?'secure.copyPassword':'secure.copySecret')" @click="copyToClipboard(note.type==='password'?note.password_encrypted || '':note.content || '')"><Copy class="h-[15px] w-[15px]" /></button>
+        <button type="button" class="vault-note-icon" :aria-expanded="isExpanded" :aria-label="$t(isExpanded?'common.close':'secure.showDetails')" @click="isExpanded=!isExpanded"><ChevronDown class="h-[15px] w-[15px] transition-transform" :class="{'rotate-180':isExpanded}" /></button>
+        <button v-if="canWrite" type="button" class="vault-note-icon" :title="$t('secure.editNoteTitle')" :aria-label="$t('secure.editNoteTitle')" @click="$emit('edit',note)"><Edit class="h-[15px] w-[15px]" /></button>
+        <button v-if="canWrite" type="button" class="vault-note-icon hover:!bg-destructive/10 hover:!text-destructive" :title="$t('secure.deleteNoteTitle')" :aria-label="$t('secure.deleteNoteTitle')" @click="$emit('delete',note.id)"><Trash2 class="h-[15px] w-[15px]" /></button>
+      </div></div>
     </div>
-    
-    <div class="mt-auto pt-2 mb-2">
-      
-      <div v-if="note.type === 'password'" class="space-y-2">
-        <div class="flex items-center justify-between bg-muted/30 p-2.5 rounded-xl border border-border/40 hover:border-primary/20 transition-colors group/copy">
-          <div class="flex flex-col min-w-0 pr-2">
-            <span class="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-widest">{{ $t('secure.username') }}</span>
-            <span class="text-xs font-semibold text-foreground truncate mt-0.5">{{ note.username || '-' }}</span>
+    <Transition name="note-reveal">
+      <div v-if="isExpanded" class="note-reveal">
+        <div class="note-reveal-inner"><div class="note-reveal-body mt-3 space-y-3 border-t border-border/50 pt-3">
+          <div v-if="note.type==='password'" class="grid gap-3 sm:grid-cols-2">
+            <div class="vault-detail">
+              <div class="min-w-0 flex-1"><span class="block text-[10px] text-muted-foreground">{{ $t('secure.username') }}</span><span class="mt-1 block truncate text-xs text-foreground">{{ note.username || '—' }}</span></div>
+              <button type="button" class="vault-note-icon" :title="$t('secure.copyUsername')" :aria-label="$t('secure.copyUsername')" @click="copyToClipboard(note.username || '')"><Copy class="h-3.5 w-3.5" /></button>
+            </div>
+            <div class="vault-detail">
+              <div class="min-w-0 flex-1"><span class="block text-[10px] text-muted-foreground">{{ $t('secure.password') }}</span><span class="mt-1 block truncate font-mono text-xs text-foreground">{{ showPassword ? note.password_encrypted : '••••••••' }}</span></div>
+              <button type="button" class="vault-note-icon" :title="$t(showPassword?'secure.hidePassword':'secure.showPassword')" :aria-label="$t(showPassword?'secure.hidePassword':'secure.showPassword')" :aria-pressed="showPassword" @click="showPassword=!showPassword"><Eye v-if="showPassword" class="h-3.5 w-3.5" /><EyeOff v-else class="h-3.5 w-3.5" /></button>
+            </div>
           </div>
-          <button @click="copyToClipboard(note.username || '', 'Kullanıcı adı')" class="w-7 h-7 flex items-center justify-center bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-lg text-muted-foreground transition-colors shrink-0">
-            <Copy class="h-3 w-3" />
-          </button>
-        </div>
-        
-        <div class="flex items-center justify-between bg-muted/30 p-2.5 rounded-xl border border-border/40 hover:border-primary/20 transition-colors group/copy">
-          <div class="flex flex-col min-w-0 pr-2">
-            <span class="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-widest">{{ $t('secure.password') }}</span>
-            <span class="text-xs font-mono text-foreground tracking-widest mt-0.5">
-              {{ showPassword ? note.password_encrypted : '••••••••' }}
-            </span> 
+          <div v-else class="space-y-2">
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-pressed="showPassword" @click="showPassword=!showPassword"><Eye v-if="showPassword" class="h-3.5 w-3.5" /><EyeOff v-else class="h-3.5 w-3.5" />{{ $t(showPassword?'secure.hidePassword':'secure.showPassword') }}</button>
+            <p v-if="showPassword" class="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/20 p-3 font-mono text-xs leading-5">{{ note.content }}</p>
+            <p v-else class="px-2 font-mono text-xs text-muted-foreground" aria-hidden="true">••••••••</p>
           </div>
-          <div class="flex gap-1 shrink-0">
-            <button @click="showPassword = !showPassword" class="w-7 h-7 flex items-center justify-center bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-lg text-muted-foreground transition-colors">
-              <Eye v-if="showPassword" class="h-3 w-3" />
-              <EyeOff v-else class="h-3 w-3" />
-            </button>
-            <button @click="copyToClipboard(note.password_encrypted || '', 'Şifre')" class="w-7 h-7 flex items-center justify-center bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-lg text-muted-foreground transition-colors">
-              <Copy class="h-3 w-3" />
-            </button>
+          <div v-if="safeUrl" class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <a v-if="safeUrl" :href="safeUrl" target="_blank" rel="noopener noreferrer" class="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md text-primary hover:underline"><Globe class="h-3 w-3 shrink-0" /><span class="truncate">{{ note.url.replace(/^https?:\/\//,'') }}</span></a>
           </div>
-        </div>
+        </div></div>
       </div>
-      
-      <div v-else class="bg-muted/30 p-3 rounded-xl border border-border/40 relative group/copy">
-        <p class="text-xs font-mono transition-all duration-300 pr-8 line-clamp-3" :class="showPassword ? 'blur-none' : 'blur-sm'">
-          {{ note.content }}
-        </p>
-        <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/copy:opacity-100 transition-all">
-          <button @click="showPassword = !showPassword" class="w-7 h-7 flex items-center justify-center rounded-lg bg-card border border-border/50 shadow-sm hover:text-primary transition-all">
-            <Eye v-if="showPassword" class="h-3.5 w-3.5" />
-            <EyeOff v-else class="h-3.5 w-3.5" />
-          </button>
-          <button @click="copyToClipboard(note.content || '', 'Gizli içerik')" class="w-7 h-7 flex items-center justify-center rounded-lg bg-card border border-border/50 shadow-sm hover:text-primary transition-all">
-            <Copy class="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-      
-      <div v-if="safeUrl" class="pt-3">
-        <a :href="safeUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 px-2 py-1 rounded-md border border-primary/10">
-          <Globe class="w-3 h-3" /> {{ note.url.replace(/^https?:\/\//, '') }}
-        </a>
-      </div>
-
-    </div>
-    
-    <div class="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50 pt-3 border-t border-border/30">
-      <span>{{ formattedDate }}</span>
-    </div>
-  </div>
+    </Transition>
+  </article>
 </template>
-
 <script setup lang="ts">
 import { useModuleAccess } from '@/lib/workspaceScope'
-import { ref, computed } from 'vue'
-import { Edit, Trash2, Copy, Eye, EyeOff, Globe } from 'lucide-vue-next'
+import { ref, computed, watch } from 'vue'
+import { Edit, Trash2, Copy, Eye, EyeOff, Globe, ChevronDown, Lock } from 'lucide-vue-next'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 
 const { canWrite } = useModuleAccess('secure')
 
 const props = defineProps<{
-  note: any // İsterseniz buraya SecureNote tipini import edebilirsiniz
+  note: any
 }>()
 
 defineEmits<{
@@ -112,23 +60,28 @@ defineEmits<{
 const uiStore = useUIStore()
 const { t } = useI18n()
 
-// Her karta özel lokal state (Ana dosyadaki Record karmaşasından kurtulduk!)
-const showPassword = ref(false)
+const isExpanded=ref(false),showPassword=ref(false)
+watch(isExpanded,open=>{if(!open)showPassword.value=false})
+watch(()=>props.note,()=>{showPassword.value=false},{deep:true})
 
 const safeUrl = computed(() => {
   try { const url = new URL(props.note.url || ''); return ['https:', 'http:'].includes(url.protocol) ? url.href : '' } catch { return '' }
 })
-const formattedDate = computed(() => {
-  const currentLang = t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US'
-  return new Date(props.note.created_at).toLocaleDateString(currentLang, { year: 'numeric', month: 'short', day: 'numeric' })
-})
 
-const copyToClipboard = async (text: string, type: string) => {
+const copyToClipboard = async (text: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    uiStore.addToast(`${type} kopyalandı!`, 'success')
+    uiStore.addToast(t('secure.copySuccess'), 'success')
   } catch (e) {
-    uiStore.addToast('Kopyalama başarısız', 'error')
+    uiStore.addToast(t('secure.copyFailed'), 'error')
   }
 }
 </script>
+
+<style scoped>
+.vault-note { @apply min-w-0 rounded-2xl bg-card/50 p-3.5 text-card-foreground transition-colors hover:bg-muted/30; }
+.vault-note-summary { display:flex; flex-direction:column; justify-content:space-between; min-height:110px; gap:10px; }
+.vault-note-icon { @apply inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30; }
+.vault-detail { @apply flex min-w-0 items-center gap-2 rounded-xl border border-border/45 bg-background/30 px-3 py-2; }
+@media(max-width:639px){.vault-note-icon{width:26px;height:28px}}
+</style>

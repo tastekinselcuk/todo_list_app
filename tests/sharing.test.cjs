@@ -10,10 +10,51 @@ const { createClient } = require('@supabase/supabase-js')
 function load(path, dependencies, globals = {}) {
   const exports = {}
   const code = ts.transpileModule(fs.readFileSync(path,'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
-  vm.runInNewContext(code,{ exports, require: name => dependencies[name] || (name === './moduleCatalog' ? load('src/lib/moduleCatalog.ts', {}, globals) : name === './storage' ? load('src/lib/storage.ts', {}, globals) : require(name)), console, URL, URLSearchParams, ...globals })
+  vm.runInNewContext(code,{ exports, require: name => dependencies[name] || (['@/lib/workspaceTrash','./workspaceTrash'].includes(name) ? load('src/lib/workspaceTrash.ts', {'./supabase':dependencies['./supabase']||dependencies['@/lib/supabase']||{supabase:{}}}, globals) : null) || (name === './moduleCatalog' ? load('src/lib/moduleCatalog.ts', {}, globals) : ['./storage','@/lib/storage'].includes(name) ? load('src/lib/storage.ts', {}, globals) : require(name)), console, URL, URLSearchParams, ...globals })
   return exports
 }
 const helpers = load('src/lib/sharing.ts',{})
+
+test('workspace deletion broadcasts refresh other sessions after pending local writes finish',async()=>{
+ pinia.setActivePinia(pinia.createPinia())
+ const auth=vue.reactive({user:{id:'owner'}}),workspaces=vue.reactive({busy:false,sharingAvailable:true,async refreshBindings(){},async load(){reloads++}})
+ let callback,reloads=0
+ const channel={on(_type,_filter,fn){callback=fn;return channel},subscribe(){return channel}}
+ const store=load('src/stores/sharing.ts',{
+  '@/lib/supabase':{supabase:{channel:()=>channel,removeChannel(){}}},
+  './auth':{useAuthStore:()=>auth},'./workspaces':{useWorkspacesStore:()=>workspaces},'@/lib/sharing':helpers,
+ },{setInterval:()=>1,clearInterval(){},window:{location:{href:'https://notes.example.test/'},addEventListener(){},removeEventListener(){}}}).useSharingStore()
+ try {
+  store.start();callback({payload:{operation:'workspace_deleted'}});await vue.nextTick();assert.equal(reloads,1)
+  workspaces.busy=true;callback({payload:{operation:'workspace_deleted'}});callback({payload:{operation:'workspace_deleted'}})
+  await vue.nextTick();assert.equal(reloads,1)
+  workspaces.busy=false;await vue.nextTick();assert.equal(reloads,2)
+  workspaces.busy=true;callback({payload:{operation:'workspace_deleted'}});store.stop();workspaces.busy=false
+  await vue.nextTick();assert.equal(reloads,2,'stopped sessions cannot replay queued refreshes')
+ }finally{store.stop();store.$dispose()}
+})
+
+test('personal notes use the exact latest version for trash after creation and completion, without sending DELETE',async()=>{
+ const requests=[],row={id:'note',collection_id:'collection',workspace_id:'workspace',created_by:'owner',content:'A note',version:1}
+ const client=createClient('https://database.example.test','public-test-key',{
+  auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:async(url,options={})=>{
+   const method=options.method||'GET',body=options.body?JSON.parse(options.body):null
+   requests.push({url:String(url),method,body})
+   let data
+   if(String(url).includes('/rpc/trash_change'))data={id:row.id,module:'quick',version:row.version+1,deleted_at:new Date().toISOString()}
+   else{if(method==='PATCH')row.version++;data=new Headers(options.headers).get('Accept')?.includes('object')?{...row}:[{...row}]}
+   return new Response(JSON.stringify(data),{status:200,headers:{'content-type':'application/json'}})
+  }}})
+ const workspaces={userId:'owner',activeId:'workspace',sessionKey:'owner:workspace',sharingAvailable:false,binding(){}}
+ const api=load('src/lib/workspaceScope.ts',{'./supabase':{supabase:client},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'./sharing':helpers}).useWorkspaceClient()
+ await api.from('quick_notes').insert({content:'New'}).select().single()
+ await api.from('quick_notes').update({completed:true}).eq('id','note')
+ const deleted=await api.from('quick_notes').delete().eq('id','note').select('id').single()
+ assert.equal(deleted.error,null);assert.equal(deleted.data.id,'note')
+ const request=requests.at(-1)
+ assert.ok(request.url.includes('/rpc/trash_change'));assert.equal(request.body.expected_version,2)
+ assert.equal(request.body.wid,'workspace');assert.equal(request.body.module_id,'quick');assert.equal(requests.some(r=>r.method==='DELETE'),false)
+})
 
 test('invitation dialog waits for permission selection and retains the actual issued role',async()=>{
   pinia.setActivePinia(pinia.createPinia())

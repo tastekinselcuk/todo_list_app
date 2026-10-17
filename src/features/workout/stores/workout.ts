@@ -110,7 +110,7 @@ export const useWorkoutStore = defineStore('workout', () => {
         // Normalized collections must add children through the existing versioned RPC.
         if (shared) for (const exercise of exercises) result = await supabase.mutateItem('workout', data.id, 'add', exercise)
       } catch (error) {
-        const cleanup = await supabase.from('workout_routines').delete().eq('id', data.id)
+        const cleanup = await supabase.from('workout_routines').delete({silent:true}).eq('id', data.id)
         if (cleanup.error) await fetchRoutines()
         throw error
       }

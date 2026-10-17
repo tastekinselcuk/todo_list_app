@@ -110,7 +110,7 @@ test('shared vault URLs permit only HTTP(S) and viewer note controls retain copy
   assert.equal(viewer.querySelectorAll('button').length,3)
   const editor=await component(file,'editor',{note:{...props.note,url:'https://example.test'}})
   assert.equal(editor.querySelectorAll('button').length,5)
-  assert.equal(editor.querySelector('a').getAttribute('rel'),'noopener noreferrer')
+  assert.equal(editor.querySelector('a'),null,'URLs appear in the expanded details')
 })
 function installNoteEditorDOM() {
   for(const [name,value] of Object.entries({window:dom.window,document:dom.window.document,navigator:dom.window.navigator,Node:dom.window.Node,HTMLElement:dom.window.HTMLElement,MutationObserver:dom.window.MutationObserver,DOMParser:dom.window.DOMParser,Event:dom.window.Event,getComputedStyle:dom.window.getComputedStyle,requestAnimationFrame:callback=>setTimeout(callback,0),cancelAnimationFrame:clearTimeout}))
@@ -204,6 +204,30 @@ function interactiveEditorFixture({disabled=false,upload=async()=>({path:'100000
   app.mount({})
   return {core,state:vue.proxyRefs(state),events,close:()=>app.unmount()}
 }
+
+test('image descriptions accept continuous typing without losing image selection or input focus',async()=>{
+  const f=interactiveEditorFixture(),input=dom.window.document.createElement('input')
+  dom.window.document.body.append(input)
+  try{
+    f.core.commands.setContent('<p><img src="https://example.test/photo.png" alt=""></p>')
+    f.core.commands.setNodeSelection(1)
+    input.focus()
+    for(const letter of 'Resim açıklaması'){
+      input.value+=letter;f.state.imageAlt=input.value;f.state.updateImageAlt()
+      await vue.nextTick()
+      assert.equal(f.core.isActive('image'),true,'the image toolbar must remain mounted')
+      assert.equal(f.core.state.selection.node.attrs.alt,input.value)
+      assert.equal(dom.window.document.activeElement,input)
+    }
+    f.state.resizeImage(50)
+    assert.equal(f.core.state.selection.node.attrs.displayWidth,50)
+    assert.equal(f.core.state.selection.node.attrs.alt,'Resim açıklaması')
+    assert.equal(dom.window.document.activeElement,input,'width changes also preserve external focus')
+    assert.match(f.events.filter(event=>event[0]==='update:modelValue').at(-1)[1],/alt="Resim açıklaması"/)
+    f.core.commands.undo()
+    assert.equal(f.core.state.doc.nodeAt(1).attrs.displayWidth,100)
+  }finally{input.remove();f.close()}
+})
 
 test('editor closes menus outside their trigger and panel, applies colors to the selection and keeps table actions usable',async()=>{
   const f=interactiveEditorFixture()
@@ -376,6 +400,30 @@ test('image preview modal validates sources, locks scroll while open, and releas
     await f.state.openImagePreview('https://example.test/photo.png','Roadmap')
   }finally{f.close()}
   assert.equal(dialog.open,false);assert.equal(dom.window.document.body.style.overflow,previous)
+})
+
+test('secure cards hide secrets until revealed, reset visibility when collapsed, and allow only web URLs',async()=>{
+  const descriptor=parse(fs.readFileSync('src/features/secure_notes/components/SecureNoteItem.vue','utf8')).descriptor
+  const dependencies={
+    '@/lib/workspaceScope':{useModuleAccess:()=>({canWrite:vue.ref(false)})},'@/stores/ui':{useUIStore:()=>({addToast(){}})},'vue-i18n':{useI18n:()=>({t:key=>key})},
+  }
+  const component=load(compileScript(descriptor,{id:'secure-card-state'}).content,dependencies).default
+  let state
+  const props=vue.reactive({note:{id:'private',type:'secret',content:'sensitive text',url:'javascript:alert(1)',created_at:'2026-01-01'}})
+  const renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})
+  const app=renderer.createApp({setup(){state=vue.proxyRefs(component.setup(props,{expose(){},emit(){}}));return()=>vue.h('div')}})
+  app.mount({})
+  try{
+    assert.equal(state.showPassword,false);assert.equal(state.safeUrl,'')
+    state.isExpanded=true;await vue.nextTick();state.showPassword=true
+    state.isExpanded=false;await vue.nextTick();assert.equal(state.showPassword,false)
+    props.note.url='https://example.test';await vue.nextTick();assert.equal(state.safeUrl,'https://example.test/')
+    const rendered=load(compileScript(descriptor,{id:'secure-card-render',inlineTemplate:true}).content,dependencies).default
+    const ssr=vue.createSSRApp(rendered,props);ssr.config.globalProperties.$t=key=>key
+    const doc=await renderToString(ssr)
+    assert.ok(!doc.includes('sensitive text'),'collapsed secret cards must not render their sensitive contents')
+    assert.ok(!doc.includes('secure.deleteNoteTitle'))
+  }finally{app.unmount()}
 })
 
 test('private image signing batches duplicates, caches per user, and rejects malformed or unauthenticated paths',async()=>{

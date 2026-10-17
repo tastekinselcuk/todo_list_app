@@ -30,7 +30,7 @@
           {{ formatDate(snippet.updatedAt) }}
         </span>
         <div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <button v-if="canWrite" @click.stop="beginInlineEdit" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" :title="$t('code.edit')">
+          <button v-if="canWrite" @click.stop="beginInlineEdit" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" :title="$t('code.edit')" :aria-label="$t('code.edit')">
             <Pencil class="w-3.5 h-3.5" />
           </button>
           <button v-if="canWrite" @click.stop="removeSnippet" class="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1" :title="$t('code.delete')">
@@ -41,43 +41,8 @@
     </div>
 
     <transition name="slide-fade">
-      <div v-if="isExpanded" class="border-t border-border/40 bg-[#0d1117] rounded-b-xl relative z-20" :style="isEditing ? 'overflow: visible;' : 'overflow: hidden;'">
-        
-        <div v-if="isEditing" class="p-0 animate-in fade-in duration-300">
-          <div class="px-4 py-2 border-b border-white/5 bg-white/5 flex items-center justify-between">
-            <input
-              v-model="editForm.title"
-              type="text"
-              class="h-8 px-2 text-sm font-semibold bg-transparent text-zinc-300 border-none focus:ring-0 flex-1 outline-none"
-            />
-            <div class="flex items-center gap-2 pr-2 relative z-30">
-              <CustomSelect
-                v-model="editForm.language"
-                :options="languageOptions"
-                size="sm"
-                variant="ghost"
-                class="text-zinc-300 bg-white/10 hover:bg-white/20 border-transparent h-8 rounded-xl !shadow-none"
-              />
-            </div>
-          </div>
-          
-          <codemirror
-            v-model="editForm.code"
-            :style="{ minHeight: '150px', fontSize: '13px' }"
-            :indent-with-tab="true"
-            :tab-size="2"
-            :extensions="cmExtensions"
-            class="w-full custom-cm"
-          />
-
-          <div class="px-4 py-2.5 bg-black/40 border-t border-white/5 flex justify-end gap-2">
-            <button v-if="editConflict" @click="refreshDraft" class="mr-auto px-2 text-xs text-primary">{{ $t('sharing.refreshDraft') }}</button>
-            <button @click="cancelInlineEdit" class="px-3 py-1.5 text-xs font-semibold rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">{{ $t('code.cancel') }}</button>
-            <button @click="handleSave" :disabled="!canSave" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50">{{ $t('code.saveChanges') }}</button>
-          </div>
-        </div>
-
-        <div v-else class="relative group/code">
+      <div v-if="isExpanded" class="border-t border-border/40 bg-[#0d1117] rounded-b-xl relative z-20 overflow-hidden">
+        <div class="relative group/code">
           <div class="absolute top-0 right-0 left-0 bottom-0 pointer-events-none z-30">
             <div class="sticky top-0 flex justify-end p-3 overflow-hidden">
               <button
@@ -95,6 +60,7 @@
 
       </div>
     </transition>
+    <CodeSnippetEditor v-if="canWrite && isEditing" v-model="editForm" :language-options="languageOptions" :label="t('code.edit')" :submit-label="t('code.saveChanges')" :saving="saving" :refreshing="refreshing" :conflict="editConflict" @save="handleSave" @cancel="cancelInlineEdit" @close="isEditing = false" @refresh="refreshDraft" />
   </article>
 </template>
 
@@ -105,12 +71,9 @@ import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { ChevronDown, Copy, Pencil, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { CodeSnippet } from '@/features/todos/stores/todo'
-import CustomSelect from '@/components/ui/CustomSelect.vue'
+import CodeSnippetEditor from './CodeSnippetEditor.vue'
 
 // CodeMirror & Highlight.js
-import { Codemirror } from 'vue-codemirror'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { javascript } from '@codemirror/lang-javascript'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 
@@ -129,12 +92,11 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const cmExtensions = [oneDark, javascript()]
 
 // Local State
 const isExpanded = ref(false)
 const isEditing = ref(false)
-const editConflict = ref(false), saving = ref(false), baseVersion = ref(props.snippet.version)
+const editConflict = ref(false), saving = ref(false), refreshing = ref(false), baseVersion = ref(props.snippet.version)
 const editForm = useWorkspaceDraft(`code-edit:${props.snippet.id}`, { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code })
 
 const canSave = computed(() => !!editForm.value.title.trim() && !!editForm.value.code.trim())
@@ -174,18 +136,20 @@ const toggleExpanded = () => {
 }
 
 const beginInlineEdit = () => {
+  if (!canWrite.value || saving.value || refreshing.value) return
   baseVersion.value = props.snippet.version; editConflict.value = false
   isEditing.value = true
   isExpanded.value = true
 }
 
 const cancelInlineEdit = () => {
+  if (saving.value || refreshing.value) return
   editForm.value = { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code }
   isEditing.value = false
 }
 
 const handleSave = () => {
-  if (saving.value || !canSave.value) return
+  if (!canWrite.value || saving.value || refreshing.value || !canSave.value) return
   saving.value = true
   emit('update', props.snippet.id, {
     title: editForm.value.title.trim(),
@@ -194,7 +158,14 @@ const handleSave = () => {
     version: baseVersion.value,
   }, (success, conflict) => { saving.value = false; editConflict.value = Boolean(conflict); if (success) isEditing.value = false })
 }
-const refreshDraft = () => emit('refresh', props.snippet.id, version => { if (version !== undefined) baseVersion.value = version })
+const refreshDraft = () => {
+  if (saving.value || refreshing.value) return
+  refreshing.value = true
+  emit('refresh', props.snippet.id, version => {
+    if (version !== undefined) { baseVersion.value = version; editConflict.value = false }
+    refreshing.value = false
+  })
+}
 
 const removeSnippet = () => emit('delete', props.snippet.id)
 const copySnippet = () => emit('copy', props.snippet.code)
@@ -212,14 +183,8 @@ const copySnippet = () => emit('copy', props.snippet.code)
 .slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
 
 :deep(.hljs) { background: transparent !important; padding: 0; }
-pre::-webkit-scrollbar, :deep(.cm-scroller)::-webkit-scrollbar { width: 6px; height: 6px; }
-pre::-webkit-scrollbar-track, :deep(.cm-scroller)::-webkit-scrollbar-track { background: transparent; }
-pre::-webkit-scrollbar-thumb, :deep(.cm-scroller)::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-pre::-webkit-scrollbar-thumb:hover, :deep(.cm-scroller)::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-
-:deep(.custom-cm .cm-editor) { background-color: #0d1117; outline: none !important; }
-:deep(.custom-cm .cm-scroller) { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; padding: 10px 0; }
-:deep(.custom-cm .cm-gutters) { background-color: #0d1117; border-right: 1px solid rgba(255,255,255,0.05); color: #484f58; }
-:deep(.custom-cm .cm-activeLine), :deep(.custom-cm .cm-activeLineGutter) { background-color: rgba(255,255,255,0.03); }
-:deep(.custom-cm .cm-focused) { outline: none !important; }
+pre::-webkit-scrollbar { width: 6px; height: 6px; }
+pre::-webkit-scrollbar-track { background: transparent; }
+pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 </style>

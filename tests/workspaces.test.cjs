@@ -18,12 +18,23 @@ function fixture() {
   }
   const requests = []
   const storage = new Map()
-  const localStorage = { get length(){return storage.size}, key:index=>[...storage.keys()][index]??null, getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }
+  const localStorage = { get length(){return storage.size}, key:index=>[...storage.keys()][index]??null, getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem:key=>storage.delete(key) }
   const holds = new Map()
   const failures = new Set()
   let counter = 0
   const client = {
-    async rpc() { return { data: 'personal', error: null } },
+    async rpc(name,args) {
+      if(name==='delete_workspace'){
+        requests.push({rpc:name,args});if(holds.has('workspaces:delete'))await holds.get('workspaces:delete')
+        if(failures.has('workspaces:delete'))return {data:null,error:{message:'WORKSPACE_SHARED'}}
+        const target=rows.workspaces.find(item=>item.id===args.wid),next=rows.workspaces.find(item=>item.id!==args.wid&&!item.archived_at)
+        rows.workspaces=rows.workspaces.filter(item=>item!==target)
+        if(target.is_default)next.is_default=true
+        return {data:{id:target.id,next_workspace:structuredClone(next)},error:null}
+      }
+      if(name==='trash_change'){requests.push({rpc:name,args});return {data:{id:args.rid,module:args.module_id,version:2,deleted_at:new Date().toISOString()},error:null}}
+      return { data: 'personal', error: null }
+    },
     from(table) {
       let operation = 'select', payload, single = false
       const filters = []
@@ -109,6 +120,22 @@ test('last workspace is scoped to the signed-in user, and create opens an empty 
   assert.equal(f.rows.plans, undefined, 'creating a workspace must not copy existing notes')
 })
 
+test('workspace deletion updates selection only after success, cleans its own drafts and ignores stale account responses',async()=>{
+ const f=fixture();await f.workspaces.load()
+ f.storage.set('workspace:owner:personal:code-draft','secret draft');f.storage.set('workspace:owner:work:code-draft','keep')
+ const release=f.hold('workspaces','delete'),pending=f.workspaces.remove('personal','Personal')
+ assert.equal(f.workspaces.items.length,2);assert.equal(await f.workspaces.remove('personal','Personal'),false)
+ release();assert.equal(await pending,true)
+ assert.equal(f.workspaces.activeId,'work');assert.equal(f.workspaces.active.is_default,true)
+ assert.equal(f.storage.has('workspace:owner:personal:code-draft'),false);assert.equal(f.storage.get('workspace:owner:work:code-draft'),'keep')
+ assert.equal(await f.workspaces.remove('work','Work'),false);assert.equal(f.workspaces.error,'LAST_WORKSPACE')
+ const failed=fixture();await failed.workspaces.load();failed.fail('workspaces','delete')
+ assert.equal(await failed.workspaces.remove('personal','Personal'),false);assert.equal(failed.workspaces.items.length,2);assert.equal(failed.workspaces.activeId,'personal')
+ const stale=fixture();await stale.workspaces.load();const finish=stale.hold('workspaces','delete'),deleting=stale.workspaces.remove('personal','Personal')
+ stale.auth.user={id:'other'};stale.workspaces.reset();finish()
+ assert.equal(await deleting,false);assert.equal(stale.workspaces.items.length,0);assert.equal(stale.workspaces.activeId,'')
+})
+
 test('every module scopes reads, updates and deletes, and stamps inserts with its captured owner/workspace', async () => {
   const f = fixture()
   await f.workspaces.load()
@@ -121,12 +148,15 @@ test('every module scopes reads, updates and deletes, and stamps inserts with it
     await client.from(table).insert({ title: 'new', workspace_id: 'work', user_id: 'intruder', created_by: 'intruder' })
     const calls = f.requests.filter(request => request.table === table)
     const ownerField = ['categories','todos','quick_notes','code_snippets','password_sessions','secure_notes'].includes(table) ? 'created_by' : 'user_id'
-    for (const call of calls.slice(0,3)) {
-      assert.ok(call.filters.some(([key,value]) => key === 'workspace_id' && value === 'personal'))
+    const soft=['todos','quick_notes','code_snippets','plans','periodic_tasks','activity_items','learning_subjects','flashcard_decks','workout_routines'].includes(table)
+    for (const call of calls.slice(0,soft?2:3)) {
+      assert.ok(call.filters.some(([key,value]) => key === 'workspace_id' && value === 'personal'),JSON.stringify({table,call}))
       assert.ok(call.filters.some(([key,value]) => key === ownerField && value === 'owner'))
     }
-    assert.equal(calls[3].payload.workspace_id, 'personal')
-    assert.equal(calls[3].payload[ownerField], 'owner')
+    if(soft){const moved=f.requests.find(request=>request.rpc==='trash_change'&&request.args.module_id===f.load('src/lib/sharing.ts').tableModules[table]);assert.equal(moved.args.wid,'personal');assert.equal(moved.args.rid,'one')}
+    const inserted=calls[soft?2:3]
+    assert.equal(inserted.payload.workspace_id, 'personal')
+    assert.equal(inserted.payload[ownerField], 'owner')
   }
   assert.throws(() => client.from('plans').update({ workspace_id: 'work' }), /ownership/)
   f.workspaces.switchTo('work')

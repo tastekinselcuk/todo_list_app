@@ -28,7 +28,7 @@
 
     <UserProfileMenu :active-view="currentView" :visible="isNavbarVisible" :docked="isTimerDocked" @edit="openAccountSettings" @logout="handleLogout('local')" @reveal="revealNavigation" />
 
-    <div class="app-content pb-8 px-4 sm:px-6" :style="{ paddingTop: isTimerDocked ? '5.5rem' : '7rem' }">
+    <div class="app-content px-4 sm:px-6" :class="currentView === 'workspace' ? 'pb-0' : 'pb-8'" :style="{ paddingTop: isTimerDocked ? '5.5rem' : '7rem' }">
 
       <div v-show="(currentView === 'workspace' && settingsStore.isModuleActive('pomodoro')) || isTimerDocked || hasActiveFocus" class="pomodoro-host mx-auto grid" :style="{ gridTemplateRows: isTimerDocked ? '0fr' : '1fr' }" :class="[isTimerDocked ? 'mb-0' : 'mb-6', settingsStore.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
         <div class="min-h-0 overflow-hidden">
@@ -120,6 +120,7 @@ const targetWorkspaceTab = ref<string | undefined>()
 const accountFocusRequest = ref(0)
 function openAccountSettings() { accountFocusRequest.value++; navigate('settings') }
 const isNavbarVisible = ref(true)
+const workspaceScrollDistances = { reveal: 40, hide: 56 }
 let navigationScroll = createNavigationScrollState()
 let scrollFrame = 0
 let stopReminders: (() => void) | undefined
@@ -140,7 +141,7 @@ function handleScroll() {
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = 0
     const focused = Boolean(document.activeElement?.matches(':focus-visible') && document.activeElement.closest('[data-app-navigation], [data-pomodoro-navigation], [data-user-profile]'))
-    isNavbarVisible.value = updateNavigationScroll(navigationScroll, window.scrollY, focused)
+    isNavbarVisible.value = updateNavigationScroll(navigationScroll, window.scrollY, focused, currentView.value === 'workspace' ? workspaceScrollDistances : undefined)
   })
 }
 function handleNavigationKey(event: KeyboardEvent) {
@@ -196,7 +197,8 @@ onUnmounted(() => {
   if (scrollFrame) cancelAnimationFrame(scrollFrame)
 })
 
-watch(() => authStore.user?.id, async (id) => {
+watch(() => authStore.user?.id, async (id, previous) => {
+  if (previous && previous !== id) uiStore.clearUndoToasts()
   workspaces.reset()
   targetWorkspaceTab.value = undefined
   if (id) await workspaces.load()

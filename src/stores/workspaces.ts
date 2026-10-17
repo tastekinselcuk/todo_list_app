@@ -5,6 +5,7 @@ import { useAuthStore } from './auth'
 import { defaultModules } from '@/lib/workspaceDefaults'
 import { disposeWorkspaceStores } from '@/lib/workspaceScope'
 import type { ModuleBinding } from '@/lib/sharing'
+import { storageKeys } from '@/lib/storage'
 
 export interface Workspace {
   id: string
@@ -169,6 +170,36 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     finally { if (owner === userId.value) busy.value = false }
   }
 
+  async function remove(id: string, expectedName: string) {
+    const target = items.value.find(item => item.id === id)
+    if (!userId.value || busy.value || !target || target.name !== expectedName) return false
+    if (!available.value.some(item => item.id !== id)) { error.value = 'LAST_WORKSPACE'; return false }
+    const owner = userId.value, generation = loadGeneration
+    busy.value = true; error.value = ''
+    try {
+      const result = await supabase.rpc('delete_workspace', { wid: id, expected_name: expectedName })
+      if (result.error) throw result.error
+      if (owner !== userId.value || generation !== loadGeneration) return false
+      const next = result.data?.next_workspace as Workspace | undefined
+      if (!next?.id || result.data?.id !== id) throw new Error('WORKSPACE_DELETE_FAILED')
+      items.value = items.value.filter(item => item.id !== id)
+      const index = items.value.findIndex(item => item.id === next.id)
+      if (next.is_default) items.value.forEach(item => { item.is_default = false })
+      if (index === -1) items.value.push(next)
+      else items.value[index] = next
+      delete bindings.value[id]; bindingsGeneration++
+      try {
+        const prefix = `workspace:${owner}:${id}:`
+        for (const key of storageKeys(prefix)) localStorage.removeItem(key)
+      } catch { /* Deletion is already committed; device storage is optional. */ }
+      if (activeId.value === id) switchTo(next.id)
+      return true
+    } catch (err) {
+      if (owner === userId.value && generation === loadGeneration) error.value = (err as Error).message
+      return false
+    } finally { if (owner === userId.value && generation === loadGeneration) busy.value = false }
+  }
+
   function setModules(modules: string[]) {
     const workspace = active.value
     const owner = userId.value
@@ -189,5 +220,5 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     return settingsQueue.then(() => !error.value)
   }
 
-  return { items, activeId, active, available, loaded, busy, error, userId, sessionKey, sharingAvailable, sharingError, scopeReady, bindings, binding, refreshBindings, load, reset, switchTo, create, configure, setModules }
+  return { items, activeId, active, available, loaded, busy, error, userId, sessionKey, sharingAvailable, sharingError, scopeReady, bindings, binding, refreshBindings, load, reset, switchTo, create, configure, remove, setModules }
 })

@@ -1,14 +1,16 @@
 ﻿<template>
   <div class="workspace-content mx-auto space-y-4">
-    <TodoQuickAdd v-if="canWrite" @open-category-dialog="showCategoryDialog = !showCategoryDialog" />
-    <CategoryModal v-if="canWrite" v-model:open="showCategoryDialog" />
+    <div class="workspace-toolbar space-y-4">
+      <TodoQuickAdd v-if="canWrite" @open-category-dialog="showCategoryDialog = !showCategoryDialog" />
+      <CategoryModal v-if="canWrite" v-model:open="showCategoryDialog" />
 
-    <div class="relative z-30">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <TodoFilters class="max-w-full" v-model:selectedCategories="selectedCategories" v-model:showCompleted="showCompleted" v-model:isGrouped="isGrouped" />
+      <div class="relative z-30">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <TodoFilters class="max-w-full" v-model:selectedCategories="selectedCategories" v-model:showCompleted="showCompleted" v-model:isGrouped="isGrouped" />
+        </div>
+        <div class="note-progress mt-3" role="progressbar" :aria-label="t('todo.completionProgress')" :aria-valuenow="completionPercent" :aria-valuetext="t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length})" :aria-valuemin="0" :aria-valuemax="100"><span :style="{width:completionPercent+'%'}" /></div>
+        <div class="mt-2 flex justify-end text-[11px] text-muted-foreground" aria-live="polite">{{ t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length}) }}</div>
       </div>
-      <div class="note-progress mt-3" role="progressbar" :aria-label="t('todo.completionProgress')" :aria-valuenow="completionPercent" :aria-valuetext="t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length})" :aria-valuemin="0" :aria-valuemax="100"><span :style="{width:completionPercent+'%'}" /></div>
-      <div class="mt-2 flex justify-end text-[11px] text-muted-foreground" aria-live="polite">{{ t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length}) }}</div>
     </div>
 
     <div v-if="loadFailed" role="alert" class="rounded-2xl border border-border/50 px-5 py-8 text-center text-xs text-muted-foreground">
@@ -48,9 +50,10 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { CheckSquare, Loader2 } from 'lucide-vue-next'
 import { useTodoStore, type Todo, type Category } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
@@ -79,7 +82,7 @@ async function loadNotes() {
     loadFailed.value = results.some(result => !result)
   } finally { loading.value = false }
 }
-onMounted(loadNotes)
+useModuleLoad(loadNotes)
 
 const scopedTodos = computed(() => {
   const search=query.value.trim().toLocaleLowerCase(locale.value)
@@ -122,10 +125,8 @@ async function handleDeleteTodo(id: string) {
   if (!canWrite.value || pendingIds.value.has(id)) return
   pendingIds.value.add(id)
   try {
-    const confirmed = await uiStore.showConfirm(t('todo.deleteTask'), t('todo.deleteTaskConfirm'), t('todo.delete'), t('todo.cancel'))
-    if (!confirmed) return
     const saved = await todoStore.deleteTodo(id)
-    uiStore.addToast(t(saved ? 'todo.taskDeleted' : 'todo.saveFailed'), saved ? 'info' : 'error')
+    if (!saved) uiStore.addToast(t('todo.saveFailed'), 'error')
   } finally { pendingIds.value.delete(id) }
 }
 useSearchReveal('detailed', async (hit, isCurrent) => { await todoStore.fetchTodos(hit.record_id);if(!isCurrent())return;selectedCategories.value=[];showCompleted.value=true;query.value='' })

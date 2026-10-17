@@ -1,16 +1,18 @@
 <template>
   <div class="workspace-content space-y-4" style="--workspace-content-limit: 72rem">
-    <FinanceEntryForm :key="editing?.id || editingSchedule?.id || draftId" :entity="tab" :record="editing" :schedule="editingSchedule" :currency="store.summary?.currency || 'TRY'" :draft-id="draftId" @cancel="resetForm" @saved="resetForm" />
+    <div class="workspace-toolbar space-y-4">
+      <FinanceEntryForm :key="editing?.id || editingSchedule?.id || draftId" :entity="tab" :record="editing" :schedule="editingSchedule" :currency="store.summary?.currency || 'TRY'" :draft-id="draftId" @cancel="resetForm" @saved="resetForm" />
 
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
-      <div class="flex items-center gap-1" role="group" :aria-label="t('finance.title')">
-        <button v-for="view in ['transaction','position'] as const" :key="view" type="button" :aria-pressed="tab===view" :disabled="store.saving" class="inline-flex h-8 items-center gap-1.5 rounded-xl px-3 text-xs font-medium transition-colors" :class="tab===view?'bg-background text-foreground shadow-sm ring-1 ring-border/50':'text-muted-foreground hover:bg-background/40 hover:text-foreground'" @click="changeTab(view)"><component :is="view==='transaction'?ArrowLeftRight:TrendingUp" class="h-3.5 w-3.5" />{{ t(view==='transaction'?'finance.cashflow':'finance.positions') }}</button>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <input v-if="tab==='transaction'" v-model="store.month" type="month" min="1900-01" max="2100-12" :aria-label="t('finance.month')" class="finance-input !h-8 !w-36 !text-xs" :disabled="store.saving" />
-        <CustomSelect v-if="store.summary" :model-value="store.summary.currency" :options="currencyOptions" :aria-label="t('finance.currency')" :disabled="store.summary.locked_currency || store.saving" :title="t('finance.currencyHint')" size="sm" class="w-20" @update:model-value="changeCurrency" />
-        <button v-if="openAnalysis" type="button" class="finance-icon" :title="t('finance.analysis')" :aria-label="t('finance.analysis')" @click="openAnalysis"><TrendingUp class="h-3.5 w-3.5" /></button>
-        <button type="button" class="finance-icon" :disabled="store.loading || store.pricing || store.saving" :title="t(tab==='position'?'finance.refreshPrices':'finance.refresh')" :aria-label="t(tab==='position'?'finance.refreshPrices':'finance.refresh')" @click="refresh"><RefreshCw class="h-3.5 w-3.5" :class="(store.loading || store.pricing) && 'animate-spin motion-reduce:animate-none'" /></button>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
+        <div class="flex items-center gap-1" role="group" :aria-label="t('finance.title')">
+          <button v-for="view in ['transaction','position'] as const" :key="view" type="button" :aria-pressed="tab===view" :disabled="store.saving" class="inline-flex h-8 items-center gap-1.5 rounded-xl px-3 text-xs font-medium transition-colors" :class="tab===view?'bg-background text-foreground shadow-sm ring-1 ring-border/50':'text-muted-foreground hover:bg-background/40 hover:text-foreground'" @click="changeTab(view)"><component :is="view==='transaction'?ArrowLeftRight:TrendingUp" class="h-3.5 w-3.5" />{{ t(view==='transaction'?'finance.cashflow':'finance.positions') }}</button>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input v-if="tab==='transaction'" v-model="store.month" type="month" min="1900-01" max="2100-12" :aria-label="t('finance.month')" class="finance-input !h-8 !w-36 !text-xs" :disabled="store.saving" />
+          <CustomSelect v-if="store.summary" :model-value="store.summary.currency" :options="currencyOptions" :aria-label="t('finance.currency')" :disabled="store.summary.locked_currency || store.saving" :title="t('finance.currencyHint')" size="sm" class="w-20" @update:model-value="changeCurrency" />
+          <button v-if="openAnalysis" type="button" class="finance-icon" :title="t('finance.analysis')" :aria-label="t('finance.analysis')" @click="openAnalysis"><TrendingUp class="h-3.5 w-3.5" /></button>
+          <button type="button" class="finance-icon" :disabled="store.loading || store.pricing || store.saving" :title="t(tab==='position'?'finance.refreshPrices':'finance.refresh')" :aria-label="t(tab==='position'?'finance.refreshPrices':'finance.refresh')" @click="refresh"><RefreshCw class="h-3.5 w-3.5" :class="(store.loading || store.pricing) && 'animate-spin motion-reduce:animate-none'" /></button>
+        </div>
       </div>
     </div>
 
@@ -65,16 +67,16 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { useModuleLoad } from '@/lib/workspaceScope'
+import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronDown, TrendingUp, Pause, Pencil, Play, RefreshCw, Repeat2, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import FinanceEntryForm from './FinanceEntryForm.vue'
 import { useFinanceStore } from '../stores/finance'
 import { financeCurrencies, money, validFinanceDate, openFinanceAnalysisKey, investmentInstrument, quoteSources, type FinanceEntity, type FinanceTransaction, type FinancePosition, type FinanceSchedule } from '../lib/finance'
-import { useUIStore } from '@/stores/ui'
 import { useWorkspacesStore } from '@/stores/workspaces'
-const store=useFinanceStore(),ui=useUIStore(),workspaces=useWorkspacesStore(),{t,locale}=useI18n()
+const store=useFinanceStore(),workspaces=useWorkspacesStore(),{t,locale}=useI18n()
 const openAnalysis=inject(openFinanceAnalysisKey)
 const tab=ref<FinanceEntity>('transaction'),editing=ref<FinanceTransaction|FinancePosition|null>(null),editingSchedule=ref<FinanceSchedule|null>(null),draftId=ref(crypto.randomUUID())
 const currencyOptions=financeCurrencies.map(value=>({value,label:value}))
@@ -102,15 +104,13 @@ function changeTab(view:FinanceEntity){if(store.saving)return;tab.value=view;res
 async function changeCurrency(value:string){if(financeCurrencies.some(code=>code===value))await store.mutate('settings','update',null,{currency:value})}
 async function remove(row:FinanceTransaction|FinancePosition) {
  const scope=workspaces.sessionKey,entity=tab.value
- if(!await ui.showConfirm(t('finance.deleteTitle'),t('finance.deleteBody',{title:row.title}),t('common.delete'),t('common.cancel')) || scope!==workspaces.sessionKey)return
- if(await store.mutate(entity,'delete',row.id,{},row.version))resetForm()
+ if(await store.mutate(entity,'delete',row.id,{},row.version) && scope===workspaces.sessionKey)resetForm()
 }
 async function removeSchedule(row:FinanceSchedule) {
  const scope=workspaces.sessionKey
- if(!await ui.showConfirm(t('finance.deleteSchedule'),t('finance.deleteScheduleBody',{title:entryName(row)}),t('common.delete'),t('common.cancel')) || scope!==workspaces.sessionKey)return
- if(await store.mutateSchedule('delete',row.id,{},row.version))resetForm()
+ if(await store.mutateSchedule('delete',row.id,{},row.version) && scope===workspaces.sessionKey)resetForm()
 }
 async function refresh(){await store.load();if(tab.value==='position')await store.refreshPrices()}
 watch(()=>store.month,()=>{if(!store.saving && validFinanceDate(`${store.month}-01`))void store.load()})
-onMounted(async()=>{if(await store.load())void store.refreshPrices()})
+useModuleLoad(async()=>{if(await store.load())void store.refreshPrices()})
 </script>

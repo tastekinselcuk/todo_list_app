@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, readonly, watch, onScopeDispose } from 'vue'
 import { useWorkspacesStore } from './workspaces'
 import { defaultModules } from '@/lib/workspaceDefaults'
-import { isThemePaletteId, type ThemePaletteId } from '@/lib/themePalettes'
+import { normalizeThemePaletteId, type ThemePaletteId } from '@/lib/themePalettes'
 import { i18n } from '@/i18n'
 import { supabase } from '@/lib/supabase'
 import { readStorage, writeStorage, readStoredJSON, writeStoredJSON, supportedLanguage } from '@/lib/storage'
@@ -31,7 +31,7 @@ export function normalizePreferences(input: unknown, defaults = systemDefaults()
     pomodoroPlacement: value.pomodoroPlacement === 'card' || value.pomodoroPlacement === 'navbar' ? value.pomodoroPlacement : defaults.pomodoroPlacement,
     language: value.language === 'en' || value.language === 'tr' ? value.language : defaults.language,
     theme: value.theme === 'light' || value.theme === 'dark' ? value.theme : defaults.theme,
-    themePalette: isThemePaletteId(value.themePalette) ? value.themePalette : defaults.themePalette,
+    themePalette: normalizeThemePaletteId(value.themePalette, defaults.themePalette),
     pomodoroDurations: { ...(validDurations ? durations : defaults.pomodoroDurations) } }
 }
 

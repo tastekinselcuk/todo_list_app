@@ -1,14 +1,17 @@
 <template>
   <div class="workout-view w-full min-w-0 space-y-4">
     <template v-if="!activeRoutine">
-      <form v-if="canWrite" class="flex flex-wrap items-center gap-2.5" @submit.prevent="createProgram">
-        <input v-model="newRoutineTitle" type="text" maxlength="120" required :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programName')" :placeholder="t('workout.routinePlaceholder')" class="workout-input h-10 min-w-40 flex-1" />
-        <CustomSelect v-model="newRoutineDay" :options="dayOptions" :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programDay')" class="w-36 shrink-0" />
-        <button type="submit" :disabled="store.isSaving || store.isLoading || !newRoutineTitle.trim()" class="primary-button h-10"><Plus class="h-3.5 w-3.5" />{{ t('workout.newRoutine') }}</button>
-      </form>
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
-        <div class="flex items-center gap-2"><h2 class="text-xs font-semibold">{{ t('workout.programs') }}</h2><span class="rounded-md bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{{ store.routines.length }}</span></div>
+      <div class="workspace-toolbar space-y-4">
+        <form v-if="canWrite" class="flex flex-wrap items-center gap-2.5" @submit.prevent="createProgram">
+          <input v-model="newRoutineTitle" type="text" maxlength="120" required :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programName')" :placeholder="t('workout.routinePlaceholder')" class="workout-input h-10 min-w-40 flex-1" />
+          <CustomSelect v-model="newRoutineDay" :options="dayOptions" :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programDay')" class="w-36 shrink-0" />
+          <button type="submit" :disabled="store.isSaving || store.isLoading || !newRoutineTitle.trim()" class="primary-button h-10"><Plus class="h-3.5 w-3.5" />{{ t('workout.newRoutine') }}</button>
+        </form>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
+          <div class="flex items-center gap-2"><h2 class="text-xs font-semibold">{{ t('workout.programs') }}</h2><span class="rounded-md bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{{ store.routines.length }}</span></div>
+        </div>
       </div>
+
       <div v-if="loadFailed" role="alert" class="rounded-2xl border border-border/50 p-5 text-center text-xs text-muted-foreground"><p>{{ t('workout.loadFailed') }}</p><button type="button" class="mt-2 text-foreground underline" @click="loadPrograms">{{ t('workout.retry') }}</button></div>
       <div v-else-if="store.isLoading && !store.routines.length" class="flex justify-center py-10" role="status" :aria-label="t('app.loading')"><Loader2 class="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none" /></div>
       <div v-else-if="filtered.length" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -22,22 +25,25 @@
     </template>
 
     <template v-else>
-      <header :data-search-record="activeRoutine.id" class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-2.5">
-          <button type="button" class="icon-button shrink-0" :aria-label="t('workout.back')" :title="t('workout.back')" @click="activeId = ''"><ArrowLeft class="h-4 w-4" /></button>
-          <div class="min-w-0"><h2 class="break-words text-sm font-semibold">{{ activeRoutine.title }}</h2><p class="mt-0.5 text-[11px] text-muted-foreground">{{ dayLabel(activeRoutine.day_of_week) }} · {{ t('workout.exercisesCount', { count: activeRoutine.exercises.length }) }}</p></div>
+      <div class="workspace-toolbar space-y-4">
+        <header :data-search-record="activeRoutine.id" class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex min-w-0 items-center gap-2.5">
+            <button type="button" class="icon-button shrink-0" :aria-label="t('workout.back')" :title="t('workout.back')" @click="activeId = ''"><ArrowLeft class="h-4 w-4" /></button>
+            <div class="min-w-0"><h2 class="break-words text-sm font-semibold">{{ activeRoutine.title }}</h2><p class="mt-0.5 text-[11px] text-muted-foreground">{{ dayLabel(activeRoutine.day_of_week) }} · {{ t('workout.exercisesCount', { count: activeRoutine.exercises.length }) }}</p></div>
+          </div>
+          <div v-if="canWrite" class="flex shrink-0 items-center gap-1">
+            <button type="button" class="icon-button" :disabled="store.isSaving" :aria-label="t('workout.editProgram')" :title="t('workout.editProgram')" @click="editProgram(activeRoutine)"><Pencil class="h-3.5 w-3.5" /></button>
+            <button type="button" class="icon-button" :disabled="store.isSaving" :aria-label="t('workout.duplicateProgram')" :title="t('workout.duplicateProgram')" @click="duplicateProgram(activeRoutine.id)"><Copy class="h-3.5 w-3.5" /></button>
+            <button type="button" class="icon-button hover:!bg-destructive/5 hover:!text-destructive" :disabled="store.isSaving" :aria-label="t('common.delete')" :title="t('common.delete')" @click="deleteProgram(activeRoutine.id)"><Trash2 class="h-3.5 w-3.5" /></button>
+            <button type="button" class="primary-button ml-2 h-9" :disabled="store.isSaving" @click="editedExercise = null; showLibrary = true"><Plus class="h-3.5 w-3.5" />{{ t('workout.addExercise') }}</button>
+          </div>
+        </header>
+        <div v-if="activeRoutine.exercises.length" class="space-y-2">
+          <div class="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"><span class="tabular-nums">{{ t('workout.completedCount', { completed, total: activeRoutine.exercises.length }) }}</span><button v-if="canWrite && completed" type="button" :disabled="store.isSaving" class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/50 hover:text-foreground" @click="resetProgram"><RotateCcw class="h-3 w-3" />{{ t('workout.resetRoutine') }}</button></div>
+          <div class="h-0.5 overflow-hidden rounded-full bg-border/40"><div class="h-full rounded-full bg-teal-500/70 transition-[width] duration-300 motion-reduce:transition-none" :style="{ width: progress + '%' }" /></div>
         </div>
-        <div v-if="canWrite" class="flex shrink-0 items-center gap-1">
-          <button type="button" class="icon-button" :disabled="store.isSaving" :aria-label="t('workout.editProgram')" :title="t('workout.editProgram')" @click="editProgram(activeRoutine)"><Pencil class="h-3.5 w-3.5" /></button>
-          <button type="button" class="icon-button" :disabled="store.isSaving" :aria-label="t('workout.duplicateProgram')" :title="t('workout.duplicateProgram')" @click="duplicateProgram(activeRoutine.id)"><Copy class="h-3.5 w-3.5" /></button>
-          <button type="button" class="icon-button hover:!bg-destructive/5 hover:!text-destructive" :disabled="store.isSaving" :aria-label="t('common.delete')" :title="t('common.delete')" @click="deleteProgram(activeRoutine.id)"><Trash2 class="h-3.5 w-3.5" /></button>
-          <button type="button" class="primary-button ml-2 h-9" :disabled="store.isSaving" @click="editedExercise = null; showLibrary = true"><Plus class="h-3.5 w-3.5" />{{ t('workout.addExercise') }}</button>
-        </div>
-      </header>
-      <div v-if="activeRoutine.exercises.length" class="space-y-2">
-        <div class="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"><span class="tabular-nums">{{ t('workout.completedCount', { completed, total: activeRoutine.exercises.length }) }}</span><button v-if="canWrite && completed" type="button" :disabled="store.isSaving" class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/50 hover:text-foreground" @click="resetProgram"><RotateCcw class="h-3 w-3" />{{ t('workout.resetRoutine') }}</button></div>
-        <div class="h-0.5 overflow-hidden rounded-full bg-border/40"><div class="h-full rounded-full bg-teal-500/70 transition-[width] duration-300 motion-reduce:transition-none" :style="{ width: progress + '%' }" /></div>
       </div>
+
       <div v-if="activeRoutine.exercises.length" class="grid grid-cols-1 items-start gap-2.5 min-[1440px]:grid-cols-2">
         <WorkoutExerciseRow v-for="exercise in activeRoutine.exercises" :key="exercise.id" :exercise="exercise" :data-search-record="activeRoutine.id" :data-search-child="exercise.id" :disabled="store.isSaving" @edit="editExercise" @delete="deleteExercise" @toggle="toggleExercise" />
       </div>
@@ -61,8 +67,9 @@
 </template>
 
 <script setup lang="ts">
+import { useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowLeft, CheckCircle2, Copy, Dumbbell, Loader2, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
@@ -90,7 +97,7 @@ const programDialog = ref<HTMLDialogElement>(), editingProgram = ref<Routine | n
 const failed = () => ui.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
 
 async function loadPrograms() { loadFailed.value = !await store.fetchRoutines() }
-onMounted(loadPrograms)
+useModuleLoad(loadPrograms)
 watch(() => [store.routines, store.isLoading], () => { if (!store.isLoading && activeId.value && !activeRoutine.value) { activeId.value = ''; showLibrary.value = false } })
 watch(canWrite, writable => { if (!writable) { showLibrary.value = false; programDialog.value?.close() } })
 async function createProgram() {
@@ -127,7 +134,6 @@ async function duplicateProgram(id: string) {
 }
 async function deleteProgram(id: string) {
   if (!canWrite.value || store.isSaving) return
-  if (!await ui.showConfirm(t('workout.deleteProgram'), t('workout.deleteRoutineConfirm'), t('common.delete'), t('common.cancel'))) return
   if (!await store.deleteRoutine(id)) { failed(); return }
   if (activeId.value === id) activeId.value = ''
 }
@@ -150,7 +156,6 @@ async function updateExercise(id: string, input: ExerciseInput, version?: number
 async function deleteExercise(id: string) {
   const routine = activeRoutine.value
   if (!routine || !canWrite.value || store.isSaving) return
-  if (!await ui.showConfirm(t('workout.deleteExercise'), t('workout.deleteExerciseConfirm'), t('common.delete'), t('common.cancel'))) return
   if (!await store.deleteExercise(routine.id, id)) failed()
 }
 async function toggleExercise(id: string) {

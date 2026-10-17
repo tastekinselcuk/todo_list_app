@@ -101,6 +101,16 @@ test('failed deletion retains notes, reports failure and successful deletion per
   assert.equal(h.store.todos.length, 3)
 })
 
+test('restoring a detailed note preserves its manual position across refreshes and subsequent reordering',async()=>{
+ const h=fixture();await h.store.fetchTodos()
+ h.store.reorderTodos([h.store.todos[1],h.store.todos[0],h.store.todos[2],h.store.todos[3]])
+ const original=copy(h.rows.todos.find(row=>row.id==='a'))
+ await h.store.deleteTodo('a');await h.store.fetchTodos()
+ h.store.reorderTodos([h.store.todos[2],h.store.todos[0],h.store.todos[1]])
+ h.rows.todos.push(original);await h.store.fetchTodos()
+ assert.deepEqual(ids(h.store),['d','a','b','c'],'the trashed slot stays in the saved manual order')
+})
+
 test('completion captures the new shared version for subsequent editing and failed writes leave it unchanged', async () => {
   const h = fixture(); await h.store.fetchTodos()
   assert.equal(await h.store.toggleTodo('a'), true)
@@ -124,25 +134,47 @@ test('viewers cannot reorder locally or send note writes', async () => {
 
 const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}), insert() {}, remove() {}, setText() {}, setElementText() {}, patchProp() {}, parentNode() {}, nextSibling() {} })
 const settle = async () => { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick() }
-function setupState(file, store, props = {}, viewer = false) {
+function setupState(file, store, props = {}, viewer = false, globals = {}) {
   const toasts = [], events = []
   const dependencies = {
-    '@/lib/workspaceScope': { useModuleAccess: () => ({ canWrite: vue.computed(() => !viewer) }), useWorkspaceDraft: (_key, value) => vue.ref(copy(value)) },
+    '@/lib/workspaceScope': { useModuleLoad: callback => vue.onMounted(callback), useModuleAccess: () => ({ canWrite: vue.computed(() => !viewer) }), useWorkspaceDraft: (_key, value) => vue.ref(copy(value)) },
     '@/features/todos/stores/todo': { useTodoStore: () => store, TODO_TITLE_MAX_LENGTH:120 },
-    '@/stores/ui': { useUIStore: () => ({ addToast: (...args) => toasts.push(args), showConfirm: async () => true }) },
+    '@/stores/ui': { useUIStore: () => ({ addToast: (...args) => toasts.push(args), showConfirm: async () => assert.fail('note deletion must not open a confirmation') }) },
     'vue-i18n': { useI18n: () => ({ t: key => key, locale: vue.ref('tr') }) },
     '@vueuse/core': { onClickOutside: () => () => {} },
     '@/components/ui/CustomSelect.vue': { default: { setup: () => () => vue.h('div') } },
-    './TodoQuickAdd.vue': { default: {} }, './TodoFilters.vue': { default: {} }, './TodoCard.vue': { default: {} }, './CategoryModal.vue': { default: {} }, './RichTextEditor.vue': { default: {} },
+    './TodoQuickAdd.vue': { default: {} }, './TodoFilters.vue': { default: {} }, './TodoCard.vue': { default: {} }, './CategoryModal.vue': { default: {} }, './RichTextEditor.vue': { default: {} }, './QuickNoteItem.vue': { default: {} },
   }
   const descriptor = parse(fs.readFileSync(file, 'utf8')).descriptor
   const source = compileScript(descriptor, { id: file }).content
-  const component = load(source, dependencies, { document: { addEventListener() {}, removeEventListener() {} } }).default
+  const component = load(source, dependencies, { document: { addEventListener() {}, removeEventListener() {} }, ...globals }).default
   let state
   const app = renderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit: (...args) => events.push(args) }); return () => vue.h('div') } })
   app.mount({})
   return { state, app, events, toasts, dependencies }
 }
+
+test('quick and detailed notes delete immediately, deduplicate repeated clicks and retain rows on failure',async()=>{
+  const h=fixture()
+  h.rows.quick_notes=[{id:'quick-one',content:'Quick note',completed:false,created_at:'2026-10-17'}]
+  const board=setupState('src/features/todos/components/TodoBoard.vue',h.store)
+  const quick=setupState('src/features/quick_notes/components/QuickNotes.vue',h.store)
+  try{
+    await settle()
+    for(const [table,id,view,handler] of [['todos','a',board,'handleDeleteTodo'],['quick_notes','quick-one',quick,'handleDeleteQuickNote']]){
+      h.hold();h.failures.add('delete')
+      const pending=view.state[handler](id)
+      await view.state[handler](id);await settle()
+      assert.equal(h.calls.filter(call=>call.table===table&&call.operation==='delete').length,1)
+      assert.ok(h.rows[table].some(row=>row.id===id),'the row stays visible until the request succeeds')
+      h.resume();await pending
+      assert.ok(h.rows[table].some(row=>row.id===id));assert.equal(view.toasts.at(-1)[1],'error')
+      h.failures.clear();await view.state[handler](id)
+      assert.equal(h.rows[table].some(row=>row.id===id),false)
+      assert.equal(view.toasts.filter(toast=>toast[1]==='info').length,0,'the shared Undo notification replaces a plain success toast')
+    }
+  }finally{board.app.unmount();quick.app.unmount()}
+})
 
 test('board combines search, categories and completion without legacy priority filtering', async () => {
   const h = fixture()
@@ -314,6 +346,36 @@ test('notes open in reading mode, enter editing explicitly and retain failed cha
   viewer.app.unmount()
 })
 
+test('cards toggle from the summary and padding while expanded details, selection and controls stay open',async()=>{
+  const {JSDOM}=require('jsdom'),dom=new JSDOM('<article><div class="note-summary"><p>Preview text</p></div><div class="note-reveal"><div class="note-reveal-body"><p>Readable text</p><time>Today</time><a href="https://example.test">Link</a><button>Edit</button><summary>Toggle</summary><img src="https://example.test/photo.png"></div></div></article>')
+  const h=fixture();await h.store.fetchTodos()
+  const props=vue.reactive({todo:copy(h.store.todos[0]),color:'#64748b',categoryName:'Work',disabled:false})
+  const f=setupState('src/features/todos/components/TodoCard.vue',h.store,props,false,{window:dom.window})
+  const article=dom.window.document.querySelector('article'),paragraph=article.querySelector('.note-summary p')
+  f.state.itemRef.value=article
+  const click=target=>f.state.onCardClick({target})
+  try{
+    click(article);assert.equal(f.state.isExpanded.value,true)
+    click(paragraph);assert.equal(f.state.isExpanded.value,false,'preview text closes the card')
+    click(paragraph);assert.equal(f.state.isExpanded.value,true)
+    for(const element of article.querySelectorAll('.note-reveal,.note-reveal-body,.note-reveal p,time')){
+      click(element);assert.equal(f.state.isExpanded.value,true,'reading text or clicking blank detail space must not close the note')
+    }
+    for(const element of article.querySelectorAll('a,button,summary,img')){
+      click(element);assert.equal(f.state.isExpanded.value,true,'interactive content must keep its own behavior')
+    }
+    const selection=dom.window.getSelection(),range=dom.window.document.createRange()
+    range.selectNodeContents(paragraph);selection.addRange(range)
+    click(paragraph);assert.equal(f.state.isExpanded.value,true,'selecting text must not close the note')
+    selection.removeAllRanges();click(article);assert.equal(f.state.isExpanded.value,false)
+    props.disabled=true;click(article);assert.equal(f.state.isExpanded.value,false)
+    props.disabled=false;f.state.mediaBusy.value=true;click(article);assert.equal(f.state.isExpanded.value,false)
+    f.state.mediaBusy.value=false;f.state.startEdit();click(article)
+    assert.equal(f.state.isEditing.value,true);assert.equal(f.state.isExpanded.value,true)
+    assert.equal(f.events.length,0,'body clicks must not complete or delete notes')
+  }finally{f.app.unmount();dom.window.close()}
+})
+
 test('completion progress follows category and search scope even when completed cards are hidden',async()=>{
   const h=fixture()
   const {state,app}=setupState('src/features/todos/components/TodoBoard.vue',h.store)
@@ -327,4 +389,28 @@ test('completion progress follows category and search scope even when completed 
     assert.equal(state.filteredTodosArray.value.length,0);assert.equal(state.completionPercent.value,100)
     state.query.value='missing';assert.equal(state.completionPercent.value,0)
   }finally{app.unmount()}
+})
+
+test('editing dialog locks the page, protects in-flight changes and restores scroll styles when leaving or unmounting',async()=>{
+  const h=fixture();await h.store.fetchTodos()
+  const browser={body:{style:{overflow:'auto'}},documentElement:{style:{overflow:'scroll',scrollbarGutter:'auto'}}}
+  const props=vue.reactive({todo:copy(h.store.todos[0]),color:'#64748b',categoryName:'Work'})
+  const f=setupState('src/features/todos/components/TodoCard.vue',h.store,props,false,{document:browser})
+  const dialog={open:false,opens:0,showModal(){this.open=true;this.opens++},close(){this.open=false}}
+  f.state.editDialogRef.value=dialog
+  try{
+    f.state.startEdit();await settle()
+    assert.equal(dialog.open,true);assert.equal(browser.body.style.overflow,'hidden');assert.equal(browser.documentElement.style.overflow,'hidden')
+    f.state.editForm.value.title='A retained draft'
+    f.state.saving.value=true;f.state.leaveEditing();assert.equal(f.state.isEditing.value,true)
+    f.state.saving.value=false;f.state.mediaBusy.value=true;f.state.leaveEditing();assert.equal(f.state.isEditing.value,true)
+    f.state.mediaBusy.value=false;f.state.leaveEditing();await settle()
+    assert.equal(dialog.open,false);assert.equal(f.state.isExpanded.value,true)
+    assert.equal(f.state.editForm.value.title,'A retained draft')
+    assert.equal(browser.body.style.overflow,'auto');assert.equal(browser.documentElement.style.overflow,'scroll')
+    assert.equal(browser.documentElement.style.scrollbarGutter,'auto')
+    f.state.startEdit();await settle()
+    assert.equal(dialog.open,true)
+  }finally{f.app.unmount()}
+  assert.equal(dialog.open,false);assert.equal(browser.body.style.overflow,'auto')
 })

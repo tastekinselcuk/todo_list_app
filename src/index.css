@@ -117,3 +117,40 @@
 @media (prefers-reduced-motion: reduce) {
   .note-reveal-enter-active, .note-reveal-leave-active, .note-reveal-body { transition: none; }
 }
+
+
+/* The document owns the scrollbar; this frame stays flush with the viewport. */
+.workspace-shell {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  isolation: isolate;
+  background-color: hsl(var(--card));
+}
+.workspace-navigation { flex: 0 0 auto; z-index: 40; }
+.workspace-viewport {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  overflow-anchor: none;
+}
+.workspace-module-content { display: flow-root; }
+.workspace-shell .workspace-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  isolation: isolate;
+}
+.workspace-shell .workspace-toolbar::before {
+  content: '';
+  position: absolute;
+  inset: -5px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: hsl(var(--card));
+}
+.workspace-shell[data-long-toolbar] .workspace-toolbar { position: relative; top: auto; }
+.workspace-shell [data-search-record] { scroll-margin-block: 8px; }

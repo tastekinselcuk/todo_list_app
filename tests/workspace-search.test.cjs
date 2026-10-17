@@ -197,6 +197,31 @@ test('a late destination prepare cannot reveal a previous selection or report an
   finally { app.unmount() }
 })
 
+test('search uses the workspace viewport navigator and respects reduced motion', async () => {
+  const {JSDOM}=require('jsdom')
+  const dom=new JSDOM('<section id="workspace-panel-quick"><article data-search-record="record"></article></section>')
+  const card=dom.window.document.querySelector('article'), calls=[], timers=new Map()
+  card.scrollIntoView=()=>assert.fail('nested workspace search must use its single document scroll range')
+  const nav=load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'),{vue},{
+    document:dom.window.document,window:{matchMedia:()=>({matches:true})},MutationObserver:dom.window.MutationObserver,
+    setTimeout:fn=>{timers.set(1,fn);return 1},clearTimeout:id=>timers.delete(id),
+  })
+  const destination=vue.ref({...hit(),record_id:'record',sequence:1})
+  const child={setup(){nav.useSearchReveal('quick',async()=>{});return()=>vue.h('div')}}
+  const renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})
+  const app=renderer.createApp({setup(){
+    vue.provide(nav.searchDestinationKey,destination)
+    vue.provide(nav.searchScrollKey,(element,behavior)=>calls.push({element,behavior}))
+    return()=>vue.h(child)
+  }})
+  app.mount({})
+  try {
+    await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(calls.length,1);assert.equal(calls[0].element,card);assert.equal(calls[0].behavior,'instant')
+    assert.equal(dom.window.document.activeElement,card)
+  } finally {app.unmount();dom.window.close()}
+})
+
 test('opening an older note fetches that specific record, and a late first-page response cannot remove it', async () => {
   const pinia = require('pinia');pinia.setActivePinia(pinia.createPinia())
   const requests = [], located = []

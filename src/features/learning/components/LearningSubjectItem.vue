@@ -117,7 +117,6 @@ import { useModuleAccess } from '@/lib/workspaceScope'
 import { ref, computed } from 'vue'
 import { ChevronDown, BookOpen, PenTool, Award, Trash2, Plus } from 'lucide-vue-next'
 import { useLearningStore, type Subject, type Topic } from '@/features/learning/stores/learning'
-import { useI18n } from 'vue-i18n'
 
 const { canWrite } = useModuleAccess('learning')
 
@@ -131,7 +130,6 @@ defineEmits<{
 }>()
 
 const learningStore = useLearningStore()
-const { t } = useI18n()
 
 // Sadece bu karta ait Topic Title state'i
 const newTopicTitle = ref('')
@@ -169,9 +167,7 @@ const handleAddTopic = async () => {
 }
 
 const handleDeleteSubject = () => {
-  if (confirm(t('learning.deleteConfirm'))) {
-    learningStore.deleteSubject(props.subject.id)
-  }
+  if (canWrite.value) void learningStore.deleteSubject(props.subject.id)
 }
 </script>
 

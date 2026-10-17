@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, ChevronDown, Layers, Search, Settings2 } from 'lucide-vue-next'
+import { Check, ChevronDown, Layers, Search, Settings2, Trash2 } from 'lucide-vue-next'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
-const emit = defineEmits<{ manage: [] }>()
+const emit = defineEmits<{ manage: []; trash: [] }>()
 const store = useWorkspacesStore()
 const { t } = useI18n()
 const open = ref(false)
@@ -58,6 +58,7 @@ onBeforeUnmount(() => {
         <button v-for="item in matches" :key="item.id" type="button" data-workspace class="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-xs transition-colors hover:bg-primary/10 focus-visible:bg-primary/10 focus-visible:outline-none" :class="item.id === store.activeId ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'" :aria-pressed="item.id === store.activeId" @click="select(item.id)"><span class="truncate">{{ item.name }}</span><Check v-if="item.id === store.activeId" class="h-3.5 w-3.5 shrink-0" /></button>
         <p v-if="!matches.length" class="p-3 text-xs text-muted-foreground">{{ t('workspaces.noResults') }}</p>
       </div>
+      <button type="button" class="flex w-full items-center gap-2 border-t border-border/40 px-4 py-3 text-xs text-muted-foreground hover:bg-muted/50" @click="close(); trigger?.focus({preventScroll:true}); emit('trash')"><Trash2 class="h-3.5 w-3.5" />{{ t('trash.title') }}</button>
       <button type="button" class="flex w-full items-center gap-2 border-t border-border/40 px-4 py-3 text-xs text-muted-foreground hover:bg-muted/50" @click="close(); emit('manage')"><Settings2 class="h-3.5 w-3.5" />{{ t('workspaces.manage') }}</button>
     </div>
   </Teleport>

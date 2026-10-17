@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess } from '@/lib/workspaceScope'
+import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { computed, ref, nextTick, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
+import { computed, ref, nextTick, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowUpRight, Check, Clock3, Copy, History, Trash2, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
@@ -123,7 +123,6 @@ async function deletePlan(plan: Plan) {
   if (store.busy || store.isSaving(plan.id)) return
   if (await store.remove(plan.id)) {
     if (editing.value?.id === plan.id) editing.value = null
-    ui.addToast(copy.value.deleted, 'success')
   } else {
     ui.addToast(copy.value.deleteFailed, 'error')
   }
@@ -142,7 +141,10 @@ async function resume(plan: Plan) {
 }
 watch(selected, value => { inputPeriod.value = value; periodChosen = true })
 let timer: ReturnType<typeof setInterval> | undefined
-onActivated(() => { void refresh(true); timer = setInterval(() => { if (periodStart('daily', new Date(), store.timezone) !== periodStart('daily', today.value, store.timezone)) void refresh() }, 30000) })
+function watchDay() { clearInterval(timer); timer = setInterval(() => { if (periodStart('daily', new Date(), store.timezone) !== periodStart('daily', today.value, store.timezone)) void refresh() }, 30000) }
+onMounted(watchDay)
+onActivated(watchDay)
+useModuleLoad(() => refresh(true))
 onDeactivated(() => { clearInterval(timer); editing.value = null })
 onUnmounted(() => clearInterval(timer))
 useSearchReveal('plans', async (hit, isCurrent) => {
@@ -158,32 +160,34 @@ useSearchReveal('plans', async (hit, isCurrent) => {
 
 <template>
   <section class="plans-shell" :aria-busy="store.busy">
-    <form v-if="canWrite" class="capture" @submit.prevent="add">
-      <div class="capture-field">
-        <input v-model="title" type="text" :aria-label="copy.placeholder" :placeholder="copy.placeholder" maxlength="1000" />
-        <div class="period-select">
-          <CustomSelect
-            :model-value="inputPeriod"
-            @update:model-value="inputPeriod = $event as Period"
-            :options="periodOptions"
-            variant="ghost"
-            size="sm"
-            :aria-label="copy.current"
-          />
+    <div class="workspace-toolbar">
+      <form v-if="canWrite" class="capture" @submit.prevent="add">
+        <div class="capture-field">
+          <input v-model="title" type="text" :aria-label="copy.placeholder" :placeholder="copy.placeholder" maxlength="1000" />
+          <div class="period-select">
+            <CustomSelect
+              :model-value="inputPeriod"
+              @update:model-value="inputPeriod = $event as Period"
+              :options="periodOptions"
+              variant="ghost"
+              size="sm"
+              :aria-label="copy.current"
+            />
+          </div>
         </div>
+        <button class="add-button" :disabled="!title.trim() || store.busy">{{ copy.add }}</button>
+      </form>
+
+      <div v-if="store.error" role="alert" class="error-message"><p>{{ copy.setup }}</p><button :disabled="store.busy" @click="refresh(true)">{{ copy.retry }}</button></div>
+      <div class="period-toolbar">
+        <nav class="period-tabs" :aria-label="copy.current"><button v-for="period in periods" :key="period" :class="{ selected: selected === period }" :aria-pressed="selected === period" @click="selected = period">{{ copy[period] }}<span v-if="count(period)">{{ count(period) }}</span></button></nav>
+        <button class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory = !showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{ on: showHistory }"><i></i></span></button>
       </div>
-      <button class="add-button" :disabled="!title.trim() || store.busy">{{ copy.add }}</button>
-    </form>
 
-    <div v-if="store.error" role="alert" class="error-message"><p>{{ copy.setup }}</p><button :disabled="store.busy" @click="refresh(true)">{{ copy.retry }}</button></div>
-    <div class="period-toolbar">
-      <nav class="period-tabs" :aria-label="copy.current"><button v-for="period in periods" :key="period" :class="{ selected: selected === period }" :aria-pressed="selected === period" @click="selected = period">{{ copy[period] }}<span v-if="count(period)">{{ count(period) }}</span></button></nav>
-      <button class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory = !showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{ on: showHistory }"><i></i></span></button>
-    </div>
-
-    <div class="progress-track" role="progressbar" :aria-label="copy.progress" :aria-valuenow="progress" :aria-valuemin="0" :aria-valuemax="100"><span :style="{ width: `${progress}%` }"></span></div>
-    <div class="completion-summary" aria-live="polite">
-      <span class="completion-count">{{ progress }}% · {{ completed.length }}/{{ currentPlans.length }} {{ copy.done }}</span>
+      <div class="progress-track" role="progressbar" :aria-label="copy.progress" :aria-valuenow="progress" :aria-valuemin="0" :aria-valuemax="100"><span :style="{ width: `${progress}%` }"></span></div>
+      <div class="completion-summary" aria-live="polite">
+        <span class="completion-count">{{ progress }}% · {{ completed.length }}/{{ currentPlans.length }} {{ copy.done }}</span>
+      </div>
     </div>
 
     <div v-if="!currentPlans.length && !store.busy && !store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
@@ -224,7 +228,7 @@ useSearchReveal('plans', async (hit, isCurrent) => {
 
 <style scoped>
 .plan-native-dialog {
-  --plan-accent:#73816b;
+  --plan-accent:hsl(var(--primary));
   background:transparent;
   border:0;
   padding:0;
@@ -236,9 +240,12 @@ useSearchReveal('plans', async (hit, isCurrent) => {
   backdrop-filter:blur(4px)
 }
 .plans-shell {
-  --plan-accent:#73816b;
+  --plan-accent:hsl(var(--primary));
   padding:0;
   color:hsl(var(--foreground))
+}
+.plans-shell > .workspace-toolbar {
+  margin-bottom:16px
 }
 .capture {
   display:flex;
@@ -376,12 +383,12 @@ useSearchReveal('plans', async (hit, isCurrent) => {
 }
 .switch-track.on i {
   transform:translateX(12px);
-  background:white
+  background:hsl(var(--primary-foreground))
 }
 .completion-summary {
   display:flex;
   justify-content:flex-end;
-  padding:8px 0 10px
+  padding:8px 0 0
 }
 .completion-count {
   font-size:11px;
@@ -434,7 +441,7 @@ useSearchReveal('plans', async (hit, isCurrent) => {
 .completed .task-check {
   background:var(--plan-accent);
   border-color:var(--plan-accent);
-  color:white
+  color:hsl(var(--primary-foreground))
 }
 .task-content {
   flex:1;

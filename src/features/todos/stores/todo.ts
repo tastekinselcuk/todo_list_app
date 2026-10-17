@@ -255,7 +255,7 @@ export const useTodoStore = defineStore('todo', () => {
       todos.value = positions.size
         ? [...fetched.filter(todo => !positions.has(todo.id)), ...fetched.filter(todo => positions.has(todo.id)).sort((a, b) => positions.get(a.id)! - positions.get(b.id)!)]
         : fetched
-      if (positions.size) todoOrder.value = todos.value.map(todo => todo.id)
+      if (positions.size) todoOrder.value = [...fetched.filter(todo=>!positions.has(todo.id)).map(todo=>todo.id),...todoOrder.value]
       return true
     } catch (err) {
       if (request !== fetchTodosGeneration) return false
@@ -432,7 +432,6 @@ export const useTodoStore = defineStore('todo', () => {
       if (err) throw err
       
       todos.value = todos.value.filter(t => t.id !== id)
-      todoOrder.value = todoOrder.value.filter(todoId => todoId !== id)
       return true
     } catch (err) {
       error.value = (err as Error).message
@@ -463,7 +462,9 @@ export const useTodoStore = defineStore('todo', () => {
     }).map(todo => current.get(todo.id)!)
     let index = 0
     todos.value = todos.value.map(todo => seen.has(todo.id) ? ordered[index++]! : todo)
-    todoOrder.value = todos.value.map(todo => todo.id)
+    const activeOrder=todos.value.map(todo=>todo.id),activeIds=new Set(activeOrder),previous=new Set(todoOrder.value)
+    const retained=activeOrder.filter(id=>previous.has(id));let cursor=0
+    todoOrder.value=[...activeOrder.filter(id=>!previous.has(id)),...todoOrder.value.map(id=>activeIds.has(id)?retained[cursor++]!:id)]
   }
 
   // ===== QUICK NOTES OPERATIONS =====

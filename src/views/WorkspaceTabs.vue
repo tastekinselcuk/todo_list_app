@@ -1,50 +1,58 @@
 <template>
-  <div
-    class="group/workspace bg-card/60 backdrop-blur-3xl text-card-foreground px-4 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/10 dark:border-white/5 space-y-4 relative overflow-hidden"
-    :style="{ '--workspace-content-max': settingsStore.isFullScreen ? 'none' : undefined }"
-  >
-    
-    <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
-
-    <div class="relative z-20 pr-16 !mt-0"><WorkspacePicker @manage="$emit('manage-workspaces')" /></div>
-
-    <button ref="searchTrigger" type="button" class="absolute top-4 right-12 z-20 !m-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :title="`${t('search.title')} (Ctrl/⌘ K)`" :aria-label="t('search.title')" aria-haspopup="dialog" @click="openTabSearch"><Search class="h-4 w-4" /></button>
-
-    <div class="relative z-10 pr-7">
-      <WorkspaceTabStrip v-model="activeTab" :tabs="stripTabs" />
-    </div>
-
-    <button
-      type="button"
-      class="absolute top-4 right-4 z-20 !m-0 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-300 opacity-0 scale-90 pointer-events-none group-hover/workspace:opacity-100 group-hover/workspace:scale-100 group-hover/workspace:pointer-events-auto focus-visible:opacity-100 focus-visible:scale-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 [@media(hover:none)]:pointer-events-auto"
-      :title="widthToggleLabel"
-      :aria-label="widthToggleLabel"
-      :aria-pressed="settingsStore.isFullScreen"
-      @click="settingsStore.isFullScreen = !settingsStore.isFullScreen"
+  <div ref="workspaceStage" class="workspace-stage relative">
+    <div
+      ref="workspaceShell"
+      class="workspace-shell group/workspace bg-card/60 text-card-foreground px-4 pb-5 pt-3 sm:px-6 sm:pb-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border/60 relative"
+      :style="{ '--workspace-content-max': settingsStore.isFullScreen ? 'none' : undefined }"
     >
-      <Shrink v-if="settingsStore.isFullScreen" class="w-4 h-4" />
-      <Expand v-else class="w-4 h-4" />
-    </button>
 
-    <div class="relative z-10">
-      <Transition name="module-switch" mode="out-in" appear>
-        <KeepAlive :max="moduleCatalog.length">
-          <WorkspaceModulePane v-if="currentComponent" :key="activeTab" :tab-id="activeTab" :module-component="currentComponent" />
-        </KeepAlive>
-      </Transition>
-      <div v-if="!activeModules.length" class="flex min-h-40 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/50 p-4 text-center">
-        <p class="text-sm text-muted-foreground">{{ t('workspace.noEnabledTabs') }}</p>
-        <button type="button" class="rounded-xl border border-border/50 px-3 py-2 text-xs hover:bg-muted/50" @click="$emit('manage-workspaces')">{{ t('app.settings') }}</button>
+      <div class="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"><div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div></div>
+
+      <div ref="workspaceNavigation" class="workspace-navigation relative space-y-2 !mt-0">
+        <div class="relative z-20 pr-16 !mt-0"><WorkspacePicker @trash="trashOpen = true" @manage="$emit('manage-workspaces')" /></div>
+
+        <button ref="searchTrigger" type="button" class="absolute top-0 right-8 z-20 !m-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :title="`${t('search.title')} (Ctrl/⌘ K)`" :aria-label="t('search.title')" aria-haspopup="dialog" @click="openTabSearch"><Search class="h-4 w-4" /></button>
+
+        <div class="relative z-10 pr-7">
+          <WorkspaceTabStrip v-model="activeTab" :tabs="stripTabs" />
+        </div>
+
+        <button
+          type="button"
+          class="absolute top-0 right-0 z-20 !m-0 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-300 opacity-0 scale-90 pointer-events-none group-hover/workspace:opacity-100 group-hover/workspace:scale-100 group-hover/workspace:pointer-events-auto focus-visible:opacity-100 focus-visible:scale-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 [@media(hover:none)]:pointer-events-auto"
+          :title="widthToggleLabel"
+          :aria-label="widthToggleLabel"
+          :aria-pressed="settingsStore.isFullScreen"
+          @click="settingsStore.isFullScreen = !settingsStore.isFullScreen"
+        >
+          <Shrink v-if="settingsStore.isFullScreen" class="w-4 h-4" />
+          <Expand v-else class="w-4 h-4" />
+        </button>
       </div>
-    </div>
 
-    <WorkspaceSearch ref="contentSearch" :enabled="activeModules.map(tab => tab.id)" @select="selectSearchHit" />
-    
+      <div ref="moduleViewport" class="workspace-viewport relative z-10">
+        <div ref="moduleContent" class="workspace-module-content">
+          <Transition name="module-switch" mode="out-in" appear @after-enter="workspaceScroll?.settle()">
+            <KeepAlive :max="moduleCatalog.length">
+              <WorkspaceModulePane v-if="currentComponent" :key="activeTab" :tab-id="activeTab" :module-component="currentComponent" />
+            </KeepAlive>
+          </Transition>
+          <div v-if="!activeModules.length" class="flex min-h-40 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/50 p-4 text-center">
+            <p class="text-sm text-muted-foreground">{{ t('workspace.noEnabledTabs') }}</p>
+            <button type="button" class="rounded-xl border border-border/50 px-3 py-2 text-xs hover:bg-muted/50" @click="$emit('manage-workspaces')">{{ t('app.settings') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <WorkspaceTrash v-if="trashOpen" @close="trashOpen = false" />
+      <WorkspaceSearch ref="contentSearch" :enabled="activeModules.map(tab => tab.id)" @select="selectSearchHit" />
+
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch, defineAsyncComponent, defineComponent, h, onMounted, onBeforeUnmount, ref, shallowReactive, provide, type Component } from 'vue'
+import { computed, watch, defineAsyncComponent, defineComponent, h, onMounted, onBeforeUnmount, ref, nextTick, shallowReactive, provide, type Component } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
 import { Expand, Search, Shrink } from 'lucide-vue-next'
@@ -52,7 +60,7 @@ import WorkspaceTabStrip from '@/components/ui/WorkspaceTabStrip.vue'
 import WorkspacePicker from '@/components/ui/WorkspacePicker.vue'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import WorkspaceSearch from '@/components/ui/WorkspaceSearch.vue'
-import { searchDestinationKey, searchRevealErrorKey, type SearchDestination } from '@/lib/searchNavigation'
+import { searchDestinationKey, searchRevealErrorKey, searchScrollKey, type SearchDestination } from '@/lib/searchNavigation'
 import { useUIStore } from '@/stores/ui'
 import type { SearchHit } from '@/lib/workspaceSearch'
 import { useWorkspacesStore } from '@/stores/workspaces'
@@ -60,6 +68,8 @@ import WorkspaceModulePane from '@/components/ui/WorkspaceModulePane.vue'
 import WorkspaceModuleFeedback from '@/components/ui/WorkspaceModuleFeedback.vue'
 import { moduleCatalog } from '@/lib/moduleCatalog'
 import { openFinanceAnalysisKey } from '@/features/finance/lib/finance'
+import { createWorkspaceScroll } from '@/lib/workspaceScroll'
+import { changeTrash, onTrashMove, onTrashChange, trashUndoKey, trashError } from '@/lib/workspaceTrash'
 
 // TÜM MODÜLLERİ DİNAMİK (LAZY) OLARAK YÜKLEYELİM
 const loaders = {
@@ -84,6 +94,8 @@ function createModule(id: keyof typeof loaders): Component {
   })
 }
 
+const WorkspaceTrash = defineAsyncComponent(() => import('@/components/ui/WorkspaceTrash.vue'))
+const trashOpen = ref(false)
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
 const widthToggleLabel = computed(() => t(settingsStore.isFullScreen ? 'workspace.collapseWorkspace' : 'workspace.expandWorkspace'))
@@ -99,11 +111,32 @@ if (props.initialTab) activeTab.value = props.initialTab
 
 const componentMap = shallowReactive<Record<string, Component>>(Object.fromEntries(Object.keys(loaders).map(id => [id, createModule(id as keyof typeof loaders)])))
 
+// One stable frame uses document scrolling as its sole navigation range.
+const workspaceStage = ref<HTMLElement>()
+const workspaceShell = ref<HTMLElement>()
+const workspaceNavigation = ref<HTMLElement>()
+const moduleViewport = ref<HTMLElement>()
+const moduleContent = ref<HTMLElement>()
+let workspaceScroll: ReturnType<typeof createWorkspaceScroll> | undefined
+provide(searchScrollKey, (element, behavior) => workspaceScroll?.reveal(element, behavior))
+onMounted(() => {
+  if (workspaceStage.value && workspaceShell.value && workspaceNavigation.value && moduleViewport.value && moduleContent.value) {
+    workspaceScroll = createWorkspaceScroll(workspaceStage.value, workspaceShell.value, workspaceNavigation.value, moduleViewport.value, moduleContent.value)
+  }
+})
+onBeforeUnmount(() => workspaceScroll?.dispose())
+watch(activeTab, () => {
+  workspaceScroll?.reset()
+  void nextTick(() => workspaceScroll?.refresh())
+})
+
 const allTabs = moduleCatalog.map(module => ({id:module.id}))
 
 const activeModules = computed(() => {
   return allTabs.filter(tab => settingsStore.isModuleActive(tab.id))
 })
+
+watch(() => [settingsStore.isFullScreen, settingsStore.isPomodoroDocked, activeModules.value.length], () => { void nextTick(() => workspaceScroll?.refresh()) })
 
 const stripTabs = computed(() => activeModules.value.map(tab => ({ id: tab.id, label: t(tab.id==='pomodoro'?'pomoNotes.tab':`workspace.modules.${tab.id}Name`) })))
 
@@ -119,6 +152,15 @@ const ui = useUIStore()
 provide(searchRevealErrorKey, () => ui.addToast(t('search.unavailable'), 'info'))
 let searchSequence = 0
 const workspaces = useWorkspacesStore()
+const stopTrashMoves=onTrashMove((receipt,change)=>{
+  if(change.owner!==workspaces.userId||change.workspace!==workspaces.activeId)return
+  ui.addUndoToast(count=>t(count===1?'trash.moved':'trash.movedMany',{count}),t('trash.undo'),async()=>{
+    try{await changeTrash(change.workspace,change.module,receipt.id,'restore',receipt.version,change.owner)}
+    catch(error){ui.addToast(t('trash.'+trashError(error)),'error');throw error}
+  },`trash:${change.owner}:${change.workspace}`,trashUndoKey(change,receipt.version))
+})
+const stopTrashChanges=onTrashChange(change=>{if(change.owner===workspaces.userId&&change.id&&change.version&&change.action!=='move')ui.discardUndo(trashUndoKey(change,change.version-(change.action==='restore'?1:0)))})
+onBeforeUnmount(()=>{stopTrashMoves();stopTrashChanges()})
 watch(() => workspaces.sessionKey, () => { destination.value = null;contentSearch.value?.close() })
 async function openTabSearch() { await contentSearch.value?.open() }
 function selectSearchHit(hit: SearchHit) {
