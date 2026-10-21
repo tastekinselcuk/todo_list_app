@@ -26,7 +26,7 @@ const copy = computed(() => tr.value ? {
   save: 'Nedeni kaydet', cancel: 'Vazgeç', carried: 'Önceki dönemden', resume: 'Listeye geri al',
   history: 'Geçmiş dönemler', historyEmpty: 'Henüz geçmiş bir dönem yok.',
   setup: 'Planlar yüklenemedi. Bağlantıyı kontrol et; ilk kurulumda PLANS_SETUP.md dosyasındaki veritabanı adımını tamamla.',
-  retry: 'Tekrar dene', complete: 'Tamamla', undo: 'Tamamlanmadı olarak işaretle', progress: 'Dönem ilerlemesi',
+  retry: 'Tekrar dene', complete: 'Tamamla', undo: 'Tamamlanmadı olarak işaretle',
   copy: 'Kopyala', copied: 'Kopyalandı', copyFailed: 'Kopyalama başarısız', delete: 'Sil', deleted: 'Plan silindi', deleteFailed: 'Plan silinemedi',
 } : {
   daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',
@@ -36,7 +36,7 @@ const copy = computed(() => tr.value ? {
   save: 'Save reason', cancel: 'Cancel', carried: 'Carried forward', resume: 'Return to list',
   history: 'Past periods', historyEmpty: 'No past periods yet.',
   setup: 'Could not load plans. Check your connection; for first-time setup, complete the database step in PLANS_SETUP.md.',
-  retry: 'Retry', complete: 'Complete', undo: 'Mark incomplete', progress: 'Period progress',
+  retry: 'Retry', complete: 'Complete', undo: 'Mark incomplete',
   copy: 'Copy', copied: 'Copied', copyFailed: 'Could not copy', delete: 'Delete', deleted: 'Plan deleted', deleteFailed: 'Could not delete plan',
 })
 const selected = useWorkspaceDraft<Period>('plan-period', 'daily')
@@ -61,7 +61,6 @@ const currentPlans = computed(() => store.plans.filter(p => p.period === selecte
 const active = computed(() => currentPlans.value.filter(p => !p.reason && !p.completed).sort((a, b) => b.history.length - a.history.length))
 const completed = computed(() => currentPlans.value.filter(p => p.completed))
 const deferred = computed(() => currentPlans.value.filter(p => p.reason && !p.completed))
-const progress = computed(() => currentPlans.value.length ? Math.round(completed.value.length / currentPlans.value.length * 100) : 0)
 const archived = computed(() => {
   const groups = new Map<string, { id: string; title: string; completed: boolean; reason: string }[]>()
   for (const plan of store.plans.filter(p => p.period === selected.value)) {
@@ -184,10 +183,6 @@ useSearchReveal('plans', async (hit, isCurrent) => {
         <button class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory = !showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{ on: showHistory }"><i></i></span></button>
       </div>
 
-      <div class="progress-track" role="progressbar" :aria-label="copy.progress" :aria-valuenow="progress" :aria-valuemin="0" :aria-valuemax="100"><span :style="{ width: `${progress}%` }"></span></div>
-      <div class="completion-summary" aria-live="polite">
-        <span class="completion-count">{{ progress }}% · {{ completed.length }}/{{ currentPlans.length }} {{ copy.done }}</span>
-      </div>
     </div>
 
     <div v-if="!currentPlans.length && !store.busy && !store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
@@ -384,28 +379,6 @@ useSearchReveal('plans', async (hit, isCurrent) => {
 .switch-track.on i {
   transform:translateX(12px);
   background:hsl(var(--primary-foreground))
-}
-.completion-summary {
-  display:flex;
-  justify-content:flex-end;
-  padding:8px 0 0
-}
-.completion-count {
-  font-size:11px;
-  color:hsl(var(--muted-foreground));
-  white-space:nowrap
-}
-.progress-track {
-  height:1px;
-  background:hsl(var(--border));
-  border-radius:1px;
-  overflow:hidden
-}
-.progress-track span {
-  display:block;
-  height:100%;
-  background:var(--plan-accent);
-  transition:width .3s
 }
 .task-row {
   display:flex;

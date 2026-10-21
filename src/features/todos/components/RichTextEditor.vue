@@ -6,7 +6,7 @@
       <button type="button" class="editor-tool editor-secondary" data-editor-menu="color" :class="menu==='color' && 'is-active'" :title="t('noteEditor.colors')" :aria-label="t('noteEditor.colors')" :aria-expanded="menu==='color'" @mousedown.prevent @click="openMenu('color')"><Palette class="h-3.5 w-3.5" /></button>
       <span class="mx-1 h-4 w-px bg-border/50" aria-hidden="true" />
       <button v-for="tool in blockTools" :key="tool.name" type="button" class="editor-tool" :class="[isActive(tool.name) && 'is-active',['orderedList','details'].includes(tool.name) && 'editor-secondary']" :title="t('noteEditor.'+tool.name)" :aria-label="t('noteEditor.'+tool.name)" :aria-pressed="isActive(tool.name)" @mousedown.prevent @click="run(tool.name)"><component :is="tool.icon" class="h-3.5 w-3.5" /></button>
-      <button type="button" class="editor-tool editor-secondary" :disabled="isActive('table')" :title="t('noteEditor.table')" :aria-label="t('noteEditor.table')" @mousedown.prevent @click="run('table')"><Table2 class="h-3.5 w-3.5" /></button>
+      <button type="button" class="editor-tool editor-secondary" data-editor-menu="table" :class="menu==='table' && 'is-active'" :disabled="isActive('table')" :title="t('noteEditor.table')" :aria-label="t('noteEditor.table')" :aria-expanded="menu==='table'" @mousedown.prevent @click="openMenu('table')"><Table2 class="h-3.5 w-3.5" /></button>
       <button type="button" class="editor-tool" :disabled="uploading" :title="t('noteEditor.image')" :aria-label="t('noteEditor.image')" data-editor-menu="image" :aria-expanded="menu==='image'" @mousedown.prevent @click="openMenu('image')"><ImagePlus class="h-3.5 w-3.5" /></button>
       <button type="button" class="editor-tool editor-secondary" :class="isActive('link') && 'is-active'" :title="t('noteEditor.link')" :aria-label="t('noteEditor.link')" data-editor-menu="link" :aria-expanded="menu==='link'" @mousedown.prevent @click="openMenu('link')"><Link2 class="h-3.5 w-3.5" /></button>
       <button type="button" class="editor-tool" :title="t('noteEditor.more')" :aria-label="t('noteEditor.more')" data-editor-menu="more" :aria-expanded="menu==='more'" @mousedown.prevent @click="openMenu('more')"><MoreHorizontal class="h-3.5 w-3.5" /></button>
@@ -16,18 +16,18 @@
     </div>
 
     <Transition name="editor-menu">
-      <div v-if="menu && !disabled" ref="panelRef" class="editor-panel" @keydown.esc.stop.prevent="menu=null">
-        <template v-if="menu==='color'">
-          <p class="editor-menu-label">{{ t('noteEditor.textColor') }}</p>
-          <div class="flex flex-wrap gap-1">
-            <button type="button" class="color-dot border border-border/60 text-xs" :aria-pressed="isColorSelected('text',null)" :title="t('noteEditor.defaultColor')" :aria-label="t('noteEditor.defaultColor')" @mousedown.prevent @click="applyColor('text',null)">A</button>
-            <button v-for="color in colors" :key="color" type="button" class="color-dot border text-xs font-semibold" :aria-pressed="isColorSelected('text',color)" :style="{color:'var(--tt-color-text-'+color+')',borderColor:'var(--tt-color-text-'+color+')'}" :title="t('noteEditor.colorNames.'+color)" :aria-label="t('noteEditor.colorNames.'+color)" @mousedown.prevent @click="applyColor('text',color)">A</button>
+      <div v-if="menu && !disabled" ref="panelRef" class="editor-panel" :class="{'editor-table-panel':menu==='table'}" @keydown.esc.stop.prevent="menu=null">
+        <template v-if="menu==='table'">
+          <div class="table-picker-heading"><span>{{ t('noteEditor.table') }}</span><span class="tabular-nums" aria-live="polite" aria-atomic="true">{{ tableSize.columns }} × {{ tableSize.rows }}</span></div>
+          <div class="table-picker-grid" role="group" :aria-label="t('noteEditor.tableSize',tableSize)">
+            <template v-for="row in 5" :key="row">
+              <button v-for="column in 8" :key="column" type="button" class="table-picker-cell" :class="{'is-highlighted':row<=tableSize.rows && column<=tableSize.columns}" :data-table-cell="`${row}-${column}`" :tabindex="row===tableSize.rows && column===tableSize.columns?0:-1" :aria-label="t('noteEditor.tableSize',{rows:row,columns:column})" @pointerenter="tableSize={rows:row,columns:column}" @focus="tableSize={rows:row,columns:column}" @keydown="moveTableSelection($event,row,column)" @mousedown.prevent @click="insertTable(row,column)" />
+            </template>
           </div>
-          <p class="editor-menu-label mt-3">{{ t('noteEditor.highlightColor') }}</p>
-          <div class="flex flex-wrap gap-1">
-            <button type="button" class="color-dot border border-border/60" :aria-pressed="isColorSelected('bg',null)" :title="t('noteEditor.defaultColor')" :aria-label="t('noteEditor.defaultColor')" @mousedown.prevent @click="applyColor('bg',null)"><X class="h-3 w-3" /></button>
-            <button v-for="color in colors" :key="color" type="button" class="color-dot border border-border/40" :aria-pressed="isColorSelected('bg',color)" :style="{backgroundColor:'var(--tt-color-highlight-'+color+')'}" :title="t('noteEditor.colorNames.'+color)" :aria-label="t('noteEditor.colorNames.'+color)" @mousedown.prevent @click="applyColor('bg',color)" />
-          </div>
+        </template>
+        <template v-else-if="menu==='color'">
+          <ColorPalette :model-value="selectedTextColor" :options="textColors" variant="text" :label="t('noteEditor.textColor')" :clear-label="t('noteEditor.defaultColor')" @update:model-value="applyColor('text',$event)" />
+          <ColorPalette class="mt-3 border-t border-border/50 pt-3" :model-value="selectedHighlightColor" :options="highlightColors" :label="t('noteEditor.highlightColor')" :clear-label="t('noteEditor.defaultColor')" @update:model-value="applyColor('bg',$event)" />
         </template>
         <template v-else-if="menu==='image'">
           <button type="button" class="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-background/40 px-3 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted/40 disabled:opacity-50" :disabled="uploading" @click="fileRef?.click()"><Upload class="h-4 w-4" />{{ t('noteEditor.uploadImage') }}</button>
@@ -78,20 +78,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
-import { NodeSelection, type SelectionBookmark } from '@tiptap/pm/state'
+import { Extension } from '@tiptap/core'
+import { NodeSelection, Plugin, PluginKey, TextSelection, type SelectionBookmark } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { Bold, Italic, Strikethrough, Underline, List, ListOrdered, ListTodo, ChevronRight, Table2, ImagePlus, Link2, Palette, MoreHorizontal, Undo2, Redo2, Quote, Code2, Minus, RemoveFormatting, Upload, Loader2, X, Trash2, Plus, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import ColorPalette from '@/components/ui/ColorPalette.vue'
 import { createNoteExtensions } from '@/lib/noteEditor'
 import { sanitizeNoteHtml, safeNoteImageUrl, safeNoteLink } from '@/lib/noteContent'
 import { uploadNoteImage, resolveNoteImage, discardNoteImage } from '@/lib/noteImages'
 
 const props=defineProps<{modelValue:string;placeholder?:string;disabled?:boolean;fitHeight?:boolean}>()
-const emit=defineEmits<{'update:modelValue':[value:string];'busy-change':[value:boolean]}>()
+const emit=defineEmits<{'update:modelValue':[value:string];'busy-change':[value:boolean];focus:[]}>()
 const {t}=useI18n()
 const rootRef=ref<HTMLElement|null>(null),fileRef=ref<HTMLInputElement|null>(null),panelRef=ref<HTMLElement|null>(null)
 const textSelectRef=ref<InstanceType<typeof CustomSelect>|null>(null),tableSelectRef=ref<InstanceType<typeof CustomSelect>|null>(null)
-const menu=ref<'color'|'image'|'link'|'more'|null>(null),imageUrl=ref(''),linkUrl=ref(''),imageAlt=ref(''),error=ref(''),uploading=ref(false),revision=ref(0)
+const menu=ref<'color'|'image'|'link'|'more'|'table'|null>(null),imageUrl=ref(''),linkUrl=ref(''),imageAlt=ref(''),error=ref(''),uploading=ref(false),revision=ref(0)
+const tableSize=ref({rows:1,columns:1})
 const imageDialogRef=ref<HTMLDialogElement|null>(null),imagePreview=ref<{src:string;alt:string}|null>(null),previewZoom=ref(false)
 let previewEpoch=0,previousBodyOverflow:string|null=null
 async function openImagePreview(src:string,alt:string){
@@ -113,8 +117,36 @@ function onPreviewClosed(){
 }
 function closeImagePreview(){imageDialogRef.value?.close();onPreviewClosed()}
 let disposed=false,bookmark:SelectionBookmark|null=null,lastEmitted=''
+// View-only selection feedback: never saved into note HTML or undo history.
+const colorSelectionKey=new PluginKey<boolean>('noteColorSelection')
+const ColorSelectionPreview=Extension.create({
+ name:'noteColorSelection',
+ addProseMirrorPlugins(){return [new Plugin<boolean>({
+  key:colorSelectionKey,
+  state:{
+   init:()=>false,
+   apply(transaction,active,previous){
+    const requested=transaction.getMeta(colorSelectionKey)
+    if(typeof requested==='boolean')return requested
+    return transaction.selection.eq(previous.selection)?active:false
+   },
+  },
+  props:{
+   attributes:(state):Record<string,string>=>colorSelectionKey.getState(state)?{'data-color-selection-preview':'true'}:{},
+   decorations(state){
+    const {selection,doc}=state
+    if(!colorSelectionKey.getState(state) || !(selection instanceof TextSelection) || selection.empty)return null
+    return DecorationSet.create(doc,[Decoration.inline(selection.from,selection.to,{class:'note-color-selection'})])
+   },
+   handleDOMEvents:{pointerdown(view){
+    if(colorSelectionKey.getState(view.state))view.dispatch(view.state.tr.setMeta(colorSelectionKey,false).setMeta('addToHistory',false))
+    return false
+   }},
+  },
+ })]},
+})
 const editor=useEditor({
- extensions:createNoteExtensions({openLinks:Boolean(props.disabled),placeholder:props.placeholder,togglePlaceholder:t('noteEditor.toggleTitle'),resolveImage:resolveNoteImage,imageError:t('noteEditor.imageUnavailable'),imageLoading:t('noteEditor.imageLoading'),toggleLabel:open=>t(open?'noteEditor.collapse':'noteEditor.expand'),taskLabel:text=>t('todo.toggleCompletion')+': '+text,resizeLabel:t('noteEditor.resizeImage'),previewLabel:t('noteEditor.previewImage'),onImagePreview:(src,alt)=>void openImagePreview(src,alt)}),
+ extensions:[...createNoteExtensions({openLinks:Boolean(props.disabled),placeholder:props.placeholder,togglePlaceholder:t('noteEditor.toggleTitle'),resolveImage:resolveNoteImage,imageError:t('noteEditor.imageUnavailable'),imageLoading:t('noteEditor.imageLoading'),toggleLabel:open=>t(open?'noteEditor.collapse':'noteEditor.expand'),taskLabel:text=>t('todo.toggleCompletion')+': '+text,resizeLabel:t('noteEditor.resizeImage'),previewLabel:t('noteEditor.previewImage'),onImagePreview:(src,alt)=>void openImagePreview(src,alt)}),ColorSelectionPreview],
  content:sanitizeNoteHtml(props.modelValue || ''),editable:!props.disabled,
  editorProps:{
   attributes:{class:'note-prose',role:props.disabled?'document':'textbox','aria-multiline':props.disabled?'false':'true','aria-label':props.placeholder || t('todo.description')},
@@ -123,6 +155,7 @@ const editor=useEditor({
   handleDrop:(_view,event,_slice,moved)=>moved?false:handleDrop(event),
  },
  onUpdate:()=>emitChange(),
+ onFocus:()=>{if(!props.disabled)emit('focus')},
  onTransaction:({transaction})=>{revision.value++;if(bookmark)bookmark=bookmark.map(transaction.mapping)},
  onSelectionUpdate:({editor:current})=>{imageAlt.value=current.isActive('image')?(current.getAttributes('image').alt || ''):''},
 })
@@ -132,16 +165,41 @@ const historyTools=[{name:'undo',icon:Undo2},{name:'redo',icon:Redo2}]
 const extraTools=[{name:'blockquote',icon:Quote},{name:'codeBlock',icon:Code2},{name:'divider',icon:Minus},{name:'clear',icon:RemoveFormatting}]
 const mobileTools=[{name:'underline',icon:Underline},{name:'strike',icon:Strikethrough},{name:'orderedList',icon:ListOrdered},{name:'details',icon:ChevronRight},{name:'table',icon:Table2},{name:'link',icon:Link2},{name:'colors',icon:Palette},...historyTools]
 const colors=['gray','brown','orange','yellow','green','blue','purple','pink','red']
+const textColors=computed(()=>colors.map(value=>({value,label:t('noteEditor.colorNames.'+value),color:`var(--tt-color-text-${value})`})))
+const highlightColors=computed(()=>colors.map(value=>({value,label:t('noteEditor.colorNames.'+value),color:`var(--tt-color-highlight-${value})`})))
+const selectedTextColor=computed(()=>colors.find(color=>isColorSelected('text',color))||null)
+const selectedHighlightColor=computed(()=>colors.find(color=>isColorSelected('bg',color))||null)
 const textOptions=computed(()=>['paragraph','h1','h2','h3'].map(value=>({value,label:t('noteEditor.'+value)})))
 const textMode=computed(()=>{revision.value;for(const level of [1,2,3])if(editor.value?.isActive('heading',{level}))return 'h'+level;return 'paragraph'})
 const tableOptions=computed(()=>['addRowBefore','addRowAfter','deleteRow','addColumnBefore','addColumnAfter','deleteColumn','mergeCells','splitCell','toggleHeaderRow'].map(value=>({value,label:t('noteEditor.'+value),disabled:!canTableAction(value)})))
 function isActive(name:string){revision.value;return Boolean(editor.value?.isActive(name))}
 function canHistory(name:string){revision.value;return !props.disabled && Boolean(name==='undo'?editor.value?.can().undo():editor.value?.can().redo())}
 function openMenu(value:typeof menu.value){
- if(props.disabled)return
+ if(props.disabled || value==='table' && isActive('table'))return
  textSelectRef.value?.close(false);tableSelectRef.value?.close(false)
  error.value='';if(value==='link')linkUrl.value=editor.value?.getAttributes('link').href || ''
+ if(value==='table')tableSize.value={rows:1,columns:1}
+ if(value==='color')showColorSelection()
  menu.value=menu.value===value?null:value
+}
+function showColorSelection(){
+ const current=editor.value
+ if(!current || props.disabled || !(current.state.selection instanceof TextSelection) || current.state.selection.empty)return
+ current.view.dispatch(current.state.tr.setMeta(colorSelectionKey,true).setMeta('addToHistory',false))
+}
+function insertTable(rows:number,columns:number){
+ if(props.disabled || !editor.value || isActive('table') || !Number.isInteger(rows) || !Number.isInteger(columns) || rows<1 || rows>5 || columns<1 || columns>8)return
+ editor.value.chain().focus(undefined,{scrollIntoView:false}).insertTable({rows,cols:columns,withHeaderRow:true}).run()
+ menu.value=null
+}
+function moveTableSelection(event:KeyboardEvent,row:number,column:number){
+ const offsets:Record<string,[number,number]>={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}
+ const offset=offsets[event.key]
+ if(!offset)return
+ event.preventDefault()
+ const rows=Math.max(1,Math.min(5,row+offset[0])),columns=Math.max(1,Math.min(8,column+offset[1]))
+ tableSize.value={rows,columns}
+ void nextTick(()=>panelRef.value?.querySelector<HTMLButtonElement>(`[data-table-cell="${rows}-${columns}"]`)?.focus({preventScroll:true}))
 }
 function selectOpened(kind:'text'|'table',open:boolean){
  if(!open)return
@@ -150,6 +208,7 @@ function selectOpened(kind:'text'|'table',open:boolean){
 }
 function run(name:string){
  const current=editor.value;if(!current || props.disabled)return
+ if(name==='table'){openMenu('table');return}
  error.value='';menu.value=null
  const chain=current.chain().focus()
  switch(name){
@@ -161,7 +220,6 @@ function run(name:string){
   case 'orderedList':chain.toggleOrderedList().run();break
   case 'taskList':chain.toggleTaskList().run();break
   case 'details':if(current.isActive('details'))chain.unsetDetails().run();else chain.setDetails().run();break
-  case 'table':if(!current.isActive('table'))chain.insertTable({rows:3,cols:3,withHeaderRow:true}).run();break
   case 'blockquote':chain.toggleBlockquote().run();break
   case 'codeBlock':chain.toggleCodeBlock().run();break
   case 'divider':chain.setHorizontalRule().run();break
@@ -170,7 +228,7 @@ function run(name:string){
   case 'redo':chain.redo().run();break
  }
 }
-function mobileAction(name:string){if(name==='colors' || name==='link')openMenu(name==='colors'?'color':'link');else{run(name);menu.value=null}}
+function mobileAction(name:string){if(name==='colors' || name==='link' || name==='table')openMenu(name==='colors'?'color':name);else{run(name);menu.value=null}}
 function setTextMode(value:string){
  if(props.disabled || !editor.value)return
  if(value==='paragraph')editor.value.chain().focus().setParagraph().run()
@@ -183,7 +241,8 @@ function isColorSelected(type:'text'|'bg',color:string|null){
  return color?value==='var(--tt-color-'+(type==='text'?'text-':'highlight-')+color+')':!value
 }
 function applyColor(type:'text'|'bg',color:string|null){
- if(props.disabled || !editor.value)return
+ if(props.disabled || !editor.value || color&&!colors.includes(color))return
+ showColorSelection()
  const chain=editor.value.chain().focus()
  if(type==='text'){if(color)chain.setColor('var(--tt-color-text-'+color+')').run();else chain.unsetColor().run()}
  else{if(color)chain.unsetHighlight().setBackgroundColor('var(--tt-color-highlight-'+color+')').run();else chain.unsetBackgroundColor().unsetHighlight().run()}
@@ -305,6 +364,8 @@ onBeforeUnmount(()=>{
  document.removeEventListener('pointerdown',clickOutside,true)
  document.removeEventListener('focusin',clickOutside,true)
 })
+function focusEditor(){if(!props.disabled)editor.value?.commands.focus(undefined,{scrollIntoView:false})}
+defineExpose({focus:focusEditor})
 </script>
 
 <style scoped>
@@ -321,14 +382,23 @@ onBeforeUnmount(()=>{
 .editor-context-action { @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:cursor-default disabled:opacity-40; }
 .editor-tool.is-active { @apply bg-primary/10 text-primary; }
 .editor-panel { @apply absolute left-2 top-10 z-50 w-72 rounded-xl border border-border/60 bg-card p-3 shadow-xl; max-width:calc(100% - 1rem); max-height:min(70vh,420px); overflow-y:auto; }
+.editor-table-panel{width:232px;padding:12px;box-shadow:0 8px 24px hsl(var(--foreground)/.1)}
+.table-picker-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;font-size:11px;font-weight:500;color:hsl(var(--muted-foreground))}
+.table-picker-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.table-picker-cell{aspect-ratio:1;min-width:0;border:1px solid hsl(var(--border)/.85);border-radius:4px;background:hsl(var(--muted)/.25);transition:background-color 90ms,border-color 90ms}
+.table-picker-cell.is-highlighted{border-color:hsl(var(--primary)/.6);background:hsl(var(--primary)/.18)}
+.table-picker-cell:focus-visible{outline:2px solid hsl(var(--primary));outline-offset:1px}
+@media(prefers-reduced-motion:reduce){.table-picker-cell{transition:none}}
 .editor-menu-label { @apply mb-1.5 text-[10px] font-medium text-muted-foreground; }
 .editor-menu-item { @apply flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs text-foreground transition-colors hover:bg-muted/50; }
 .editor-menu-item.editor-mobile-only { display:none; }
-.color-dot { @apply flex h-6 w-6 items-center justify-center rounded-md transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30; }
-.color-dot[aria-pressed="true"] { outline:2px solid hsl(var(--primary)/.55); outline-offset:2px; }
 .editor-field { @apply h-8 rounded-lg border border-border/50 bg-background/50 px-2 text-xs outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/30; }
 .editor-confirm { @apply rounded-lg bg-primary px-2.5 text-xs font-medium text-primary-foreground disabled:opacity-40; }
 :deep(.note-prose) { @apply min-w-0 break-words p-3 text-sm leading-relaxed outline-none; overflow-wrap:anywhere; }
+:deep(.note-color-selection){box-shadow:0 1px 0 hsl(var(--muted-foreground)/.45);box-decoration-break:clone;-webkit-box-decoration-break:clone}
+@media(forced-colors:none){
+ :deep(.note-prose[data-color-selection-preview]::selection),:deep(.note-prose[data-color-selection-preview] ::selection){background:transparent;color:inherit;text-shadow:none}
+}
 .editor-editable :deep(.note-prose) { min-height:112px; max-height:60vh; overflow-y:auto; resize:vertical; }
 .editor-fitted { flex:1; min-height:0; }
 .editor-fitted .editor-panel { max-height:min(360px,45dvh); }
@@ -378,8 +448,8 @@ onBeforeUnmount(()=>{
 :deep(.note-image-node.is-selected) { outline:2px solid hsl(var(--primary)/.4); outline-offset:2px; }
 :deep(.note-image-status) { display:block; width:100%; min-height:48px; border:1px solid hsl(var(--border)/.6); border-radius:8px; background:hsl(var(--muted)/.2); color:hsl(var(--muted-foreground)); font-size:11px; text-align:center; padding:12px; }
 :deep(.note-image-node [hidden]) { display:none; }
-.editor-menu-enter-active, .editor-menu-leave-active { transition:opacity 120ms ease,transform 120ms ease; }
-.editor-menu-enter-from, .editor-menu-leave-to { opacity:0; transform:translateY(-3px); }
+.editor-menu-enter-active, .editor-menu-leave-active { transition:opacity 180ms ease,transform 180ms cubic-bezier(.22,1,.36,1); }
+.editor-menu-enter-from, .editor-menu-leave-to { opacity:0; transform:translateY(-4px); }
 @media(prefers-reduced-motion:reduce){.editor-menu-enter-active,.editor-menu-leave-active{transition:none}}
 @media(max-width:639px){.editor-tool{width:24px}.editor-tool.editor-secondary,.editor-history{display:none}.editor-menu-item.editor-mobile-only{display:flex}}
 :global(:root) {

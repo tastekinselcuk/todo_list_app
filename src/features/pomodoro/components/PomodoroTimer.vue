@@ -4,10 +4,10 @@
       v-if="!isExpanded"
       key="compact"
       data-teleport="compact"
-      class="bg-card/50 backdrop-blur-xl text-card-foreground p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border/50 relative max-w-sm mx-auto w-full transition-all duration-300 group/pomodoro flex flex-col items-center"
+      class="bg-card/50 backdrop-blur-xl text-card-foreground p-4 rounded-3xl shadow-[0_6px_24px_rgb(0,0,0,0.025)] border border-border/50 relative max-w-sm mx-auto w-full transition-all duration-300 group/pomodoro flex flex-col items-center"
     >
-      <div class="w-full flex flex-col items-center gap-4 mb-6">        
-        <div class="flex gap-1 p-1 bg-muted/50 rounded-full border border-border/50 items-center justify-center">
+      <div class="w-full flex flex-col items-center gap-4 mb-4">
+        <div class="flex gap-1 p-1 bg-muted/40 rounded-full items-center justify-center">
           <button
             v-for="mode in modes"
             :key="mode.name"
@@ -26,7 +26,7 @@
         </div>
       </div>
 
-      <div class="flex flex-col items-center justify-center py-2 w-full border-y border-border/30 mb-5">
+      <div class="flex flex-col items-center justify-center py-2 w-full mb-4">
         <div v-if="currentTarget" class="mb-2 flex max-w-full items-center gap-1"><button type="button" class="min-w-0 truncate px-2 text-xs text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task', currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button><button type="button" :disabled="timer.clearing" class="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-label="t('pomoNotes.freeFocus')" :title="t('pomoNotes.freeFocus')" @click="clearFocus()"><X class="h-3 w-3" /></button></div>
         <div
           class="text-6xl font-thin tabular-nums tracking-tighter text-foreground cursor-pointer select-none transition-colors hover:text-primary duration-300"
@@ -37,7 +37,7 @@
         </div>
       </div>
 
-      <div class="flex justify-center gap-3 w-full">
+      <div class="flex justify-center gap-2 w-full">
         <button
           @click="toggleTimer"
           :disabled="starting || timer.clearing"
@@ -79,12 +79,14 @@
       data-teleport="expanded"
       data-pomodoro-navigation
       :inert="!navbarVisible"
+      :style="attached ? { top:`${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight}px` } : undefined"
       :class="[
         'pomodoro-dock fixed top-0 left-0 right-0 bg-card/70 backdrop-blur-2xl border-b border-border/60 shadow-sm z-40',
-        navbarVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
+        navbarVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none',
+        { 'is-workspace-attached': attached }
       ]"
     >
-      <div class="h-14 max-w-full pl-3 pr-[4.5rem] sm:pl-5 sm:pr-28 flex items-center justify-between gap-2 relative">
+      <div class="h-14 max-w-full pl-3 pr-[4.5rem] sm:pl-5 sm:pr-28 flex items-center justify-between gap-2 relative" :style="attached ? { height:`${workspaceHeaderHeight}px` } : undefined">
         <div data-pomodoro-left class="flex shrink-0 items-center gap-3 xl:gap-4">
           <div class="flex items-center gap-2">
             <div class="hidden xl:block p-1.5 bg-primary/10 text-primary rounded-lg ring-1 ring-primary/20">
@@ -112,6 +114,7 @@
             {{ mode.name }}
           </button>
         </div>
+        <button data-pomodoro-mode-trigger type="button" popovertarget="pomodoro-dock-controls" :aria-label="$t('pomodoro.modeSelect')" :title="$t('pomodoro.modeSelect')" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground transition-colors hover:bg-background sm:inline-flex lg:hidden"><MoreHorizontal class="h-3.5 w-3.5" /></button>
         </div>
 
         <div class="hidden sm:flex items-center gap-3 flex-shrink-0">
@@ -153,13 +156,13 @@
         <button type="button" popovertarget="pomodoro-dock-controls" :aria-label="$t('pomodoro.controls')" :title="$t('pomodoro.controls')" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground transition-colors hover:bg-background hover:text-foreground sm:hidden">
           <MoreHorizontal class="h-4 w-4" />
         </button>
-        <div ref="dockControls" id="pomodoro-dock-controls" popover="auto" :aria-label="$t('pomodoro.controls')" class="dock-controls rounded-2xl border border-border/60 bg-card p-1.5 text-card-foreground shadow-[0_12px_36px_rgb(0,0,0,0.12)] sm:hidden">
-          <div role="group" :aria-label="$t('pomodoro.modeSelect')" class="border-b border-border/40 pb-1.5 mb-1.5">
+        <div ref="dockControls" id="pomodoro-dock-controls" popover="auto" :aria-label="$t('pomodoro.controls')" class="dock-controls rounded-2xl border border-border/60 bg-card p-1.5 text-card-foreground shadow-[0_12px_36px_rgb(0,0,0,0.12)]">
+          <div role="group" :aria-label="$t('pomodoro.modeSelect')" class="border-b border-border/40 pb-1.5 mb-1.5 sm:border-0 sm:pb-0 sm:mb-0">
             <button v-for="mode in modes" :key="mode.key" type="button" :aria-pressed="currentMode.key === mode.key" class="dock-control" :class="currentMode.key === mode.key ? 'bg-muted text-foreground' : 'text-muted-foreground'" @click="setMode(mode); closeDockControls()">{{ mode.name }}<Check v-if="currentMode.key === mode.key" class="ml-auto h-3.5 w-3.5" /></button>
           </div>
-          <button type="button" :disabled="starting || timer.clearing" class="dock-control" @click="toggleTimer(); closeDockControls()"><Pause v-if="isRunning && !remote" class="h-3.5 w-3.5" /><Play v-else class="h-3.5 w-3.5" />{{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}</button>
-          <button type="button" :disabled="!canReset" class="dock-control" @click="resetTimer(); closeDockControls()"><RotateCcw class="h-3.5 w-3.5" />{{ $t('pomodoro.reset') }}</button>
-          <button type="button" class="dock-control text-muted-foreground" @click="closeDockControls(); setExpanded(false)"><ArrowDown class="h-3.5 w-3.5" />{{ $t('pomodoro.collapse') }}</button>
+          <button type="button" :disabled="starting || timer.clearing" class="dock-control sm:!hidden" @click="toggleTimer(); closeDockControls()"><Pause v-if="isRunning && !remote" class="h-3.5 w-3.5" /><Play v-else class="h-3.5 w-3.5" />{{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}</button>
+          <button type="button" :disabled="!canReset" class="dock-control sm:!hidden" @click="resetTimer(); closeDockControls()"><RotateCcw class="h-3.5 w-3.5" />{{ $t('pomodoro.reset') }}</button>
+          <button type="button" class="dock-control text-muted-foreground sm:!hidden" @click="closeDockControls(); setExpanded(false)"><ArrowDown class="h-3.5 w-3.5" />{{ $t('pomodoro.collapse') }}</button>
         </div>
       </div>
       
@@ -290,9 +293,10 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ArrowDown, Check, MoreHorizontal, Pause, Play, Timer, X, RotateCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { workspaceHeaderHeight } from '@/lib/navigationScroll'
 import { useUIStore } from '@/stores/ui'
 import { usePomodoroStore, normalizeDurations, type TimerDurations, type ModeKey } from '@/features/pomodoro/stores/pomodoro'
-interface Props { navbarVisible?: boolean; docked?: boolean }
+interface Props { navbarVisible?: boolean; docked?: boolean; attached?: boolean; headerOffset?: number }
 interface Emits { expand: []; collapse: []; 'focus-task': [workspace: string] }
 interface TimerMode { key: ModeKey; name: string; label: string; duration: number }
 type TimerPresetId = 'baby-step' | 'popular' | 'medium' | 'extended' | 'custom'
@@ -347,9 +351,11 @@ onUnmounted(()=>timer.shutdown())
 </script>
 
 <style scoped>
-.pomodoro-dock { transition: transform 240ms cubic-bezier(.22,1,.36,1), opacity 180ms ease; }
+.pomodoro-dock { transition: transform 240ms cubic-bezier(.22,1,.36,1), padding-left 240ms cubic-bezier(.22,1,.36,1), opacity 180ms ease; }
+.pomodoro-dock.is-workspace-attached { transform:none; padding-block:0; border-width:0; background:transparent; box-shadow:none; backdrop-filter:none; transition:padding-left 240ms cubic-bezier(.22,1,.36,1),opacity 180ms ease; }
 .dock-controls { inset: 3rem 4.5rem auto auto; margin: 0; width: 11rem; opacity: 0; transform: translateY(-4px); transition: opacity 140ms ease, transform 160ms cubic-bezier(.22,1,.36,1), display 160ms allow-discrete, overlay 160ms allow-discrete; }
 .dock-controls:popover-open { opacity: 1; transform: translateY(0); }
+@media (min-width:640px) { .dock-controls { inset:3rem auto auto 1.25rem; } }
 @starting-style { .dock-controls:popover-open { opacity: 0; transform: translateY(-4px); } }
 .dock-control { display: flex; width: 100%; align-items: center; gap: .5rem; padding: .6rem .65rem; border-radius: .65rem; font-size: .75rem; transition: background-color 150ms, color 150ms; }
 .dock-control:hover { background: hsl(var(--muted) / .6); }

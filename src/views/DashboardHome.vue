@@ -123,7 +123,7 @@ const periodicStore = usePeriodicTasksStore()
 const activityStore = useActivityListsStore()
 const now = ref(new Date())
 const currentDate = computed(() => now.value.toLocaleDateString(locale.value === 'tr' ? 'tr-TR' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' }))
-const moduleIcons={ListTodo,CheckSquare,Zap,ShieldCheck:Shield,Code2,Timer,Target,Layers,Dumbbell,Repeat,Clapperboard,Wallet}
+const moduleIcons={ListTodo,CalendarDays,CheckSquare,Zap,ShieldCheck:Shield,Code2,Timer,Target,Layers,Dumbbell,Repeat,Clapperboard,Wallet}
 const moduleDefinitions=moduleCatalog.map(module=>({id:module.id,icon:moduleIcons[module.icon],
   color:module.id==='plans'?'bg-primary/10 text-primary':module.theme.icon}))
 const modules = computed(() => moduleDefinitions.filter(module => settingsStore.isModuleActive(module.id)))
@@ -222,6 +222,7 @@ async function completeAgenda(item: AgendaItem) {
 }
 
 function moduleMetric(id: string) {
+  if (id === 'tasks') return t('workspace.modules.tasksDesc')
   if (id === 'secure') return t('dashboard.home.protected')
   if (id === 'pomodoro') return t('pomoNotes.dashboardHint')
   if (id === 'finance') return t('finance.dashboardHint')

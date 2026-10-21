@@ -1,74 +1,48 @@
 <template>
   <article
-    class="workspace-card group bg-card/40 dark:bg-muted/5 relative z-10 select-custom"
-    :class="[
-      isExpanded 
-        ? 'is-expanded bg-card/70'
-        : 'hover:bg-card/70 overflow-hidden'
-    ]"
+    class="workspace-card group bg-card/40 dark:bg-muted/5 relative z-10 hover:bg-card/70 cursor-pointer"
+    :data-shared-editing="isEditing"
+    @click="openFocusedView"
   >
     <div 
-    :data-shared-editing="isEditing"
-      @click="toggleExpanded"
-      class="flex items-center justify-between py-2.5 px-4 cursor-pointer"
+      class="flex items-center justify-between gap-3 py-2.5 px-4"
     >
-      <div class="flex items-center gap-3 flex-1 pr-3 min-w-0">
-        <ChevronDown 
-          class="w-4 h-4 shrink-0 text-muted-foreground/50 transition-transform duration-200" 
-          :class="{ '-rotate-90': !isExpanded, 'text-primary': isExpanded }"
-        />
-        <span class="font-semibold text-sm truncate text-foreground" :class="{ 'text-primary': isExpanded }">
+      <button ref="openButtonRef" type="button" class="flex items-center gap-3 flex-1 min-w-0 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-haspopup="dialog" :aria-expanded="isOpen" @click.stop="openFocusedView">
+        <Code2 class="w-4 h-4 shrink-0 text-muted-foreground/60" />
+        <span class="font-normal text-[13px] leading-5 truncate text-foreground">
           {{ snippet.title }}
         </span>
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-muted/50 text-muted-foreground border border-border/50 uppercase tracking-widest">
+        <span class="hidden sm:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted/30 text-muted-foreground border border-border/40">
           {{ formatLanguageLabel(snippet.language) }}
         </span>
-      </div>
+      </button>
       
       <div class="flex items-center gap-3 shrink-0">
-        <span class="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider hidden sm:block">
+        <span class="text-[10px] text-muted-foreground/60 hidden sm:block">
           {{ formatDate(snippet.updatedAt) }}
         </span>
-        <div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div class="flex items-center opacity-100 sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           <button v-if="canWrite" @click.stop="beginInlineEdit" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" :title="$t('code.edit')" :aria-label="$t('code.edit')">
             <Pencil class="w-3.5 h-3.5" />
           </button>
-          <button v-if="canWrite" @click.stop="removeSnippet" class="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1" :title="$t('code.delete')">
+          <button v-if="canWrite" @click.stop="removeSnippet" class="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1" :title="$t('code.delete')" :aria-label="$t('code.delete')">
             <Trash2 class="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
     </div>
 
-    <transition name="slide-fade">
-      <div v-if="isExpanded" class="border-t border-border/40 bg-[#0d1117] rounded-b-xl relative z-20 overflow-hidden">
-        <div class="relative group/code">
-          <div class="absolute top-0 right-0 left-0 bottom-0 pointer-events-none z-30">
-            <div class="sticky top-0 flex justify-end p-3 overflow-hidden">
-              <button
-                @click.stop="copySnippet"
-                class="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/10 text-zinc-300 hover:text-primary-foreground hover:bg-primary/80 text-[10px] font-bold tracking-widest uppercase backdrop-blur-md transition-all shadow-lg opacity-0 group-hover/code:opacity-100"
-              >
-                <Copy class="w-3 h-3" />
-                {{ $t('code.copy') }}
-              </button>
-            </div>
-          </div>
-          
-          <pre class="m-0 p-5 text-[13px] leading-relaxed overflow-x-auto font-mono"><code class="hljs" v-html="highlightedCode"></code></pre>
-        </div>
-
-      </div>
-    </transition>
-    <CodeSnippetEditor v-if="canWrite && isEditing" v-model="editForm" :language-options="languageOptions" :label="t('code.edit')" :submit-label="t('code.saveChanges')" :saving="saving" :refreshing="refreshing" :conflict="editConflict" @save="handleSave" @cancel="cancelInlineEdit" @close="isEditing = false" @refresh="refreshDraft" />
+    <CodeSnippetEditor v-if="isOpen" :model-value="isEditing ? editForm : snippet" @update:model-value="editForm=$event" :viewing="!isEditing" :can-edit="canWrite" :language-options="languageOptions" :label="isEditing?t('code.edit'):snippet.title" :submit-label="t('code.saveChanges')" :saving="saving" :refreshing="refreshing" :conflict="editConflict" @save="handleSave" @cancel="cancelInlineEdit" @close="closeFocusedView" @edit="beginInlineEdit" @copy="copySnippet" @refresh="refreshDraft">
+      <template #preview><pre class="m-0 min-w-full w-max p-4 text-[13px] leading-relaxed font-mono"><code class="hljs" v-html="highlightedCode" /></pre></template>
+    </CodeSnippetEditor>
   </article>
 </template>
 
 <script setup lang="ts">
 import { useModuleAccess } from '@/lib/workspaceScope'
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { ChevronDown, Copy, Pencil, Trash2 } from 'lucide-vue-next'
+import { Code2, Pencil, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { CodeSnippet } from '@/features/todos/stores/todo'
 import CodeSnippetEditor from './CodeSnippetEditor.vue'
@@ -91,12 +65,13 @@ const emit = defineEmits<{
   copy: [code: string]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // Local State
-const isExpanded = ref(false)
+const isOpen = ref(false), openButtonRef=ref<HTMLButtonElement|null>(null)
 const isEditing = ref(false)
-const editConflict = ref(false), saving = ref(false), refreshing = ref(false), baseVersion = ref(props.snippet.version)
+const editConflict = ref(false), saving = ref(false), refreshing = ref(false)
+const baseVersion=useWorkspaceDraft(`code-edit-version:${props.snippet.id}`,props.snippet.version)
 const editForm = useWorkspaceDraft(`code-edit:${props.snippet.id}`, { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code })
 
 const canSave = computed(() => !!editForm.value.title.trim() && !!editForm.value.code.trim())
@@ -107,7 +82,7 @@ const formatLanguageLabel = (language: string) => {
 }
 
 const formatDate = (isoDate: string) => {
-  const currentLang = t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US'
+  const currentLang = locale.value
   return new Date(isoDate).toLocaleDateString(currentLang, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
@@ -128,38 +103,45 @@ const highlightedCode = computed(() => {
 })
 
 // Actions
-const toggleExpanded = () => {
-  if (isExpanded.value && isEditing.value) {
-    cancelInlineEdit()
-  }
-  isExpanded.value = !isExpanded.value
+const openFocusedView = () => { if(!isOpen.value)isOpen.value=true }
+const closeFocusedView = () => {
+  if(saving.value || refreshing.value)return
+  isEditing.value=false;isOpen.value=false
+  void nextTick(()=>openButtonRef.value?.focus({preventScroll:true}))
 }
+const matchesDraft=(snippet:CodeSnippet)=>editForm.value.title===snippet.title && editForm.value.language===(snippet.language||'plaintext') && editForm.value.code===snippet.code
+watch(()=>props.snippet,(snippet,previous)=>{
+  if(isEditing.value){if(snippet.version!==baseVersion.value)editConflict.value=true;return}
+  if(matchesDraft(previous))editForm.value={title:snippet.title,language:snippet.language||'plaintext',code:snippet.code}
+  if(matchesDraft(snippet))baseVersion.value=snippet.version
+})
 
 const beginInlineEdit = () => {
   if (!canWrite.value || saving.value || refreshing.value) return
-  baseVersion.value = props.snippet.version; editConflict.value = false
+  editConflict.value = baseVersion.value !== props.snippet.version
   isEditing.value = true
-  isExpanded.value = true
+  isOpen.value = true
 }
 
 const cancelInlineEdit = () => {
   if (saving.value || refreshing.value) return
   editForm.value = { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code }
+  baseVersion.value=props.snippet.version;editConflict.value=false
   isEditing.value = false
 }
 
 const handleSave = () => {
-  if (!canWrite.value || saving.value || refreshing.value || !canSave.value) return
+  if (!canWrite.value || !isEditing.value || saving.value || refreshing.value || !canSave.value) return
   saving.value = true
   emit('update', props.snippet.id, {
     title: editForm.value.title.trim(),
     language: editForm.value.language || 'plaintext',
     code: editForm.value.code,
     version: baseVersion.value,
-  }, (success, conflict) => { saving.value = false; editConflict.value = Boolean(conflict); if (success) isEditing.value = false })
+  }, (success, conflict) => { saving.value = false; editConflict.value = Boolean(conflict); if (success) {editForm.value.title=editForm.value.title.trim();isEditing.value = false} })
 }
 const refreshDraft = () => {
-  if (saving.value || refreshing.value) return
+  if (!canWrite.value || !isEditing.value || saving.value || refreshing.value) return
   refreshing.value = true
   emit('refresh', props.snippet.id, version => {
     if (version !== undefined) { baseVersion.value = version; editConflict.value = false }
@@ -167,21 +149,11 @@ const refreshDraft = () => {
   })
 }
 
-const removeSnippet = () => emit('delete', props.snippet.id)
+const removeSnippet = () => {if(canWrite.value && !saving.value && !refreshing.value)emit('delete', props.snippet.id)}
 const copySnippet = () => emit('copy', props.snippet.code)
 </script>
 
 <style scoped>
-/* METİN SEÇİCİ RENGİ REVİZESİ */
-.select-custom ::selection {
-  background-color: rgba(59, 130, 246, 0.3); /* Primary renginin şeffaf hali */
-  color: #fff;
-}
-
-.slide-fade-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.slide-fade-leave-active { transition: all 0.2s cubic-bezier(0.4, 0, 1, 1); }
-.slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
-
 :deep(.hljs) { background: transparent !important; padding: 0; }
 pre::-webkit-scrollbar { width: 6px; height: 6px; }
 pre::-webkit-scrollbar-track { background: transparent; }

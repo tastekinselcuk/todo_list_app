@@ -29,7 +29,7 @@
       </div>
     </Transition>
     <Teleport to="body">
-      <dialog ref="editDialogRef" class="note-edit-dialog" :aria-label="t('todo.editTask')" @cancel.prevent="leaveEditing" @close="onEditDialogClosed" @click="event=>{if(event.target===editDialogRef)leaveEditing()}">
+      <dialog ref="editDialogRef" class="note-edit-dialog" closedby="closerequest" :aria-label="t('todo.editTask')" @cancel.prevent="leaveEditing" @close="onEditDialogClosed">
             <form v-if="isEditing" class="note-edit-form" @submit.prevent="saveEdit">
               <div class="flex shrink-0 items-center justify-between gap-3">
                 <span class="text-xs font-medium text-muted-foreground">{{ t('todo.editTask') }}</span>
@@ -233,10 +233,6 @@ const formatDate = (date: string | null) => date ? new Date(date).toLocaleDateSt
 </script>
 
 <style scoped>
-.note-edit-dialog { width:calc(100vw - 32px); max-width:1100px; height:min(820px,calc(100dvh - 48px)); max-height:calc(100dvh - 48px); margin:auto; padding:0; overflow:hidden; overscroll-behavior:contain; border:1px solid hsl(var(--border)/.6); border-radius:18px; background:hsl(var(--card)); color:hsl(var(--foreground)); box-shadow:0 24px 80px rgb(0 0 0 / .2); }
-.note-edit-dialog::backdrop { background:hsl(var(--background)/.8); backdrop-filter:blur(6px); }
-.note-edit-form { display:flex; flex-direction:column; height:100%; min-height:0; gap:12px; padding:16px; }
-@media(max-width:639px){.note-edit-dialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);border-radius:14px}.note-edit-form{padding:12px;gap:10px}}
 
 .note-card { padding:10px 12px; background:hsl(var(--card)/.4); cursor:pointer; }
 .note-card:hover,.note-card:focus-within { background:hsl(var(--muted)/.5); }

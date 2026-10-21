@@ -1,7 +1,12 @@
 /** A native document scroll range drives one clipped, pinned workspace viewport. */
-export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, navigation: HTMLElement, viewport: HTMLElement, content: HTMLElement) {
+export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, navigation: HTMLElement, viewport: HTMLElement, content: HTMLElement,
+  options: { headerInset?: number; onPinned?: (pinned: boolean) => void; onHeaderOffset?: (offset: number) => void } = {}) {
   let disposed = false, queued = 0, needsMeasure = false, transitioning = false, holdHeight = 0
   let maxScroll = 0, expectedScroll = 0
+  let headerInset = Math.max(0, options.headerInset || 0), targetInset = headerInset
+  let insetAnimation: { from: number; started: number } | undefined
+  let pinned: boolean | undefined, resetAnchor = false
+  let reportedInset: number | undefined
   let observedToolbar: HTMLElement | null = null
   const observer = new ResizeObserver(refresh)
   const loadingObserver = new MutationObserver(refresh)
@@ -11,7 +16,9 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
 
   function sync() {
     if (disposed) return
-    const offset = window.scrollY - stageTop()
+    const offset = window.scrollY - stageTop() + headerInset
+    const nextPinned = offset >= -.5
+    if (nextPinned !== pinned) { pinned = nextPinned; options.onPinned?.(nextPinned) }
     expectedScroll = clamp(offset)
     if (Math.abs(viewport.scrollTop - expectedScroll) > .5) viewport.scrollTop = expectedScroll
   }
@@ -23,7 +30,7 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
       + navigation.offsetHeight + px(styles.rowGap)
     const contentHeight = content.offsetHeight
     const naturalHeight = Math.ceil(chrome + contentHeight)
-    const screenHeight = Math.max(1, window.innerHeight)
+    const screenHeight = Math.max(1, window.innerHeight - headerInset)
     if (!transitioning && !content.querySelector('[data-module-loading="true"]')) holdHeight = 0
     const stageHeight = Math.max(naturalHeight, holdHeight)
     const frameHeight = Math.min(stageHeight, screenHeight)
@@ -32,6 +39,8 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
     // Identical values do not invalidate layout on every observer callback.
     if (stage.style.height !== `${stageHeight}px`) stage.style.height = `${stageHeight}px`
     if (frame.style.height !== `${frameHeight}px`) frame.style.height = `${frameHeight}px`
+    if (frame.style.top !== `${headerInset}px`) frame.style.top = `${headerInset}px`
+    if (reportedInset !== headerInset) { reportedInset = headerInset; options.onHeaderOffset?.(headerInset) }
     const toolbar = content.querySelector<HTMLElement>('.workspace-toolbar')
     if (toolbar !== observedToolbar) {
       if (observedToolbar) observer.unobserve(observedToolbar)
@@ -44,7 +53,14 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
 
   function flush() {
     queued = 0
+    if (insetAnimation) {
+      const progress = Math.min(1, (Date.now() - insetAnimation.started) / 240)
+      headerInset = insetAnimation.from + (targetInset - insetAnimation.from) * (1 - Math.pow(1 - progress, 3))
+      if (progress >= 1) { headerInset = targetInset; insetAnimation = undefined }
+      needsMeasure = true
+    }
     if (needsMeasure) { needsMeasure = false; measure() } else sync()
+    if (insetAnimation) schedule()
   }
   function schedule() { if (!disposed && !queued) queued = requestAnimationFrame(flush) }
   function refresh() { needsMeasure = true; schedule() }
@@ -54,15 +70,16 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
   function reflectViewportScroll() {
     if (disposed || needsMeasure || Math.abs(viewport.scrollTop - expectedScroll) <= 1) return
     expectedScroll = clamp(viewport.scrollTop)
-    window.scrollTo({ top: stageTop() + expectedScroll, behavior: 'instant' })
+    window.scrollTo({ top: Math.max(0, stageTop() - headerInset + expectedScroll), behavior: 'instant' })
   }
 
   function reset() {
     if (disposed) return
-    const top = stageTop()
+    const top = Math.max(0, stageTop() - headerInset)
     transitioning = true
-    if (window.scrollY >= top) {
-      holdHeight = Math.min(window.innerHeight, frame.offsetHeight)
+    resetAnchor = window.scrollY >= top
+    if (resetAnchor) {
+      holdHeight = Math.min(window.innerHeight - headerInset, frame.offsetHeight)
       window.scrollTo({ top, behavior: 'instant' })
     }
     expectedScroll = 0
@@ -70,7 +87,18 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
     refresh()
   }
 
-  function settle() { transitioning = false; refresh() }
+  function settle() { transitioning = false; resetAnchor = false; refresh() }
+
+  function setHeaderInset(value: number) {
+    const next = Math.max(0, Math.min(window.innerHeight - 1, value || 0))
+    if (disposed || next === targetInset) return
+    targetInset = next
+    if (transitioning && resetAnchor || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      headerInset = next; insetAnimation = undefined
+      if (resetAnchor) window.scrollTo({ top: Math.max(0, stageTop() - headerInset), behavior: 'instant' })
+    } else insetAnimation = { from: headerInset, started: Date.now() }
+    refresh()
+  }
 
   function reveal(element: HTMLElement, behavior: ScrollBehavior) {
     if (disposed) return
@@ -80,7 +108,7 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
     const view = viewport.getBoundingClientRect(), item = element.getBoundingClientRect()
     const offset = toolbar?.contains(element) ? 0
       : viewport.scrollTop + item.top - view.top - toolsHeight - Math.max(0, (viewport.clientHeight - toolsHeight - item.height) / 2)
-    window.scrollTo({ top: stageTop() + clamp(offset), behavior })
+    window.scrollTo({ top: Math.max(0, stageTop() - headerInset + clamp(offset)), behavior })
   }
 
   function ancestorTransition(event: Event) {
@@ -99,7 +127,7 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
   measure()
 
   return {
-    refresh, reset, settle, reveal,
+    refresh, reset, settle, reveal, setHeaderInset,
     dispose() {
       disposed = true
       if (queued) cancelAnimationFrame(queued)
@@ -109,6 +137,7 @@ export function createWorkspaceScroll(stage: HTMLElement, frame: HTMLElement, na
       window.removeEventListener('resize', refresh)
       viewport.removeEventListener('scroll', reflectViewportScroll)
       document.removeEventListener('transitionend', ancestorTransition, true)
+      options.onPinned?.(false)
     },
   }
 }

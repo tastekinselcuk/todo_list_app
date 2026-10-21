@@ -1,6 +1,6 @@
 import { moduleCatalog, moduleTables, type ModuleId } from './moduleCatalog'
-export const shareableModules = moduleCatalog.filter(module => module.id !== 'finance').map(module => module.id)
-export type ShareableModule = Exclude<ModuleId, 'finance'>
+export const shareableModules = moduleCatalog.filter(module => module.id !== 'finance' && module.id !== 'tasks').map(module => module.id)
+export type ShareableModule = Exclude<ModuleId, 'finance' | 'tasks'>
 export type InviteRole = 'viewer' | 'editor'
 export const tableModules = moduleTables
 export interface ModuleBinding {

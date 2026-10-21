@@ -1,6 +1,7 @@
 // One ordered client registry. SQL compatibility is verified separately in integration tests.
 export const moduleCatalog = [
   { id:'plans', icon:'ListTodo', required:false, tables:{plans:'user_id'}, theme:{border:'border-stone-400/30',accent:'bg-stone-500',icon:'bg-stone-500/[0.15] text-stone-500'} },
+  { id:'tasks', icon:'CalendarDays', required:false, tables:{work_tasks:'user_id',work_projects:'user_id',work_blocks:'user_id'}, theme:{border:'border-sky-500/30',accent:'bg-sky-500',icon:'bg-sky-500/[0.15] text-sky-500'} },
   { id:'detailed', icon:'CheckSquare', required:true, tables:{categories:'created_by',todos:'created_by'}, theme:{border:'border-blue-500/30',accent:'bg-blue-500',icon:'bg-blue-500/[0.15] text-blue-500'} },
   { id:'quick', icon:'Zap', required:false, tables:{quick_notes:'created_by'}, theme:{border:'border-amber-500/30',accent:'bg-amber-500',icon:'bg-amber-500/[0.15] text-amber-500'} },
   { id:'secure', icon:'ShieldCheck', required:false, tables:{password_sessions:'created_by',secure_notes:'created_by'}, theme:{border:'border-emerald-500/30',accent:'bg-emerald-500',icon:'bg-emerald-500/[0.15] text-emerald-500'} },

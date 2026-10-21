@@ -143,16 +143,83 @@ function setupState(file, store, props = {}, viewer = false, globals = {}) {
     'vue-i18n': { useI18n: () => ({ t: key => key, locale: vue.ref('tr') }) },
     '@vueuse/core': { onClickOutside: () => () => {} },
     '@/components/ui/CustomSelect.vue': { default: { setup: () => () => vue.h('div') } },
+    '@/components/ui/ColorPalette.vue': { default: {} },
+    './CodeSnippetEditor.vue': { default: {} }, 'highlight.js/styles/github-dark.css': {},
     './TodoQuickAdd.vue': { default: {} }, './TodoFilters.vue': { default: {} }, './TodoCard.vue': { default: {} }, './CategoryModal.vue': { default: {} }, './RichTextEditor.vue': { default: {} }, './QuickNoteItem.vue': { default: {} },
   }
   const descriptor = parse(fs.readFileSync(file, 'utf8')).descriptor
   const source = compileScript(descriptor, { id: file }).content
-  const component = load(source, dependencies, { document: { addEventListener() {}, removeEventListener() {} }, ...globals }).default
+  const component = load(source, dependencies, { document: { addEventListener() {}, removeEventListener() {} }, window:{addEventListener(){},removeEventListener(){},innerWidth:1200,innerHeight:900}, ...globals }).default
   let state
   const app = renderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit: (...args) => events.push(args) }); return () => vue.h('div') } })
   app.mount({})
   return { state, app, events, toasts, dependencies }
 }
+
+test('code cards open in focused reading mode, retain failed edits and captured versions, then save back to reading',async()=>{
+  const snippet={id:'code-one',title:'Example',language:'plaintext',code:'Original code',version:3,createdAt:'2026-10-22',updatedAt:'2026-10-22'}
+  const props=vue.reactive({snippet,languageOptions:[]})
+  const f=setupState('src/features/code_snippets/components/CodeSnippetItem.vue',{},props)
+  try{
+    f.state.openFocusedView();assert.equal(f.state.isOpen.value,true);assert.equal(f.state.isEditing.value,false)
+    f.state.copySnippet();assert.deepEqual(f.events.at(-1),['copy','Original code'])
+    f.state.handleSave();assert.equal(f.events.filter(event=>event[0]==='update').length,0)
+    props.snippet={...snippet,title:'Remote title',version:4};await settle()
+    f.state.beginInlineEdit();assert.equal(f.state.editForm.value.title,'Remote title');assert.equal(f.state.baseVersion.value,4)
+    f.state.editForm.value.code='Unsaved draft';f.state.closeFocusedView();f.state.openFocusedView();f.state.beginInlineEdit()
+    assert.equal(f.state.editForm.value.code,'Unsaved draft','Escape/close retains the draft')
+    props.snippet={...props.snippet,code:'Other member code',version:5};await settle()
+    assert.equal(f.state.editConflict.value,true);assert.equal(f.state.baseVersion.value,4)
+    f.state.handleSave();const failed=f.events.at(-1)
+    assert.equal(failed[0],'update');assert.equal(failed[2].version,4)
+    f.state.closeFocusedView();assert.equal(f.state.isOpen.value,true,'pending saves keep the focused window open')
+    failed[3](false,true);assert.equal(f.state.isEditing.value,true);assert.equal(f.state.editForm.value.code,'Unsaved draft')
+    f.state.refreshDraft();f.events.at(-1)[2](5)
+    f.state.handleSave();const saved=f.events.at(-1)
+    props.snippet={...props.snippet,...saved[2],version:6};saved[3](true,false);await settle()
+    assert.equal(f.state.isOpen.value,true);assert.equal(f.state.isEditing.value,false);assert.equal(f.state.baseVersion.value,6)
+    assert.equal(props.snippet.code,'Unsaved draft')
+    f.state.beginInlineEdit();f.state.editForm.value.code='Discard me';f.state.cancelInlineEdit()
+    assert.equal(f.state.isOpen.value,true);assert.equal(f.state.isEditing.value,false);assert.equal(f.state.editForm.value.code,'Unsaved draft')
+  }finally{f.app.unmount()}
+  const viewer=setupState('src/features/code_snippets/components/CodeSnippetItem.vue',{},props,true)
+  try{
+    viewer.state.openFocusedView();viewer.state.beginInlineEdit();viewer.state.handleSave();viewer.state.removeSnippet()
+    assert.equal(viewer.state.isOpen.value,true);assert.equal(viewer.state.isEditing.value,false);assert.equal(viewer.events.length,0)
+    viewer.state.copySnippet();assert.equal(viewer.events[0][0],'copy')
+  }finally{viewer.app.unmount()}
+})
+
+test('category creation retains failed drafts, blocks duplicate submissions and restores keyboard focus on close',async()=>{
+  let release,writes=0,focused=0
+  const listeners=new Map(),props=vue.reactive({open:true})
+  const pending=new Promise(resolve=>release=resolve)
+  const store={async addCategory(payload){writes++;await pending;return{success:false,message:'OFFLINE'}}}
+  const document={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name),querySelector:()=>({focus(){focused++}})}
+  const h=setupState('src/features/todos/components/CategoryModal.vue',store,props,false,{document})
+  try{
+    h.state.newCategory.value={name:'  Project notes  ',color:'#287755',icon:'folder'}
+    const write=h.state.handleSubmit();await h.state.handleSubmit()
+    h.state.closeModal(true)
+    assert.equal(writes,1)
+    assert.equal(h.events.length,0,'a pending save keeps the form open')
+    release();await write
+    assert.equal(h.state.saving.value,false)
+    assert.equal(h.state.newCategory.value.name,'  Project notes  ')
+    assert.equal(h.state.newCategory.value.color,'#287755')
+    assert.equal(h.events.length,0,'a failed save preserves the editable draft')
+    assert.equal(h.toasts.at(-1)[1],'error')
+    h.state.closeModal(true)
+    assert.deepEqual(h.events.at(-1),['update:open',false])
+    assert.equal(focused,1)
+    props.open=false;await settle()
+    assert.equal(listeners.size,0)
+    props.open=true;await settle()
+    h.state.resetDraft()
+    assert.equal(h.state.newCategory.value.name,'  Project notes  ','a cancelled closing animation must not erase a reopened draft')
+  }finally{release();h.app.unmount()}
+  assert.equal(listeners.size,0)
+})
 
 test('quick and detailed notes delete immediately, deduplicate repeated clicks and retain rows on failure',async()=>{
   const h=fixture()
@@ -266,6 +333,102 @@ test('composer prevents duplicate submits, retains failed drafts and saves categ
   app.unmount()
 })
 
+test('creating a note moves the same editor into the fitted dialog and back, preserves failed saves and releases page scroll', async () => {
+  const {JSDOM}=require('jsdom'),runtime=require('@vue/runtime-dom')
+  const dom=new JSDOM('<!doctype html><body><main id="app"></main></body>',{pretendToBeVisual:true}),doc=dom.window.document
+  const keys=['document','window','Document','ShadowRoot','Element','HTMLElement','SVGElement','getComputedStyle','requestAnimationFrame','cancelAnimationFrame'],previous=new Map(keys.map(key=>[key,global[key]]))
+  Object.assign(global,{document:doc,window:dom.window,Document:dom.window.Document,ShadowRoot:dom.window.ShadowRoot,Element:dom.window.Element,HTMLElement:dom.window.HTMLElement,SVGElement:dom.window.SVGElement,getComputedStyle:dom.window.getComputedStyle,requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout})
+  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;this.querySelector('input')?.focus()}
+  dom.window.HTMLDialogElement.prototype.close=function(){if(this.open){this.open=false;this.dispatchEvent(new dom.window.Event('close'))}}
+  const h=fixture();await h.store.fetchCategories()
+  let editorMounts=0
+  const Editor={props:['modelValue','disabled','fitHeight'],emits:['focus','update:modelValue','busy-change'],setup(props,{emit,expose}){
+    editorMounts++;const node=vue.ref()
+    expose({focus:()=>node.value?.focus()})
+    return()=>vue.h('div',{'data-note-editor':''},vue.h('div',{ref:node,contenteditable:'true',tabindex:0,'data-editor-body':'',innerHTML:props.modelValue,onFocus:()=>emit('focus'),onInput:event=>emit('update:modelValue',event.target.innerHTML)}))
+  }}
+  const dependencies={
+    vue:{...vue,Transition:(_props,{slots})=>slots.default?.()},
+    '@/lib/workspaceScope':{useWorkspaceDraft:(_key,value)=>vue.ref(value)},
+    '@/features/todos/stores/todo':{useTodoStore:()=>h.store,TODO_TITLE_MAX_LENGTH:120},
+    '@/stores/ui':{useUIStore:()=>({addToast(){}})},'vue-i18n':{useI18n:()=>({t:key=>key})},
+    '@/components/ui/CustomSelect.vue':{default:{setup:()=>()=>vue.h('span','Category')}},'./RichTextEditor.vue':{__esModule:true,default:Editor},
+  }
+  const component=load(compileScript(parse(fs.readFileSync('src/features/todos/components/TodoQuickAdd.vue','utf8')).descriptor,{id:'composer-dom',inlineTemplate:true}).content,dependencies,{document:doc}).default
+  const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,
+    createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),
+    createText:value=>doc.createTextNode(value),createComment:value=>doc.createComment(value),querySelector:selector=>doc.querySelector(selector),
+    insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]},
+  })
+  const app=renderer.createApp(component)
+  try{
+    app.mount(doc.getElementById('app'));await settle()
+    const title=doc.querySelector('input');title.value='Focused draft';title.dispatchEvent(new dom.window.Event('input',{bubbles:true}));title.focus()
+    await settle();await settle()
+    const editor=doc.querySelector('[data-editor-body]'),dialog=doc.querySelector('dialog'),origin=doc.querySelector('[data-shared-editing]')
+    assert.equal(dialog.open,false,'typing a title only expands the inline details')
+    assert.equal(doc.querySelector('button[aria-label="todo.addTodo"]'),null,'the duplicate plus action stays removed')
+    editor.innerHTML='<p>Keep this rich draft</p>';editor.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await settle()
+    origin.getBoundingClientRect=()=>({height:240})
+    editor.focus();await settle();await settle()
+    assert.equal(dialog.open,true);assert.ok(dialog.contains(editor));assert.equal(origin.style.height,'240px')
+    assert.equal(editorMounts,1,'opening the dialog moves the editor instead of recreating its undo and selection state')
+    assert.equal(doc.body.style.overflow,'hidden')
+    dialog.click();await settle()
+    assert.equal(dialog.open,true,'backdrop clicks must not dismiss an unsaved focused draft')
+    assert.equal(doc.body.style.overflow,'hidden');assert.equal(editorMounts,1)
+    dialog.querySelector('button[aria-label="common.close"]').click();await settle();await settle()
+    assert.equal(dialog.open,false);assert.ok(origin.contains(editor));assert.equal(title.value,'Focused draft')
+    assert.match(editor.innerHTML,/Keep this rich draft/);assert.equal(editorMounts,1);assert.equal(doc.body.style.overflow,'')
+    editor.focus();await settle();await settle();h.failures.add('insert')
+    dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await settle();await settle()
+    assert.equal(dialog.open,true,'failed saves keep the focused draft available')
+    assert.equal(title.value,'Focused draft');assert.match(editor.innerHTML,/Keep this rich draft/)
+    h.failures.clear();dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await settle();await settle()
+    assert.equal(dialog.open,false);assert.equal(doc.body.style.overflow,'');assert.equal(title.value,'')
+    assert.match(h.store.todos[0].description,/Keep this rich draft/)
+  }finally{app.unmount();for(const[key,value]of previous){if(value===undefined)delete global[key];else global[key]=value}dom.window.close()}
+})
+
+test('category color strip stays beside its trigger, fits narrow screens and closes after a valid selection',async()=>{
+  const props=vue.reactive({open:true})
+  const viewport={innerWidth:1200,innerHeight:900,addEventListener(){},removeEventListener(){}}
+  const f=setupState('src/features/todos/components/CategoryModal.vue',{},props,false,{window:viewport})
+  let shown=0,hidden=0
+  f.state.colorTriggerRef.value={getBoundingClientRect:()=>({top:200,bottom:240,left:100,right:140})}
+  f.state.colorMenuRef.value={showPopover(){shown++},hidePopover(){hidden++}}
+  try{
+    f.state.toggleColorMenu();assert.equal(shown,1);assert.equal(f.state.colorPosition.value.left,'146px');assert.equal(f.state.colorPosition.value.top,'200px')
+    f.state.colorOpen.value=true;f.state.chooseColor('#AABBCC')
+    assert.equal(f.state.newCategory.value.color,'#AABBCC');assert.equal(f.state.colorOpen.value,false);assert.equal(hidden,1)
+    f.state.chooseColor('invalid');assert.equal(f.state.newCategory.value.color,'#AABBCC')
+    viewport.innerWidth=320;viewport.innerHeight=280;f.state.toggleColorMenu()
+    assert.equal(f.state.colorPosition.value.left,'8px');assert.equal(f.state.colorPosition.value.top,'202px')
+  }finally{f.app.unmount()}
+})
+
+test('quick notes group by the local calendar day instead of the UTC timestamp prefix',async()=>{
+  const f=setupState('src/features/quick_notes/components/QuickNotes.vue',{quickNotes:[],fetchQuickNotes:async()=>{}})
+  try{
+    for(const date of [new Date(2026,9,22,0,15),new Date(2026,9,22,23,45)])
+      assert.equal(f.state.getDateKey(date.toISOString()),'2026-10-22','notes near either end of the local day must stay in that day')
+    assert.equal(f.state.formatDateHeader(f.state.getTodayKey()),'todo.today')
+    const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1)
+    assert.equal(f.state.formatDateHeader(f.state.localDateKey(yesterday)),'todo.yesterday')
+  }finally{f.app.unmount()}
+})
+
+test('shared color palette validates custom colors before emitting and preserves preset selection', async()=>{
+  const props=vue.reactive({modelValue:'#287755',options:[{value:'#287755',label:'Forest',color:'#287755'}],allowCustom:true})
+  const f=setupState('src/components/ui/ColorPalette.vue',{},props)
+  try{
+    assert.equal(f.state.selected('#287755'),true)
+    f.state.customHex.value='invalid';f.state.applyCustom();assert.equal(f.events.length,0)
+    f.state.customHex.value=' aabbcc ';f.state.applyCustom();assert.deepEqual(f.events[0],['update:modelValue','#AABBCC'])
+    props.modelValue='#102B35';await vue.nextTick();assert.equal(f.state.customHex.value,'#102B35')
+  }finally{f.app.unmount()}
+})
+
 test('open edit preserves rich text and the captured version on conflict and refreshes without losing the draft', async () => {
   const h = fixture(); await h.store.fetchTodos()
   const props = vue.reactive({ todo: copy(h.store.todos[0]), color: '#3B82F6', categoryName: 'Work' })
@@ -374,21 +537,6 @@ test('cards toggle from the summary and padding while expanded details, selectio
     assert.equal(f.state.isEditing.value,true);assert.equal(f.state.isExpanded.value,true)
     assert.equal(f.events.length,0,'body clicks must not complete or delete notes')
   }finally{f.app.unmount();dom.window.close()}
-})
-
-test('completion progress follows category and search scope even when completed cards are hidden',async()=>{
-  const h=fixture()
-  const {state,app}=setupState('src/features/todos/components/TodoBoard.vue',h.store)
-  try{
-    await settle()
-    assert.equal(state.completedCount.value,1);assert.equal(state.scopedTodos.value.length,4);assert.equal(state.completionPercent.value,25)
-    state.showCompleted.value=false
-    assert.equal(state.filteredTodosArray.value.length,3);assert.equal(state.completionPercent.value,25)
-    state.selectedCategories.value=['work'];assert.equal(state.completionPercent.value,0);assert.equal(state.scopedTodos.value.length,2)
-    state.selectedCategories.value=[];state.query.value='Completed'
-    assert.equal(state.filteredTodosArray.value.length,0);assert.equal(state.completionPercent.value,100)
-    state.query.value='missing';assert.equal(state.completionPercent.value,0)
-  }finally{app.unmount()}
 })
 
 test('editing dialog locks the page, protects in-flight changes and restores scroll styles when leaving or unmounting',async()=>{

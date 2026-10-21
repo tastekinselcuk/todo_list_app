@@ -76,6 +76,7 @@ import FinanceEntryForm from './FinanceEntryForm.vue'
 import { useFinanceStore } from '../stores/finance'
 import { financeCurrencies, money, validFinanceDate, openFinanceAnalysisKey, investmentInstrument, quoteSources, type FinanceEntity, type FinanceTransaction, type FinancePosition, type FinanceSchedule } from '../lib/finance'
 import { useWorkspacesStore } from '@/stores/workspaces'
+import { workspaceNavigationKey } from '@/lib/workspaceNavigation'
 const store=useFinanceStore(),workspaces=useWorkspacesStore(),{t,locale}=useI18n()
 const openAnalysis=inject(openFinanceAnalysisKey)
 const tab=ref<FinanceEntity>('transaction'),editing=ref<FinanceTransaction|FinancePosition|null>(null),editingSchedule=ref<FinanceSchedule|null>(null),draftId=ref(crypto.randomUUID())
@@ -101,6 +102,13 @@ function resetForm(){editing.value=null;editingSchedule.value=null;draftId.value
 function edit(row:FinanceTransaction|FinancePosition){resetForm();editing.value=row;store.error=''}
 function editSchedule(row:FinanceSchedule){resetForm();editingSchedule.value=row;store.error=''}
 function changeTab(view:FinanceEntity){if(store.saving)return;tab.value=view;resetForm();store.error=''}
+const navigationIntent=inject(workspaceNavigationKey,null)
+let handledNavigation=-1
+if(navigationIntent)watch([navigationIntent,()=>store.saving],([intent,saving])=>{
+ if(saving||!intent||intent.module!=='finance'||intent.sequence===handledNavigation||!['transaction','position'].includes(intent.view))return
+ handledNavigation=intent.sequence
+ if(tab.value!==intent.view)changeTab(intent.view as FinanceEntity)
+},{immediate:true})
 async function changeCurrency(value:string){if(financeCurrencies.some(code=>code===value))await store.mutate('settings','update',null,{currency:value})}
 async function remove(row:FinanceTransaction|FinancePosition) {
  const scope=workspaces.sessionKey,entity=tab.value

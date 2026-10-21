@@ -115,7 +115,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, CheckSquare, Clapperboard, Code2, Dumbbell, Globe, Layers, Link2, ListTodo, Loader2, Moon, Palette, Repeat, ShieldCheck, SlidersHorizontal, Sun, Target, Timer, Users, Wallet, Zap } from 'lucide-vue-next'
+import { CalendarDays, Check, CheckSquare, Clapperboard, Code2, Dumbbell, Globe, Layers, Link2, ListTodo, Loader2, Moon, Palette, Repeat, ShieldCheck, SlidersHorizontal, Sun, Target, Timer, Users, Wallet, Zap } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
 import AccountSettings from '@/components/AccountSettings.vue'
@@ -152,7 +152,7 @@ function paletteSwatches(id: unknown) {
 function handlePaletteChange(value: string) {
   if (isThemePaletteId(value)) themeStore.palette = value
 }
-const moduleIcons = { ListTodo, CheckSquare, Zap, ShieldCheck, Code2, Timer, Target, Layers, Dumbbell, Repeat, Clapperboard, Wallet }
+const moduleIcons = { ListTodo, CalendarDays, CheckSquare, Zap, ShieldCheck, Code2, Timer, Target, Layers, Dumbbell, Repeat, Clapperboard, Wallet }
 const availableModules = moduleCatalog.map(module=>({ ...module, icon:moduleIcons[module.icon],isRequired:module.required }))
 const enabledCount = computed(() => availableModules.filter(module => settingsStore.isModuleActive(module.id)).length)
 

@@ -20,7 +20,7 @@
       
       <span 
         :class="[
-          'font-semibold text-sm leading-snug transition-all duration-300 break-words w-full', 
+          'font-normal text-[13px] leading-5 transition-colors duration-200 break-words w-full',
           note.completed ? 'line-through text-muted-foreground/80' : 'text-foreground'
         ]"
       >

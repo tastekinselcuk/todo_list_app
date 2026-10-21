@@ -1,15 +1,15 @@
 ﻿<template>
   <div class="workspace-content mx-auto space-y-4">
     <div class="workspace-toolbar space-y-4">
-      <TodoQuickAdd v-if="canWrite" @open-category-dialog="showCategoryDialog = !showCategoryDialog" />
-      <CategoryModal v-if="canWrite" v-model:open="showCategoryDialog" />
+      <div v-if="canWrite">
+        <TodoQuickAdd :category-open="showCategoryDialog" @open-category-dialog="showCategoryDialog = !showCategoryDialog" />
+        <CategoryModal v-model:open="showCategoryDialog" />
+      </div>
 
       <div class="relative z-30">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TodoFilters class="max-w-full" v-model:selectedCategories="selectedCategories" v-model:showCompleted="showCompleted" v-model:isGrouped="isGrouped" />
         </div>
-        <div class="note-progress mt-3" role="progressbar" :aria-label="t('todo.completionProgress')" :aria-valuenow="completionPercent" :aria-valuetext="t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length})" :aria-valuemin="0" :aria-valuemax="100"><span :style="{width:completionPercent+'%'}" /></div>
-        <div class="mt-2 flex justify-end text-[11px] text-muted-foreground" aria-live="polite">{{ t('todo.progressSummary',{percent:completionPercent,done:completedCount,total:scopedTodos.length}) }}</div>
       </div>
     </div>
 
@@ -96,8 +96,6 @@ const filteredTodosArray = computed({
   get:()=>scopedTodos.value.filter(todo=>showCompleted.value || !todo.completed),
   set:(newValue:Todo[])=>{todoStore.reorderTodos(newValue)},
 })
-const completedCount=computed(()=>scopedTodos.value.filter(todo=>todo.completed).length)
-const completionPercent=computed(()=>scopedTodos.value.length?Math.round(completedCount.value/scopedTodos.value.length*100):0)
 const hasFilters = computed(() => Boolean(query.value.trim() || selectedCategories.value.length || !showCompleted.value))
 const groupedTodos = computed(() => {
   const groups: { category: Category; todos: Todo[] }[] = []
@@ -134,7 +132,4 @@ useSearchReveal('detailed', async (hit, isCurrent) => { await todoStore.fetchTod
 
 <style scoped>
 .note-drag-ghost { opacity: 0.3; }
-.note-progress { height:1px; overflow:hidden; background:hsl(var(--border)); }
-.note-progress span { display:block; height:100%; background:hsl(var(--primary)/.6); transition:width .3s ease; }
-@media(prefers-reduced-motion:reduce){.note-progress span{transition:none}}
 </style>

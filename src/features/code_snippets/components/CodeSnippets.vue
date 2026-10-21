@@ -17,6 +17,10 @@
       <CustomSelect
         v-model="snippetForm.language"
         :options="languageSelectOptions"
+        searchable
+        :aria-label="t('code.language')"
+        :search-placeholder="t('code.searchLanguage')"
+        :empty-text="t('code.noLanguages')"
         size="md"
         variant="default"
         class="snippet-toolbar-select w-full sm:w-44 shrink-0 z-30 relative"

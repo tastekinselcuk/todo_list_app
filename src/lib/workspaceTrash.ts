@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export const trashModules = ['plans','detailed','quick','code','pomodoro','learning','flashcards','workout','periodic','activities'] as const
+export const trashModules = ['plans','tasks','calendar','detailed','quick','code','pomodoro','learning','flashcards','workout','periodic','activities'] as const
 export type TrashModule = typeof trashModules[number]
 export const trashTables:Record<string,TrashModule>={plans:'plans',todos:'detailed',quick_notes:'quick',code_snippets:'code',pomo_tasks:'pomodoro',learning_subjects:'learning',flashcard_decks:'flashcards',workout_routines:'workout',periodic_tasks:'periodic',activity_items:'activities'}
 export interface TrashReceipt { id:string; module:TrashModule; collection_id:string; version:number; deleted_at:string|null }

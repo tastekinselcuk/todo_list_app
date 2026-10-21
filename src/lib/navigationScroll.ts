@@ -1,3 +1,5 @@
+export const workspaceHeaderHeight = 48
+
 export interface NavigationScrollState {
   visible: boolean
   position: number

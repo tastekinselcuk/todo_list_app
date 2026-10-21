@@ -38,9 +38,13 @@
         :class="openAbove ? 'bottom-full mb-1' : 'top-full mt-1'"
         :style="{ minWidth: dropdownMinWidth }"
       >
+        <div v-if="searchable" class="relative mx-1 mb-1 border-b border-border/40">
+          <Search aria-hidden="true" class="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
+          <input ref="searchRef" v-model="query" type="search" autocomplete="off" spellcheck="false" :aria-label="searchPlaceholder" :placeholder="searchPlaceholder" class="h-9 w-full min-w-0 bg-transparent pl-7 pr-2 text-xs font-normal text-foreground outline-none placeholder:text-muted-foreground/60" @keydown.enter.stop.prevent="selectFirstMatch" />
+        </div>
         <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
           <button
-            v-for="option in options"
+            v-for="option in filteredOptions"
             :key="option.value"
             type="button"
             :disabled="option.disabled"
@@ -61,6 +65,7 @@
             <div v-else class="w-1.5 shrink-0" />
             <slot name="option" :option="option"><span class="truncate">{{ option.label }}</span></slot>
           </button>
+          <p v-if="!filteredOptions.length" role="status" class="px-3 py-3 text-xs text-muted-foreground">{{ emptyText }}</p>
         </div>
       </div>
     </Transition>
@@ -69,7 +74,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown, Search } from 'lucide-vue-next'
 
 export interface SelectOption {
   value: string
@@ -87,12 +92,17 @@ const props = withDefaults(defineProps<{
   variant?: 'default' | 'ghost'
   colorClass?: string
   preserveFocus?: boolean
+  searchable?: boolean
+  searchPlaceholder?: string
+  emptyText?: string
   buttonStyle?: Record<string, string>
 }>(), {
   placeholder: 'Seçiniz',
   size: 'md',
   variant: 'default',
   colorClass: '',
+  searchPlaceholder: 'Ara…',
+  emptyText: 'Sonuç bulunamadı',
   buttonStyle: () => ({})
 })
 
@@ -107,6 +117,11 @@ const containerRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLButtonElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownMinWidth = ref('160px')
+const query=ref(''),searchRef=ref<HTMLInputElement|null>(null)
+const filteredOptions=computed(()=>{
+  const search=query.value.trim().toLowerCase()
+  return !props.searchable || !search ? props.options : props.options.filter(option=>`${option.label} ${option.value}`.toLowerCase().includes(search))
+})
 
 const selectedOption = computed(() => props.options.find(o => o.value === props.modelValue))
 const displayLabel = computed(() => selectedOption.value?.label || props.placeholder)
@@ -133,7 +148,8 @@ function updatePosition() {
   if (!containerRef.value) return
   const rect = containerRef.value.getBoundingClientRect()
   const spaceBelow = window.innerHeight - rect.bottom
-  openAbove.value = spaceBelow < 220 && rect.top > 220
+  const height=props.searchable?260:220
+  openAbove.value = spaceBelow < height && rect.top > height
   dropdownMinWidth.value = `${Math.max(rect.width, 160)}px`
 }
 
@@ -142,22 +158,25 @@ function toggle() {
   isOpen.value = !isOpen.value
   emit('open-change', isOpen.value)
   if (isOpen.value) {
-    nextTick(updatePosition)
+    query.value=''
+    nextTick(()=>{updatePosition();if(isOpen.value)searchRef.value?.focus({preventScroll:true})})
   }
 }
 
 function handleKeydown(event: KeyboardEvent) {
   if (props.disabled || !['ArrowDown','ArrowUp','Home','End'].includes(event.key)) return
+  if(event.target===searchRef.value && ['Home','End'].includes(event.key))return
   if (!isOpen.value && ['Home','End'].includes(event.key)) return
   event.preventDefault()
   const opening=!isOpen.value
   if (opening) toggle()
+  if(opening && props.searchable)return
   nextTick(() => {
     if (!isOpen.value) return
     const choices=Array.from(dropdownRef.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
     if (!choices.length) return
     const index=choices.indexOf(document.activeElement as HTMLButtonElement)
-    const target=event.key==='Home'?0:event.key==='End'?choices.length-1:opening?(event.key==='ArrowUp'?choices.length-1:0):(index+(event.key==='ArrowUp'?-1:1)+choices.length)%choices.length
+    const target=event.key==='Home'?0:event.key==='End'?choices.length-1:opening || index<0?(event.key==='ArrowUp'?choices.length-1:0):(index+(event.key==='ArrowUp'?-1:1)+choices.length)%choices.length
     choices[target]?.focus()
   })
 }
@@ -167,6 +186,10 @@ function selectOption(option: SelectOption) {
   if (props.disabled || option.disabled) return
   emit('update:modelValue', option.value)
   close()
+}
+function selectFirstMatch(){
+  const option=filteredOptions.value.find(option=>!option.disabled)
+  if(option)selectOption(option)
 }
 
 function close(restoreFocus = true) {

@@ -65,7 +65,7 @@ onBeforeUnmount(() => { disposed = true; observer?.disconnect() })
   <div ref="shell" class="relative z-10 flex justify-center w-full">
     <div
       ref="bar"
-      class="workspace-strip bg-muted/50 backdrop-blur-md rounded-2xl border border-border/50"
+      class="workspace-strip bg-muted/30 backdrop-blur-md rounded-2xl border border-border/40"
       :style="{ '--tab-padding': `${layout.padding}px`, '--tab-gap': `${layout.gap}px`, '--tab-max-width': available ? `${available}px` : 'none' }"
     >
       <div class="arrow-slot">
@@ -81,7 +81,7 @@ onBeforeUnmount(() => { disposed = true; observer?.disconnect() })
               v-for="(tab, index) in tabs" :key="tab.id" type="button"
               :id="`workspace-tab-${tab.id}`" role="tab" :aria-controls="`workspace-panel-${tab.id}`" :tabindex="modelValue === tab.id ? 0 : -1"
               :inert="index < first || index >= first + layout.count"
-              class="strip-tab relative py-2 text-sm font-medium rounded-xl transition-colors duration-200 whitespace-nowrap"
+              class="strip-tab relative py-2 text-[13px] font-medium rounded-xl transition-colors duration-200 whitespace-nowrap"
               :class="modelValue === tab.id ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground hover:bg-background/40'"
               :aria-selected="modelValue === tab.id" :title="tab.label" @click="emit('update:modelValue', tab.id)"
               @keydown.right.prevent="selectFromKeyboard(index + 1)" @keydown.left.prevent="selectFromKeyboard(index - 1)" @keydown.home.prevent="selectFromKeyboard(0)" @keydown.end.prevent="selectFromKeyboard(tabs.length - 1)">

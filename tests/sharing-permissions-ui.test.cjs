@@ -45,6 +45,51 @@ test('viewer quick notes keep copy available and hide deletion',async()=>{
   assert.equal(editor.querySelectorAll('button').length,2)
   assert.match(viewer.body.textContent,/Shared note/)
 })
+test('focused code reader switches to editing in the same dialog, ignores backdrop clicks and keeps closing explicit',async()=>{
+  installNoteEditorDOM()
+  const doc=dom.window.document,runtime=require('@vue/runtime-dom'),prototype=dom.window.HTMLDialogElement.prototype
+  const oldShow=prototype.showModal,oldClose=prototype.close
+  prototype.showModal=function(){this.open=true}
+  prototype.close=function(){if(this.open){this.open=false;this.dispatchEvent(new dom.window.Event('close'))}}
+  const overflow=doc.body.style.overflow,rootOverflow=doc.documentElement.style.overflow,gutter=doc.documentElement.style.scrollbarGutter
+  const props=vue.reactive({modelValue:{title:'Example',language:'plaintext',code:'Example code'},languageOptions:[{value:'plaintext',label:'Plain Text'}],label:'Example',submitLabel:'Save',viewing:true,canEdit:true,saving:false})
+  const events=[],descriptor=parse(fs.readFileSync('src/features/code_snippets/components/CodeSnippetEditor.vue','utf8')).descriptor
+  const compiled=load(compileScript(descriptor,{id:'focused-code-dom',inlineTemplate:true}).content,{
+    'vue-i18n':{useI18n:()=>({t:key=>key})},
+    '@/components/ui/CustomSelect.vue':{default:{setup:()=>()=>vue.h('span','Language')}},
+    'vue-codemirror':{Codemirror:{props:['modelValue'],setup:()=>()=>vue.h('div',{class:'cm-content',tabindex:0},'Code editor')}},
+    '@codemirror/theme-one-dark':{oneDark:[]},'@codemirror/lang-javascript':{javascript:()=>[]},
+  },{document:doc}).default
+  const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,
+    createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),
+    createText:value=>doc.createTextNode(value),createComment:value=>doc.createComment(value),querySelector:selector=>doc.querySelector(selector),
+    insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]},
+  })
+  const target=doc.createElement('div');doc.body.append(target)
+  const app=renderer.createApp({setup:()=>()=>vue.h(compiled,{...props,onEdit:()=>props.viewing=false,onCancel:()=>props.viewing=true,onClose:()=>events.push('close'),onSave:()=>events.push('save')},{preview:()=>vue.h('pre','Example code')})})
+  try{
+    app.mount(target);await vue.nextTick();await vue.nextTick()
+    const dialog=doc.querySelector('dialog.note-edit-dialog'),reader=dialog.querySelector('.code-preview')
+    assert.equal(dialog.open,true);assert.equal(doc.body.style.overflow,'hidden');assert.equal(doc.activeElement,reader)
+    dialog.click();assert.deepEqual(events,[],'clicking the backdrop must not close the reader')
+    dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.deepEqual(events,[],'reading mode cannot submit a write')
+    const editButton=[...dialog.querySelectorAll('button')].find(button=>button.textContent.includes('code.edit'));editButton.click()
+    await vue.nextTick();await vue.nextTick()
+    assert.equal(doc.querySelector('dialog.note-edit-dialog'),dialog,'editing keeps the same modal and page scroll lock')
+    assert.equal(dialog.querySelector('.code-preview'),null);assert.equal(doc.activeElement,dialog.querySelector('.cm-content'))
+    props.saving=true;await vue.nextTick()
+    dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.deepEqual(events,[])
+    props.saving=false;await vue.nextTick()
+    dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.deepEqual(events,['close'])
+    dialog.querySelector('button[aria-label="common.close"]').click();assert.deepEqual(events,['close','close'])
+    props.viewing=true;props.canEdit=false;await vue.nextTick()
+    assert.equal([...dialog.querySelectorAll('button')].some(button=>button.textContent.includes('code.edit')),false,'read-only members retain reading and copy without editing')
+  }finally{
+    app.unmount();target.remove();prototype.showModal=oldShow;prototype.close=oldClose
+    assert.equal(doc.body.style.overflow,overflow);assert.equal(doc.documentElement.style.overflow,rootOverflow);assert.equal(doc.documentElement.style.scrollbarGutter,gutter)
+  }
+})
+
 function reminderFormFixture(editTask=null) {
   const descriptor=parse(fs.readFileSync('src/features/PeriodicTasks/components/PeriodicTaskForm.vue','utf8')).descriptor
   const result=load(compileScript(descriptor,{id:'reminder-form'}).content,{
@@ -172,7 +217,7 @@ test('disabled rich text sanitizes incoming changes and ignores mutation, paste,
   const result=load(compileScript(descriptor,{id:'readonly-editor'}).content,{
     '@/lib/noteContent':notes,'@/lib/noteEditor':extensionModule,
     '@/lib/noteImages':{uploadNoteImage:()=>assert.fail('readonly editors must not upload'),resolveNoteImage:async()=>''},
-    '@/components/ui/CustomSelect.vue':{default:{}},'vue-i18n':{useI18n:()=>({t:key=>key})},
+    '@/components/ui/CustomSelect.vue':{default:{}},'@/components/ui/ColorPalette.vue':{default:{}},'vue-i18n':{useI18n:()=>({t:key=>key})},
     '@tiptap/vue-3':{EditorContent:{},useEditor:options=>{core=new (require('@tiptap/core').Editor)(options);vue.onBeforeUnmount(()=>core.destroy());return vue.shallowRef(core)}},
   },{document:dom.window.document,window:dom.window}).default
   const props=vue.reactive({modelValue:'Original',disabled:true}),emitted=[]
@@ -196,7 +241,7 @@ function interactiveEditorFixture({disabled=false,upload=async()=>({path:'100000
   const compiled=load(compileScript(descriptor,{id:'editor-interactions'}).content,{
     '@/lib/noteContent':notes,'@/lib/noteEditor':{createNoteExtensions:()=>noteExtensions()},
     '@/lib/noteImages':{uploadNoteImage:upload,resolveNoteImage:async()=>'',discardNoteImage:async()=>{}},
-    '@/components/ui/CustomSelect.vue':{default:{}},'vue-i18n':{useI18n:()=>({t:key=>key})},
+    '@/components/ui/CustomSelect.vue':{default:{}},'@/components/ui/ColorPalette.vue':{default:{}},'vue-i18n':{useI18n:()=>({t:key=>key})},
     '@tiptap/vue-3':{EditorContent:{},useEditor:options=>{core=new (require('@tiptap/core').Editor)(options);vue.onBeforeUnmount(()=>core.destroy());return vue.shallowRef(core)}},
   },{document:dom.window.document,window:dom.window}).default
   const events=[],renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})
@@ -252,10 +297,66 @@ test('editor closes menus outside their trigger and panel, applies colors to the
     assert.equal(f.state.menu,null);assert.match(f.core.getHTML(),/background-color: var\(--tt-color-highlight-yellow\)/)
     f.state.setTextMode('h2');f.state.setTextMode('h2');assert.equal(f.state.textMode,'h2','choosing the same heading must not undo it')
     f.core.commands.setContent('<p>Table</p>');f.state.run('table')
+    assert.equal(f.state.menu,'table');assert.doesNotMatch(f.core.getHTML(),/<table/,'opening the picker must not insert a default table')
+    f.state.insertTable(2,5)
+    assert.equal(f.state.menu,null)
     const table=()=>f.core.getJSON().content.find(node=>node.type==='table')
     f.state.tableAction('addRowAfter');f.state.tableAction('addColumnAfter')
-    assert.equal(table().content.length,4);assert.equal(table().content[0].content.length,4)
+    assert.equal(table().content.length,3);assert.equal(table().content[0].content.length,6)
   }finally{root.remove();f.close()}
+})
+
+test('color formatting preserves the selected range, reveals its real colors and keeps preview decoration out of saved notes and undo history',async()=>{
+  const f=interactiveEditorFixture()
+  try{
+    f.core.commands.setTextSelection({from:1,to:6})
+    const before=f.core.getHTML(),updates=f.events.filter(event=>event[0]==='update:modelValue').length
+    f.state.openMenu('color')
+    assert.equal(f.core.view.dom.getAttribute('data-color-selection-preview'),'true')
+    assert.equal(f.core.view.dom.querySelector('.note-color-selection').textContent,'First')
+    assert.equal(f.core.getHTML(),before)
+    assert.equal(f.events.filter(event=>event[0]==='update:modelValue').length,updates,'opening the picker is a view change, not a note edit')
+    f.state.applyColor('text','purple');f.state.applyColor('bg','yellow')
+    assert.equal(f.core.state.selection.from,1);assert.equal(f.core.state.selection.to,6)
+    assert.equal(f.core.view.dom.getAttribute('data-color-selection-preview'),'true','the applied color remains visible after the palette closes')
+    assert.match(f.core.getHTML(),/--tt-color-text-purple/);assert.match(f.core.getHTML(),/--tt-color-highlight-yellow/)
+    assert.doesNotMatch(f.core.getHTML(),/note-color-selection|data-color-selection-preview/)
+    f.core.view.dom.dispatchEvent(new dom.window.Event('pointerdown',{bubbles:true}))
+    assert.equal(f.core.view.dom.hasAttribute('data-color-selection-preview'),false)
+    f.state.openMenu('color');f.core.commands.setTextSelection(2)
+    assert.equal(f.core.view.dom.querySelector('.note-color-selection'),null)
+    assert.equal(f.core.view.dom.hasAttribute('data-color-selection-preview'),false)
+    f.core.commands.undo()
+    assert.doesNotMatch(f.core.getHTML(),/--tt-color-highlight-yellow/,'Undo removes formatting without an extra preview-only history entry')
+    assert.match(f.core.getHTML(),/--tt-color-text-purple/)
+    f.core.commands.undo();assert.doesNotMatch(f.core.getHTML(),/--tt-color-/)
+  }finally{f.close()}
+})
+
+test('table picker supports keyboard sizing, bounded insertion and mobile access without nested tables',async()=>{
+  const f=interactiveEditorFixture(),panel=dom.window.document.createElement('div')
+  panel.innerHTML='<button data-table-cell="2-4"></button>'
+  dom.window.document.body.append(panel);f.state.panelRef=panel
+  try{
+    f.state.mobileAction('table');assert.equal(f.state.menu,'table')
+    const before=f.core.getHTML()
+    for(const [rows,cols]of [[0,1],[6,2],[2,9],[2.5,3],[NaN,3]])f.state.insertTable(rows,cols)
+    assert.equal(f.core.getHTML(),before)
+    let prevented=0
+    f.state.moveTableSelection({key:'ArrowRight',preventDefault(){prevented++}},2,3)
+    await vue.nextTick()
+    assert.equal(prevented,1);assert.equal(f.state.tableSize.rows,2);assert.equal(f.state.tableSize.columns,4)
+    assert.equal(dom.window.document.activeElement,panel.firstChild)
+    f.state.moveTableSelection({key:'ArrowDown',preventDefault(){}},5,8)
+    assert.equal(f.state.tableSize.rows,5);assert.equal(f.state.tableSize.columns,8)
+    f.state.insertTable(5,8)
+    const table=f.core.getJSON().content.find(node=>node.type==='table')
+    assert.equal(table.content.length,5);assert.equal(table.content[0].content.length,8)
+    const withTable=f.core.getHTML();f.state.insertTable(1,1);f.state.openMenu('table')
+    assert.equal(f.core.getHTML(),withTable);assert.equal(f.state.menu,null)
+  }finally{panel.remove();f.close()}
+  const viewer=interactiveEditorFixture({disabled:true})
+  try{const before=viewer.core.getHTML();viewer.state.insertTable(2,2);viewer.state.openMenu('table');assert.equal(viewer.core.getHTML(),before);assert.equal(viewer.state.menu,null)}finally{viewer.close()}
 })
 
 test('clipboard and drop images keep their intended location while uploading, with balanced busy state',async()=>{
@@ -309,6 +410,32 @@ test('toolbar dropdown dismisses on outside pointer and keyboard focus, preservi
     assert.ok(events.some(e=>e[0]==='update:modelValue' && e[1]==='b'))
     state.toggle();props.disabled=true;await vue.nextTick();assert.equal(state.isOpen,false)
   }finally{root.remove();outside.remove();app.unmount()}
+})
+
+test('searchable language dropdown filters labels and values without changing selection and resets on reopen',async()=>{
+  installNoteEditorDOM()
+  const component=load(compileScript(parse(fs.readFileSync('src/components/ui/CustomSelect.vue','utf8')).descriptor,{id:'searchable-languages'}).content,{}, {document:dom.window.document,window:dom.window}).default
+  const props=vue.reactive({modelValue:'javascript',options:[{value:'javascript',label:'JavaScript'},{value:'typescript',label:'TypeScript'},{value:'shell',label:'Bash'},{value:'sql',label:'SQL',disabled:true}],searchable:true}),events=[]
+  const renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})
+  let state
+  const app=renderer.createApp({setup(){state=vue.proxyRefs(component.setup(props,{expose(){},emit:(...args)=>events.push(args)}));return()=>vue.h('div')}})
+  app.mount({})
+  const root=dom.window.document.createElement('div');root.innerHTML='<button>Language</button><input type="search"><div><button>JavaScript</button></div>'
+  dom.window.document.body.append(root);state.containerRef=root;state.triggerRef=root.querySelector('button');state.searchRef=root.querySelector('input');state.dropdownRef=root.querySelector('div')
+  try{
+    state.toggle();await vue.nextTick();assert.equal(dom.window.document.activeElement,state.searchRef)
+    state.query=' SCRIPT ';assert.deepEqual(state.filteredOptions.map(option=>option.value),['javascript','typescript'])
+    assert.equal(props.modelValue,'javascript');assert.equal(events.filter(event=>event[0]==='update:modelValue').length,0)
+    let prevented=0;state.handleKeydown({key:'Home',target:state.searchRef,preventDefault(){prevented++}});assert.equal(prevented,0,'Home moves the text caret inside search')
+    state.query='shell';assert.equal(state.filteredOptions[0].label,'Bash','search includes the underlying language identifier')
+    state.query='not-a-language';state.selectFirstMatch();assert.equal(state.filteredOptions.length,0);assert.equal(state.isOpen,true)
+    state.query='SQL';state.selectFirstMatch();assert.equal(state.isOpen,true,'disabled matches cannot be selected')
+    state.query='TYPE';state.selectFirstMatch();assert.equal(state.isOpen,false)
+    assert.equal(events.filter(event=>event[0]==='update:modelValue').at(-1)[1],'typescript')
+    assert.equal(dom.window.document.activeElement,state.triggerRef)
+    state.toggle();await vue.nextTick();assert.equal(state.query,'');assert.equal(state.filteredOptions.length,4)
+    props.searchable=false;state.query='typescript';assert.equal(state.filteredOptions.length,4,'ordinary dropdowns retain their existing complete list')
+  }finally{app.unmount();root.remove()}
 })
 
 test('image sizing by handle and keyboard persists safe widths and viewers cannot resize',()=>{

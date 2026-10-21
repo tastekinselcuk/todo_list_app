@@ -1,5 +1,5 @@
 <template>
-  <div ref="root" data-user-profile :inert="!visible && !open" class="profile-host fixed right-4 z-[60] sm:right-6" :class="{ 'profile-hidden': !visible && !open, 'profile-docked': docked }" :style="{ top: docked ? '.5rem' : '2.375rem' }" @focusin="emit('reveal')" @keydown.esc.stop.prevent="close(true)">
+  <div ref="root" data-user-profile :inert="!visible && !open" class="profile-host fixed right-[14px] z-[60]" :class="{ 'profile-hidden': !visible && !open, 'profile-docked': docked, 'profile-attached': attached }" :style="{ top: attached ? `${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight + (workspaceHeaderHeight - 40) / 2}px` : '14px' }" @focusin="emit('reveal')" @keydown.esc.stop.prevent="close(true)">
     <button ref="trigger" type="button" class="profile-trigger inline-flex h-10 items-center gap-1.5 rounded-full border border-border/60 bg-card/80 p-1 pr-2 shadow-sm backdrop-blur-xl transition-colors hover:bg-muted/80 disabled:opacity-50" :aria-label="t('account.menuLabel')" aria-haspopup="menu" :aria-expanded="open" aria-controls="profile-menu" :disabled="auth.accountBusy" @click="open ? close(true) : show()" @keydown.down.prevent="show()" @keydown.up.prevent="show(true)">
       <span class="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold" :class="avatarClasses[validAvatarTone(auth.user?.avatarTone)]">{{ initials }}</span>
       <ChevronDown class="h-3 w-3 text-muted-foreground transition-transform" :class="{ 'rotate-180': open }" />
@@ -21,9 +21,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowUpRight, ChevronDown, LogOut, UserRound } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { workspaceHeaderHeight } from '@/lib/navigationScroll'
 import { useAuthStore } from '@/stores/auth'
 import { accountInitials, accountName, avatarClasses, validAvatarTone } from '@/lib/accountProfile'
-const props = defineProps<{ visible: boolean; docked: boolean; activeView: string }>()
+const props = defineProps<{ visible: boolean; docked: boolean; activeView: string; attached?: boolean; headerOffset?: number }>()
 const emit = defineEmits<{ edit: []; logout: []; reveal: [] }>()
 const auth = useAuthStore(), { t } = useI18n()
 const root = ref<HTMLElement>(), trigger = ref<HTMLButtonElement>()
@@ -58,6 +59,7 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside); do
 <style scoped>
 .profile-host { transition: top 260ms cubic-bezier(.22,1,.36,1), transform 220ms ease, opacity 180ms ease; }
 .profile-hidden { transform: translateY(-7rem); opacity: 0; pointer-events: none; }
+.profile-attached,.profile-attached.profile-hidden { transform:none; transition:opacity 180ms ease; }
 @media (max-width: 639px) {
   .profile-docked { right: .75rem; }
   .profile-docked .profile-trigger { padding-right: .25rem; }

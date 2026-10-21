@@ -2,20 +2,19 @@
   <div ref="workspaceStage" class="workspace-stage relative">
     <div
       ref="workspaceShell"
-      class="workspace-shell group/workspace bg-card/60 text-card-foreground px-4 pb-5 pt-3 sm:px-6 sm:pb-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border/60 relative"
+      class="workspace-shell group/workspace bg-card/60 text-card-foreground px-4 pb-5 pt-3 sm:px-6 sm:pb-6 rounded-[1.75rem] shadow-[0_6px_24px_rgb(0,0,0,0.025)] border border-border/60 relative"
       :style="{ '--workspace-content-max': settingsStore.isFullScreen ? 'none' : undefined }"
     >
 
-      <div class="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"><div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div></div>
+      <div class="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"><div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/[0.025] rounded-full blur-3xl pointer-events-none"></div></div>
 
-      <div ref="workspaceNavigation" class="workspace-navigation relative space-y-2 !mt-0">
-        <div class="relative z-20 pr-16 !mt-0"><WorkspacePicker @trash="trashOpen = true" @manage="$emit('manage-workspaces')" /></div>
+      <div ref="workspaceNavigation" class="workspace-navigation relative !mt-0">
+        <div class="relative z-20 flex min-w-0 items-center gap-1 pr-16 !mt-0">
+          <WorkspaceRail :model-value="activeTab" :enabled="activeModules.map(tab=>tab.id)" :workspace-name="workspaces.active?.name" @update:model-value="selectModule" @navigate="selectModuleView" @search="openTabSearch" @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
+          <WorkspacePicker @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
+        </div>
 
         <button ref="searchTrigger" type="button" class="absolute top-0 right-8 z-20 !m-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :title="`${t('search.title')} (Ctrl/⌘ K)`" :aria-label="t('search.title')" aria-haspopup="dialog" @click="openTabSearch"><Search class="h-4 w-4" /></button>
-
-        <div class="relative z-10 pr-7">
-          <WorkspaceTabStrip v-model="activeTab" :tabs="stripTabs" />
-        </div>
 
         <button
           type="button"
@@ -56,8 +55,9 @@ import { computed, watch, defineAsyncComponent, defineComponent, h, onMounted, o
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
 import { Expand, Search, Shrink } from 'lucide-vue-next'
-import WorkspaceTabStrip from '@/components/ui/WorkspaceTabStrip.vue'
 import WorkspacePicker from '@/components/ui/WorkspacePicker.vue'
+import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
+import { workspaceNavigationKey, type WorkspaceNavigationIntent } from '@/lib/workspaceNavigation'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import WorkspaceSearch from '@/components/ui/WorkspaceSearch.vue'
 import { searchDestinationKey, searchRevealErrorKey, searchScrollKey, type SearchDestination } from '@/lib/searchNavigation'
@@ -74,6 +74,7 @@ import { changeTrash, onTrashMove, onTrashChange, trashUndoKey, trashError } fro
 // TÜM MODÜLLERİ DİNAMİK (LAZY) OLARAK YÜKLEYELİM
 const loaders = {
   plans: () => import('@/features/plans/components/Plans.vue'),
+  tasks: () => import('@/features/tasks/components/Tasks.vue'),
   detailed: () => import('@/features/todos/components/TodoBoard.vue'),
   quick: () => import('@/features/quick_notes/components/QuickNotes.vue'),
   secure: () => import('@/features/secure_notes/components/SecureNotes.vue'),
@@ -102,12 +103,28 @@ const widthToggleLabel = computed(() => t(settingsStore.isFullScreen ? 'workspac
 
 const props = defineProps<{
   initialTab?: string
+  navigationRequest?: number
+  headerInset?: number
 }>()
 
-const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': [] }>()
+const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': []; 'active-module': [module:string]; pinned: [pinned:boolean]; 'header-offset': [offset:number] }>()
 provide(openFinanceAnalysisKey,()=>emit('open-finance-analysis'))
 const activeTab = useWorkspaceDraft('last-tab', props.initialTab || 'plans')
 if (props.initialTab) activeTab.value = props.initialTab
+const navigationIntent = ref<WorkspaceNavigationIntent|null>(null)
+let navigationSequence = 0
+provide(workspaceNavigationKey,navigationIntent)
+function selectModule(module:string) {
+  if(!activeModules.value.some(tab=>tab.id===module))return
+  activeTab.value=module
+  navigationIntent.value=module==='tasks'?{module,view:'calendar',sequence:++navigationSequence}:null
+}
+function selectModuleView(module:string,view:string) {
+  if(!activeModules.value.some(tab=>tab.id===module))return
+  if(module!=='finance'||!['transaction','position'].includes(view))return
+  activeTab.value=module
+  navigationIntent.value={module,view,sequence:++navigationSequence}
+}
 
 const componentMap = shallowReactive<Record<string, Component>>(Object.fromEntries(Object.keys(loaders).map(id => [id, createModule(id as keyof typeof loaders)])))
 
@@ -121,10 +138,11 @@ let workspaceScroll: ReturnType<typeof createWorkspaceScroll> | undefined
 provide(searchScrollKey, (element, behavior) => workspaceScroll?.reveal(element, behavior))
 onMounted(() => {
   if (workspaceStage.value && workspaceShell.value && workspaceNavigation.value && moduleViewport.value && moduleContent.value) {
-    workspaceScroll = createWorkspaceScroll(workspaceStage.value, workspaceShell.value, workspaceNavigation.value, moduleViewport.value, moduleContent.value)
+    workspaceScroll = createWorkspaceScroll(workspaceStage.value, workspaceShell.value, workspaceNavigation.value, moduleViewport.value, moduleContent.value, { headerInset: props.headerInset, onPinned: pinned => emit('pinned', pinned), onHeaderOffset: offset => emit('header-offset', offset) })
   }
 })
 onBeforeUnmount(() => workspaceScroll?.dispose())
+watch(() => props.headerInset, value => workspaceScroll?.setHeaderInset(value || 0))
 watch(activeTab, () => {
   workspaceScroll?.reset()
   void nextTick(() => workspaceScroll?.refresh())
@@ -137,8 +155,6 @@ const activeModules = computed(() => {
 })
 
 watch(() => [settingsStore.isFullScreen, settingsStore.isPomodoroDocked, activeModules.value.length], () => { void nextTick(() => workspaceScroll?.refresh()) })
-
-const stripTabs = computed(() => activeModules.value.map(tab => ({ id: tab.id, label: t(tab.id==='pomodoro'?'pomoNotes.tab':`workspace.modules.${tab.id}Name`) })))
 
 const currentComponent = computed(() => {
   return activeModules.value.some(tab => tab.id === activeTab.value) ? componentMap[activeTab.value] : null
@@ -164,7 +180,7 @@ onBeforeUnmount(()=>{stopTrashMoves();stopTrashChanges()})
 watch(() => workspaces.sessionKey, () => { destination.value = null;contentSearch.value?.close() })
 async function openTabSearch() { await contentSearch.value?.open() }
 function selectSearchHit(hit: SearchHit) {
-  if (hit.module === ('secure' as string) || !activeModules.value.some(tab => tab.id === hit.module)) return
+  if (['secure','finance'].includes(hit.module) || !activeModules.value.some(tab => tab.id === hit.module)) return
   destination.value = { ...hit, sequence: ++searchSequence }
   activeTab.value = hit.module
 }
@@ -178,7 +194,7 @@ function handleShortcut(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', handleShortcut))
 onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
 
-watch(() => props.initialTab, (newVal) => {
+watch([() => props.initialTab, () => props.navigationRequest], ([newVal]) => {
   if (newVal && activeModules.value.find(t => t.id === newVal)) {
     activeTab.value = newVal
   }
@@ -190,6 +206,7 @@ watch(activeModules, (newTabs) => {
     activeTab.value = newTabs[0]?.id || ''
   }
 }, { immediate: true })
+watch(activeTab,module=>emit('active-module',module),{immediate:true})
 </script>
 
 <style scoped>

@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 relative z-10 w-full flex flex-col items-center">
+  <div class="space-y-3 relative z-10 w-full flex flex-col items-center">
     
     <div v-if="canWrite" class="workspace-toolbar flex gap-2.5 workspace-content">
       <div class="relative flex-1 group">
@@ -20,16 +20,15 @@
       </button>
     </div>
     
-    <div class="space-y-6 pt-2 workspace-content">
+    <div class="space-y-3 workspace-content">
       
       <template v-for="(group, dateKey) in groupedNotes" :key="dateKey">
-        <div class="space-y-3 w-full">
-          <div class="flex items-center gap-3">
-            <div class="h-px flex-1 bg-gradient-to-r from-transparent via-border/50 to-transparent"></div>
-            <span class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
+        <div class="space-y-1.5 w-full">
+          <div class="flex h-5 items-center gap-2 px-1">
+            <time :datetime="String(dateKey)" class="shrink-0 text-[11px] font-medium leading-5 text-muted-foreground">
               {{ formatDateHeader(String(dateKey)) }}
-            </span>
-            <div class="h-px flex-1 bg-gradient-to-l from-transparent via-border/50 to-transparent"></div>
+            </time>
+            <div aria-hidden="true" class="h-px flex-1 bg-border/40"></div>
           </div>
           
           <div class="grid grid-cols-1 gap-2 w-full">
@@ -69,18 +68,13 @@ const { canWrite } = useModuleAccess('quick')
 
 const todoStore = useTodoStore()
 const uiStore = useUIStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const quickNote = useWorkspaceDraft('quick-note', '')
 
-const getTodayKey = () => {
-  const today = new Date()
-  return today.toISOString().split('T')[0]
-}
-
-const getDateKey = (isoDate: string) => {
-  return isoDate.split('T')[0]
-}
+const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+const getTodayKey = () => localDateKey(new Date())
+const getDateKey = (isoDate: string) => localDateKey(new Date(isoDate))
 
 const formatDateHeader = (dateKey: string) => {
   const date = new Date(dateKey + 'T00:00:00')
@@ -90,10 +84,10 @@ const formatDateHeader = (dateKey: string) => {
 
   if (dateKey === getTodayKey()) {
     return t('todo.today') 
-  } else if (dateKey === yesterday.toISOString().split('T')[0]) {
+  } else if (dateKey === localDateKey(yesterday)) {
     return t('todo.yesterday') 
   } else {
-    return date.toLocaleDateString(t('workspace.language') === 'Dil' ? 'tr-TR' : 'en-US', { 
+    return date.toLocaleDateString(locale?.value || 'tr', {
       month: 'long', 
       day: 'numeric', 
       year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined 

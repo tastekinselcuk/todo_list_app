@@ -154,3 +154,10 @@
 }
 .workspace-shell[data-long-toolbar] .workspace-toolbar { position: relative; top: auto; }
 .workspace-shell [data-search-record] { scroll-margin-block: 8px; }
+
+/* Creation and editing share one viewport-fitted note surface. */
+.note-edit-dialog { width:calc(100vw - 32px); max-width:1100px; height:min(820px,calc(100dvh - 48px)); max-height:calc(100dvh - 48px); margin:auto; padding:0; overflow:hidden; overscroll-behavior:contain; border:1px solid hsl(var(--border)/.6); border-radius:18px; background:hsl(var(--card)); color:hsl(var(--foreground)); box-shadow:0 24px 80px rgb(0 0 0 / .2); }
+.note-edit-dialog::backdrop { background:hsl(var(--background)/.8); backdrop-filter:blur(6px); }
+.note-edit-form { display:flex; flex-direction:column; height:100%; min-height:0; gap:12px; padding:16px; }
+@media(max-width:639px){.note-edit-dialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);border-radius:14px}.note-edit-form{padding:12px;gap:10px}}
+@media(prefers-reduced-motion:no-preference){.note-edit-dialog[open]{animation:note-editor-enter 180ms ease-out}@keyframes note-editor-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}}
