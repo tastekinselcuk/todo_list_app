@@ -19,7 +19,10 @@
             <CustomSelect v-model="group" :options="groupOptions" :aria-label="t('workout.muscleGroup')" :disabled="busy" size="sm" />
             <CustomSelect v-model="equipment" :options="equipmentOptions" :aria-label="t('workout.equipment')" :disabled="busy" size="sm" />
           </div>
-          <p class="text-[11px] text-muted-foreground" role="status">{{ loading ? t('workout.fetching') : t('workout.libraryCount', { count: matches.length }) }}</p>
+          <div class="flex min-h-7 items-center justify-between gap-2">
+            <p class="text-[11px] text-muted-foreground" role="status">{{ loading ? t('workout.fetching') : t('workout.libraryCount', { count: matches.length }) }}</p>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-40" :disabled="busy || !hasFilters" @click="resetFilters"><RotateCcw class="h-3 w-3" />{{ t('workout.resetFilters') }}</button>
+          </div>
           <div v-if="catalogError" class="rounded-xl border border-border/40 p-4 text-xs text-muted-foreground"><p>{{ t('workout.libraryError') }}</p><button type="button" class="mt-2 text-foreground underline" @click="loadCatalog">{{ t('workout.retry') }}</button></div>
           <div v-else class="max-h-[42dvh] overflow-y-auto pr-1">
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -65,7 +68,7 @@
 <script setup lang="ts">
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { Loader2, Plus, Search, X } from 'lucide-vue-next'
+import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import ExerciseImage from './ExerciseImage.vue'
@@ -83,6 +86,8 @@ const draft = ref<ExerciseInput>(blank())
 const capturedVersion = ref<number>(), capturedId = ref('')
 const valid = computed(() => Boolean(draft.value.name.trim() && draft.value.reps.trim() && Number.isInteger(draft.value.sets) && draft.value.sets >= 1 && draft.value.sets <= 100))
 const matches = computed(() => searchCatalog(catalog.value, query.value, group.value, equipment.value))
+const hasFilters = computed(() => Boolean(query.value.trim() || group.value !== 'all' || equipment.value !== 'all'))
+function resetFilters() { query.value = ''; group.value = 'all'; equipment.value = 'all'; limit.value = 24 }
 const groupOptions = computed(() => [{ value: 'all', label: t('workout.allMuscles') }, ...muscleGroups.map(value => ({ value, label: t('workout.groups.' + value) }))])
 const equipmentOptions = computed(() => [{ value: 'all', label: t('workout.allEquipment') }, ...equipmentTypes.map(value => ({ value, label: t('workout.equipmentNames.' + value.replace(/ /g, '_').replace(/-/g, '_')) }))])
 const muscleLabel = (muscle: string) => t('workout.muscles.' + muscle.replace(/ /g, '_'))
@@ -92,6 +97,7 @@ async function loadCatalog() {
 }
 watch(() => props.show, async show => {
   if (!show) { if (dialog.value?.open) dialog.value.close(); return }
+  resetFilters()
   const original = props.exercise
   mode.value = original ? 'edit' : 'library'
   draft.value = original ? { ...blank(), ...original } : blank()

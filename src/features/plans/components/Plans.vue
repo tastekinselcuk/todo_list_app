@@ -8,9 +8,7 @@ import { ArrowUpRight, Check, Clock3, Copy, History, Trash2, X } from 'lucide-vu
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { usePlansStore, type Plan } from '../stores/plans'
 import { firstPopulatedPeriod, periodStart, periods, type Period } from '../lib/periods'
-import { workspaceStorageKey } from '@/lib/workspaceScope'
 import { useUIStore } from '@/stores/ui'
-import { readStorage } from '@/lib/storage'
 
 const { canWrite } = useModuleAccess('plans')
 
@@ -39,21 +37,19 @@ const copy = computed(() => tr.value ? {
   retry: 'Retry', complete: 'Complete', undo: 'Mark incomplete',
   copy: 'Copy', copied: 'Copied', copyFailed: 'Could not copy', delete: 'Delete', deleted: 'Plan deleted', deleteFailed: 'Could not delete plan',
 })
-const selected = useWorkspaceDraft<Period>('plan-period', 'daily')
-if (!periods.includes(selected.value)) selected.value = 'daily'
-let periodChosen = readStorage(workspaceStorageKey('plan-period')) !== null
+const selected = ref<Period>('daily')
+let periodChosen = false
 const emptyMessage = computed(() => tr.value
   ? `Henüz ${copy.value[selected.value].toLocaleLowerCase('tr-TR')} plan eklenmedi.`
   : `No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
 const inputPeriod = ref<Period>(selected.value)
 const periodOptions = computed(() => periods.map(value => ({ value, label: copy.value[value] })))
 const title = useWorkspaceDraft('plan-title', '')
-const historyKey = workspaceStorageKey('plans-history')
-const showHistory = useWorkspaceDraft('plans-history', readStorage(historyKey) === 'true')
+const showHistory = ref(false)
 const editing = ref<Plan | null>(null)
 const dialog = ref<HTMLDialogElement | null>(null)
 watch(editing, async value => {
-  if (value) { await nextTick(); if (!dialog.value?.open) dialog.value?.showModal() }
+  if (value) { await nextTick(); if (editing.value===value&&!dialog.value?.open) dialog.value?.showModal() }
 })
 const reason = ref('')
 const today = ref(new Date())
@@ -144,7 +140,7 @@ function watchDay() { clearInterval(timer); timer = setInterval(() => { if (peri
 onMounted(watchDay)
 onActivated(watchDay)
 useModuleLoad(() => refresh(true))
-onDeactivated(() => { clearInterval(timer); editing.value = null })
+onDeactivated(() => { clearInterval(timer); editing.value = null; dialog.value?.close(); showHistory.value=false; selected.value='daily'; inputPeriod.value='daily'; periodChosen=false })
 onUnmounted(() => clearInterval(timer))
 useSearchReveal('plans', async (hit, isCurrent) => {
   if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period

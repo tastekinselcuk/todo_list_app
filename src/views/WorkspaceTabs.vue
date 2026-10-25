@@ -9,12 +9,10 @@
       <div class="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"><div class="absolute -top-10 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/[0.025] rounded-full blur-3xl pointer-events-none"></div></div>
 
       <div ref="workspaceNavigation" class="workspace-navigation relative !mt-0">
-        <div class="relative z-20 flex min-w-0 items-center gap-1 pr-16 !mt-0">
-          <WorkspaceRail :model-value="activeTab" :active-view="reportedView?.module===activeTab?reportedView.view:'topics'" :enabled="activeModules.map(tab=>tab.id)" :workspace-name="workspaces.active?.name" @update:model-value="selectModule" @navigate="selectModuleView" @search="openTabSearch" @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
-          <WorkspacePicker @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
+        <div class="relative z-20 flex min-w-0 items-center gap-1 pr-8 !mt-0">
+          <WorkspaceRail :model-value="activeTab" :enabled="activeModules.map(tab=>tab.id)" :workspace-name="workspaces.active?.name" @update:model-value="selectModule" @search="openTabSearch" @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
+          <WorkspaceModulePicker :model-value="activeTab" :active-view="activeModuleView" :enabled="activeModules.map(tab=>tab.id)" @update:model-value="selectModule" @navigate="selectModuleView" />
         </div>
-
-        <button ref="searchTrigger" type="button" class="absolute top-0 right-8 z-20 !m-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :title="`${t('search.title')} (Ctrl/⌘ K)`" :aria-label="t('search.title')" aria-haspopup="dialog" @click="openTabSearch"><Search class="h-4 w-4" /></button>
 
         <button
           type="button"
@@ -54,8 +52,8 @@
 import { computed, watch, defineAsyncComponent, defineComponent, h, onMounted, onBeforeUnmount, ref, nextTick, shallowReactive, provide, type Component } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
-import { Expand, Search, Shrink } from 'lucide-vue-next'
-import WorkspacePicker from '@/components/ui/WorkspacePicker.vue'
+import { Expand, Shrink } from 'lucide-vue-next'
+import WorkspaceModulePicker from '@/components/ui/WorkspaceModulePicker.vue'
 import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
 import { workspaceNavigationKey, workspaceActiveViewKey, workspaceOpenItemKey, type WorkspaceNavigationIntent } from '@/lib/workspaceNavigation'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
@@ -115,23 +113,29 @@ if (props.initialTab && settingsStore.isModuleActive(props.initialTab)) activeTa
 const navigationIntent = ref<WorkspaceNavigationIntent|null>(null)
 let navigationSequence = 0
 provide(workspaceNavigationKey,navigationIntent)
-const reportedView=ref<{module:string;view:string}|null>(null)
-provide(workspaceActiveViewKey,(module,view)=>{reportedView.value={module,view};emit('active-view',module,view)})
+const moduleViews=shallowReactive<Record<string,string>>({})
+const activeModuleView=computed(()=>moduleViews[activeTab.value]||'')
+provide(workspaceActiveViewKey,(module,view)=>{moduleViews[module]=view;emit('active-view',module,view)})
 function applyInitialView(){
   const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','today','mistakes']}
-  if(allowed[activeTab.value]?.includes(props.initialView||''))navigationIntent.value={module:activeTab.value,view:props.initialView!,sequence:++navigationSequence}
+  if(allowed[activeTab.value]?.includes(props.initialView||'')){moduleViews[activeTab.value]=props.initialView!;navigationIntent.value={module:activeTab.value,view:props.initialView!,sequence:++navigationSequence}}
 }
 applyInitialView()
 function selectModule(module:string) {
   if(!activeModules.value.some(tab=>tab.id===module))return
   activeTab.value=module
-  navigationIntent.value=module==='tasks'?{module,view:'calendar',sequence:++navigationSequence}:null
+  destination.value=null
+  const view=({tasks:'calendar',finance:'transaction',learning:'topics'} as Record<string,string>)[module]
+  if(view)moduleViews[module]=view
+  navigationIntent.value=view?{module,view,sequence:++navigationSequence}:null
 }
 function selectModuleView(module:string,view:string) {
   if(!activeModules.value.some(tab=>tab.id===module))return
-  const allowed:Record<string,string[]>={finance:['transaction','position'],learning:['topics','today','mistakes']}
+  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','today','mistakes']}
   if(!allowed[module]?.includes(view))return
+  destination.value=null
   activeTab.value=module
+  moduleViews[module]=view
   navigationIntent.value={module,view,sequence:++navigationSequence}
 }
 
@@ -170,7 +174,6 @@ const currentComponent = computed(() => {
 })
 
 const contentSearch = ref<InstanceType<typeof WorkspaceSearch>>()
-const searchTrigger = ref<HTMLButtonElement>()
 const destination = ref<SearchDestination | null>(null)
 provide(searchDestinationKey, destination)
 const ui = useUIStore()

@@ -183,7 +183,7 @@
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onDeactivated } from 'vue'
 import { Layers, Plus, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
 import { useFlashcardStore, type Deck } from '@/features/flashcards/stores/flashcards'
 import { useUIStore } from '@/stores/ui'
@@ -219,6 +219,10 @@ const flippedCards = ref<string[]>([])
 const testResults = ref<{cardId: string, isCorrect: boolean}[]>([])
 const gameScore = ref(0)
 const gameErrors = ref(0)
+onDeactivated(() => {
+  currentView.value = 'decks'; activeDeck.value = null; flippedCards.value = []
+  testResults.value = []; gameScore.value = 0; gameErrors.value = 0
+})
 
 useModuleLoad(() => store.fetchDecks())
 

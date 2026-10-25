@@ -11,7 +11,7 @@ import { usePomodoroStore } from '../stores/pomodoro'
 import { usePomoNotesStore, type PomoTask } from '../stores/pomoNotes'
 const { t, locale }=useI18n(),store=usePomoNotesStore(),timer=usePomodoroStore(),ui=useUIStore()
 const { canWrite }=useModuleAccess('pomodoro')
-const title=useWorkspaceDraft('pomo-note-title',''),estimate=useWorkspaceDraft('pomo-note-estimate',1)
+const title=useWorkspaceDraft('pomo-note-title',''),estimate=ref(1)
 if(!Number.isInteger(estimate.value)||estimate.value<1||estimate.value>999)estimate.value=1
 const input=ref<HTMLInputElement>(),menu=ref<PomoTask|null>(null),menuRef=ref<HTMLElement>(),menuStyle=ref<Record<string,string>>({})
 const menuTrigger=ref<HTMLElement|null>(null)
@@ -29,7 +29,7 @@ async function add() {
   if(!title.value.trim()||!Number.isInteger(estimate.value)||estimate.value<1||estimate.value>999||store.saving||!canWrite.value||store.status!=='ready')return
   const text=title.value.trim(),goal=Math.max(1,Math.min(999,Math.round(estimate.value)))
   if(await store.mutate('create',null,{title:text,estimate:goal,seconds:timer.durations.focus*60})){
-    title.value='';await nextTick();input.value?.focus()
+    title.value='';estimate.value=1;await nextTick();if(visible)input.value?.focus()
   }
 }
 async function toggle(task:PomoTask) {
@@ -109,10 +109,11 @@ function activate() {
 }
 function deactivate() {
   visible=false;store.active=false;menu.value=null;modal.value?.close();editing.value=null
+  estimate.value=1;store.search='';store.revealedId='';store.filter='active'
   if(poll)clearInterval(poll);poll=undefined
   if(syncDelay)clearTimeout(syncDelay)
 }
-watch(()=>store.filter,()=>{menu.value=null;if(!revealing){store.revealedId='';void store.load()}})
+watch(()=>store.filter,()=>{menu.value=null;if(!revealing){store.revealedId='';if(visible)void store.load()}})
 watch(()=>timer.taskStatsSequence,()=>{
   if(!visible||store.saving||editing.value)return
   if(syncDelay)clearTimeout(syncDelay);syncDelay=setTimeout(()=>{void store.load()},150)

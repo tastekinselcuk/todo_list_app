@@ -60,10 +60,10 @@ import ActivityCard from './ActivityCard.vue'
 import ActivityCollectionEditor from './ActivityCollectionEditor.vue'
 const {t}=useI18n(),{canWrite}=useModuleAccess('activities'),store=useActivityListsStore(),ui=useUIStore(),workspaces=useWorkspacesStore(),scope=workspaces.sessionKey
 const libraryRoot=ref<HTMLElement>(),reveal=inject(searchScrollKey,null)
-const opened=useWorkspaceDraft('activity-open-collection',''),selectedType=useWorkspaceDraft<ActivityType>('activity-type','movie'),searchQuery=useWorkspaceDraft('activity-search','')
+const opened=ref(''),selectedType=useWorkspaceDraft<ActivityType>('activity-type','movie'),searchQuery=ref('')
 const statusFilter=ref('all'),typeFilter=ref('all'),showArchived=ref(false),newName=ref(''),working=ref(false),createId=ref(crypto.randomUUID())
 const searchResults=ref<SearchResult[]>([]),isSearching=ref(false),searched=ref(false),typeIcons={movie:Film,series:Tv,book:BookOpen,place:MapPin}
-let searchGeneration=0,controller:AbortController|undefined
+let searchGeneration=0,entryGeneration=0,controller:AbortController|undefined
 const editorMode=ref<'collection'|'memberships'|null>(null),editingCollection=ref<ActivityCollection|null>(null),editingItem=ref<ActivityItem|null>(null),editorError=ref<string|null>(null)
 const currentCollection=computed(()=>store.collections.find(c=>c.id===opened.value)),collectionName=computed(()=>opened.value===generalCollection?t('activityLibrary.general'):currentCollection.value?.name||'')
 const currentItems=computed(()=>store.inCollection(opened.value)),hasArchives=computed(()=>store.collections.some(c=>c.archived_at))
@@ -80,10 +80,10 @@ async function reload(){await store.loadItems();if(opened.value&&opened.value!==
 watch(opened,async()=>{clearSearch();searchQuery.value='';statusFilter.value='all';typeFilter.value='all';await nextTick();const toolbar=libraryRoot.value?.querySelector<HTMLElement>('.workspace-toolbar');if(toolbar&&libraryRoot.value!.getBoundingClientRect().top<0)reveal?.(toolbar,'smooth')})
 watch(selectedType,clearSearch)
 function clearSearch(){searchGeneration++;controller?.abort();controller=undefined;searchResults.value=[];searched.value=false;isSearching.value=false}
-onDeactivated(()=>{clearSearch();closeEditor(true)})
+onDeactivated(()=>{entryGeneration++;opened.value='';searchQuery.value='';statusFilter.value='all';typeFilter.value='all';showArchived.value=false;clearSearch();closeEditor(true)})
 onBeforeUnmount(()=>{clearSearch();closeEditor(true)})
 async function run(action:()=>Promise<unknown>){if(working.value)return false;working.value=true;editorError.value=null;try{await action();return true}catch(error){const code=activityLibraryError(error);if(editorMode.value)editorError.value=code;else ui.addToast(t('activityLibrary.errors.'+code),'error');return false}finally{working.value=false}}
-async function createCollection(){if(!newName.value.trim())return;const name=newName.value.trim();if(await run(async()=>{const data=await store.mutate('collection.create',createId.value,{name});opened.value=data.collection.id})){if(newName.value.trim()===name)newName.value='';createId.value=crypto.randomUUID();showArchived.value=false}}
+async function createCollection(){if(!newName.value.trim())return;const name=newName.value.trim(),entry=entryGeneration;if(await run(async()=>{const data=await store.mutate('collection.create',createId.value,{name});if(entry===entryGeneration)opened.value=data.collection.id})){if(newName.value.trim()===name)newName.value='';createId.value=crypto.randomUUID();if(entry===entryGeneration)showArchived.value=false}}
 function editCollection(collection:ActivityCollection){editingCollection.value={...collection};editingItem.value=null;editorError.value=null;editorMode.value='collection'}
 function organizeItem(item:ActivityItem){editingItem.value={...item};editingCollection.value=null;editorError.value=null;editorMode.value='memberships'}
 function closeEditor(force=false){if(working.value&&!force)return;editorMode.value=null;editingCollection.value=null;editingItem.value=null;editorError.value=null}
@@ -106,9 +106,9 @@ async function runSearch(){
 const addRequests=new Map<string,string>()
 function resultKey(result:SearchResult){return `${opened.value}:${result.type}:${result.externalSource}:${result.externalId}`}
 function resultAdded(result:SearchResult){return currentItems.value.some(item=>item.type===result.type&&item.external_source===result.externalSource&&item.external_id===result.externalId)}
-async function addResult(result:SearchResult){const key=resultKey(result),id=addRequests.get(key)||crypto.randomUUID();addRequests.set(key,id)
+async function addResult(result:SearchResult){const key=resultKey(result),id=addRequests.get(key)||crypto.randomUUID(),entry=entryGeneration;addRequests.set(key,id)
  const saved=await run(async()=>{const data=await store.addFromSearch(result,opened.value,id)
-  if(data.already_exists&&opened.value===generalCollection&&data.group_ids?.length){const ids:string[]=data.group_ids;opened.value=ids.find(id=>store.collections.some(c=>c.id===id&&!c.archived_at))||ids[0]!;ui.addToast(t('activities.alreadyExists'),'info')}
+  if(entry===entryGeneration&&data.already_exists&&opened.value===generalCollection&&data.group_ids?.length){const ids:string[]=data.group_ids;opened.value=ids.find(id=>store.collections.some(c=>c.id===id&&!c.archived_at))||ids[0]!;ui.addToast(t('activities.alreadyExists'),'info')}
   else ui.addToast(t(data.already_exists?'activityLibrary.alreadyInCollection':'activityLibrary.added'),'info')
  })
  if(saved)addRequests.delete(key)

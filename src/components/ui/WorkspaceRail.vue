@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeftRight, BookOpen, CalendarDays, CheckSquare, ChevronRight, ChevronsLeft, ChevronsRight, Clapperboard, Code2, Dumbbell, Heart, Layers, LayoutGrid, ListTodo, NotebookPen, PanelLeft, Repeat, Search, Settings2, ShieldCheck, Target, Timer, Trash2, TrendingUp, Wallet, X, Zap } from 'lucide-vue-next'
+import { BookOpen, CalendarDays, ChevronsLeft, ChevronsRight, Heart, Layers, LayoutGrid, NotebookPen, PanelLeft, Search, Settings2, Trash2, Wallet, X } from 'lucide-vue-next'
 import { chooseWorkspaceSectionModule, getWorkspaceSections, workspaceSectionFor, type PageNavigationContext, type WorkspaceSection, type WorkspaceSectionId } from '@/lib/workspaceSections'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
+import WorkspacePicker from './WorkspacePicker.vue'
 
-const props = withDefaults(defineProps<{ modelValue: string; enabled?: string[]; workspaceName?: string; context?:PageNavigationContext; activeView?:string }>(),{enabled:()=>[],activeView:'topics'})
-const emit = defineEmits<{ 'update:modelValue': [id: string]; navigate: [module: string, view: string]; search: []; manage: []; trash: [] }>()
+const props = withDefaults(defineProps<{ modelValue: string; enabled?: string[]; workspaceName?: string; context?:PageNavigationContext }>(),{enabled:()=>[]})
+const emit = defineEmits<{ 'update:modelValue': [id: string]; search: []; manage: []; trash: [] }>()
 const { t } = useI18n()
 const sections = computed(() => getWorkspaceSections(props.enabled))
 const activeSection = computed(() => workspaceSectionFor(props.modelValue))
@@ -15,13 +16,12 @@ const railMode = useWorkspaceDraft('workspace-rail-mode', 'auto')
 // A collapsed rail always supports a temporary preview. Preserve existing open pins.
 if (railMode.value !== 'open') railMode.value = 'auto'
 const hovered = ref(false), focused = ref(false), mobileOpen = ref(false)
+const workspacePickerOpen=ref(false),desktopPicker=ref<InstanceType<typeof WorkspacePicker>>()
+const canPickWorkspace=computed(()=>!props.context||Boolean(props.workspaceName))
 const pinned = computed(() => railMode.value === 'open')
-const expanded = computed(() => pinned.value || hovered.value || focused.value)
+const expanded = computed(() => pinned.value || hovered.value || focused.value || workspacePickerOpen.value)
 const desktop = ref<HTMLElement>(), drawer = ref<HTMLDialogElement>(), mobileTrigger = ref<HTMLButtonElement>()
-const shownSection = computed(() => sections.value.find(section => section.id === activeSection.value) || sections.value[0])
-const icons: Record<string, Component> = { BookOpen, CalendarDays, CheckSquare, Clapperboard, Code2, Dumbbell, Heart, Layers, LayoutGrid, ListTodo, NotebookPen, Repeat, Settings2, ShieldCheck, Target, Timer, Wallet, Zap }
-const moduleIcons: Record<string, string> = { plans: 'ListTodo', tasks: 'CalendarDays', detailed: 'CheckSquare', quick: 'Zap', secure: 'ShieldCheck', code: 'Code2', pomodoro: 'Timer', learning: 'Target', flashcards: 'Layers', workout: 'Dumbbell', periodic: 'Repeat', activities: 'Clapperboard', finance: 'Wallet' }
-const moduleName = (id: string) => t(id === 'pomodoro' ? 'pomoNotes.tab' : `workspace.modules.${id}Name`)
+const icons: Record<string, Component> = { BookOpen, CalendarDays, Heart, Layers, LayoutGrid, NotebookPen, Settings2, Wallet }
 const searchShortcut = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'
 let previousFocus: HTMLElement | null = null, blockedFocus: EventTarget | null = null
 let scrollState: { body: string; root: string; gutter: string } | undefined
@@ -52,15 +52,6 @@ function selectSection(section: WorkspaceSection) {
   const id = chooseWorkspaceSectionModule(section, memory.get(section.id))
   if (id) selectModule(id)
 }
-function selectFinanceView(view: 'transaction' | 'position') {
-  if (!props.enabled.includes('finance')) return
-  selectModule('finance')
-  emit('navigate', 'finance', view)
-}
-function selectLearningView(view:string){
-  if(!props.enabled.includes('learning'))return
-  selectModule('learning');emit('navigate','learning',view)
-}
 function pointerEnter(event: PointerEvent) {
   if (event.pointerType !== 'mouse' || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
   blockedFocus = null; hovered.value = true
@@ -81,27 +72,19 @@ function focusLeave() {
   })
 }
 function closeDesktop() {
-  if (desktop.value?.querySelector('.rail-modules')?.contains(document.activeElement)) focusCategory()
+  desktopPicker.value?.close()
   hovered.value = false; focused.value = false
   blockedFocus = document.activeElement
 }
 function togglePin() {
   const open = !pinned.value
-  if (!open && desktop.value?.querySelector('.rail-modules')?.contains(document.activeElement)) focusCategory()
+  desktopPicker.value?.close()
   railMode.value = open ? 'open' : 'auto'
   hovered.value = false; focused.value = false
   blockedFocus = document.activeElement
 }
-async function focusSectionModules(section: WorkspaceSection) {
-  if (section.id !== activeSection.value) return
-  blockedFocus = null; focused.value = true
-  await nextTick()
-  desktop.value?.querySelector<HTMLButtonElement>('.rail-modules .rail-module')?.focus({ preventScroll: true })
-}
-function focusCategory() {
-  desktop.value?.querySelector<HTMLButtonElement>(`[data-section="${shownSection.value?.id}"]`)?.focus({ preventScroll: true })
-}
 function outsidePointer(event: PointerEvent) {
+  if(workspacePickerOpen.value)return
   if (!desktop.value?.contains(event.target as Node)) closeDesktop()
 }
 function restoreScroll() {
@@ -163,27 +146,18 @@ onBeforeUnmount(() => {
   <aside ref="desktop" data-workspace-rail :data-context="context?.title" :data-pinned-open="pinned ? '' : undefined" class="workspace-rail" :class="{ 'is-expanded': expanded }" :aria-label="t(context?.title || 'workspaceNav.navigation')" @pointerenter="pointerEnter" @pointerleave="pointerLeave" @pointerdown="focused = false" @focusin="focusEnter" @focusout="focusLeave" @keydown.esc.stop.prevent="closeDesktop()">
     <div class="rail-heading">
       <button type="button" class="rail-mark" :aria-label="t(pinned ? 'workspaceNav.pinClosed' : 'workspaceNav.pinOpen')" :title="t(pinned ? 'workspaceNav.pinClosed' : 'workspaceNav.pinOpen')" :aria-expanded="expanded" :aria-pressed="pinned" @click="togglePin"><ChevronsLeft v-if="pinned" :size="20" :stroke-width="1.7" /><ChevronsRight v-else :size="20" :stroke-width="1.7" /></button>
-      <div class="rail-heading-copy"><span v-if="!context || workspaceName">{{ t(context?.title || 'workspaceNav.workspace') }}</span><strong :title="workspaceName">{{ workspaceName || t(context?.title || 'workspaceNav.workspace') }}</strong></div>
+      <WorkspacePicker v-if="expanded && canPickWorkspace" ref="desktopPicker" variant="rail" @open-change="workspacePickerOpen=$event" @manage="action('manage')" />
+      <div v-else class="rail-heading-copy"><span v-if="!context || workspaceName">{{ t(context?.title || 'workspaceNav.workspace') }}</span><strong :title="workspaceName">{{ workspaceName || t(context?.title || 'workspaceNav.workspace') }}</strong></div>
     </div>
     <div class="rail-content">
       <nav v-if="context" class="rail-categories" :aria-label="t(context.title)">
         <button v-for="item in context.items" :key="item.id" type="button" class="rail-category" :class="{'is-active':modelValue===item.id}" :title="t(item.label)" :aria-label="t(item.label)" :aria-current="modelValue===item.id?'page':undefined" @click="selectPage(item.id)"><span class="rail-category-icon"><component :is="icons[item.icon]" :size="20" :stroke-width="1.65" /></span><span class="rail-category-label">{{ t(item.label) }}</span></button>
       </nav>
       <nav v-else class="rail-categories" :aria-label="t('workspaceNav.sectionsLabel')">
-        <button v-for="section in sections" :key="section.id" type="button" class="rail-category" :data-section="section.id" :class="{ 'is-active': activeSection === section.id }" :title="t(`workspaceNav.sections.${section.id}`)" :aria-label="t(`workspaceNav.sections.${section.id}`)" :aria-current="activeSection === section.id ? 'page' : undefined" :aria-expanded="expanded && shownSection?.id === section.id" @keydown.right.prevent="focusSectionModules(section)" @click="selectSection(section)">
-          <span class="rail-category-icon"><component :is="icons[section.icon]" :size="20" :stroke-width="1.65" /></span><span class="rail-category-label">{{ t(`workspaceNav.sections.${section.id}`) }}</span><ChevronRight class="rail-category-chevron" :size="14" />
+        <button v-for="section in sections" :key="section.id" type="button" class="rail-category" :data-section="section.id" :class="{ 'is-active': activeSection === section.id }" :title="t(`workspaceNav.sections.${section.id}`)" :aria-label="t(`workspaceNav.sections.${section.id}`)" :aria-current="activeSection === section.id ? 'page' : undefined" @click="selectSection(section)">
+          <span class="rail-category-icon"><component :is="icons[section.icon]" :size="20" :stroke-width="1.65" /></span><span class="rail-category-label">{{ t(`workspaceNav.sections.${section.id}`) }}</span>
         </button>
       </nav>
-      <Transition name="rail-details">
-        <nav v-if="!context && expanded && shownSection" class="rail-modules" :aria-label="t(`workspaceNav.sections.${shownSection.id}`)" @keydown.left.stop.prevent="focusCategory">
-          <div class="rail-section-heading"><span>{{ t(`workspaceNav.sections.${shownSection.id}`) }}</span><span>{{ shownSection.modules.length }}</span></div>
-          <template v-for="id in shownSection.modules" :key="id">
-           <button type="button" class="rail-module" :class="{ 'is-active': modelValue === id && (id!=='learning'||activeView==='topics') }" :aria-current="modelValue===id&&(id!=='learning'||activeView==='topics')?'page':undefined" @click="id==='learning'?selectLearningView('topics'):selectModule(id)"><component :is="icons[moduleIcons[id]!]" :size="16" :stroke-width="1.7" /><span>{{ id==='learning'?t('study.views.topics'):moduleName(id) }}</span><span v-if="modelValue===id&&(id!=='learning'||activeView==='topics')" class="rail-current-dot" /></button>
-           <div v-if="id==='learning'" class="rail-finance-views"><button v-for="item in ['today','mistakes']" :key="item" type="button" class="rail-module" :class="{'is-active':modelValue==='learning'&&activeView===item}" :aria-current="modelValue==='learning'&&activeView===item?'page':undefined" @click="selectLearningView(item)"><CalendarDays v-if="item==='today'" :size="15" /><BookOpen v-else :size="15" /><span>{{ t('study.views.'+item) }}</span></button></div>
-          </template>
-          <div v-if="shownSection.id === 'finance'" class="rail-finance-views"><button type="button" class="rail-module" @click="selectFinanceView('transaction')"><ArrowLeftRight :size="15" :stroke-width="1.7" /><span>{{ t('finance.cashflow') }}</span></button><button type="button" class="rail-module" @click="selectFinanceView('position')"><TrendingUp :size="15" :stroke-width="1.7" /><span>{{ t('finance.positions') }}</span></button></div>
-        </nav>
-      </Transition>
     </div>
     <footer v-if="!context" class="rail-footer">
       <button type="button" class="rail-action" :title="t('workspaceNav.search')" :aria-label="t('workspaceNav.search')" @click="action('search')"><Search :size="19" :stroke-width="1.65" /><span>{{ t('workspaceNav.search') }}</span><kbd>{{ searchShortcut }}</kbd></button>
@@ -196,17 +170,10 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <dialog ref="drawer" class="rail-drawer" :aria-label="t(context?.title || 'workspaceNav.navigation')" @cancel.prevent="closeMobile" @keydown="drawerKeys" @click="event => { if (event.target === drawer) closeMobile() }">
       <div class="drawer-surface">
-        <header class="drawer-heading"><div><span v-if="!context || workspaceName">{{ t(context?.title || 'workspaceNav.workspace') }}</span><h2>{{ workspaceName || t(context?.title || 'workspaceNav.sectionsLabel') }}</h2></div><button type="button" class="drawer-close" :aria-label="t('workspaceNav.close')" @click="closeMobile"><X :size="19" /></button></header>
-        <nav v-if="context" class="drawer-sections" :aria-label="t(context.title)"><button v-for="item in context.items" :key="item.id" type="button" class="rail-module" :class="{'is-active':modelValue===item.id}" :aria-current="modelValue===item.id?'page':undefined" @click="selectPage(item.id)"><component :is="icons[item.icon]" :size="17" :stroke-width="1.7" /><span>{{ t(item.label) }}</span><ChevronRight :size="14" /></button></nav>
+        <header class="drawer-heading"><WorkspacePicker v-if="mobileOpen && canPickWorkspace" variant="rail" :portal-target="drawer" @select="closeMobile" @manage="action('manage')" /><div v-else><span v-if="!context || workspaceName">{{ t(context?.title || 'workspaceNav.workspace') }}</span><h2>{{ workspaceName || t(context?.title || 'workspaceNav.sectionsLabel') }}</h2></div><button type="button" class="drawer-close" :aria-label="t('workspaceNav.close')" @click="closeMobile"><X :size="19" /></button></header>
+        <nav v-if="context" class="drawer-sections" :aria-label="t(context.title)"><button v-for="item in context.items" :key="item.id" type="button" class="rail-module" :class="{'is-active':modelValue===item.id}" :aria-current="modelValue===item.id?'page':undefined" @click="selectPage(item.id)"><component :is="icons[item.icon]" :size="17" :stroke-width="1.7" /><span>{{ t(item.label) }}</span></button></nav>
         <nav v-else class="drawer-sections" :aria-label="t('workspaceNav.sectionsLabel')">
-          <section v-for="section in sections" :key="section.id" class="drawer-section">
-            <h3><component :is="icons[section.icon]" :size="15" :stroke-width="1.7" />{{ t(`workspaceNav.sections.${section.id}`) }}</h3>
-            <template v-for="id in section.modules" :key="id">
-             <button type="button" class="rail-module" :class="{ 'is-active': modelValue===id&&(id!=='learning'||activeView==='topics') }" :aria-current="modelValue===id&&(id!=='learning'||activeView==='topics')?'page':undefined" @click="id==='learning'?selectLearningView('topics'):selectModule(id)"><component :is="icons[moduleIcons[id]!]" :size="17" :stroke-width="1.7" /><span>{{ id==='learning'?t('study.views.topics'):moduleName(id) }}</span><ChevronRight :size="14" /></button>
-             <div v-if="id==='learning'" class="rail-finance-views"><button v-for="item in ['today','mistakes']" :key="item" type="button" class="rail-module" :class="{'is-active':modelValue==='learning'&&activeView===item}" :aria-current="modelValue==='learning'&&activeView===item?'page':undefined" @click="selectLearningView(item)"><CalendarDays v-if="item==='today'" :size="16" /><BookOpen v-else :size="16" /><span>{{ t('study.views.'+item) }}</span></button></div>
-            </template>
-            <div v-if="section.id === 'finance'" class="rail-finance-views"><button type="button" class="rail-module" @click="selectFinanceView('transaction')"><ArrowLeftRight :size="16" :stroke-width="1.7" /><span>{{ t('finance.cashflow') }}</span></button><button type="button" class="rail-module" @click="selectFinanceView('position')"><TrendingUp :size="16" :stroke-width="1.7" /><span>{{ t('finance.positions') }}</span></button></div>
-          </section>
+          <button v-for="section in sections" :key="section.id" type="button" class="rail-module" :data-section="section.id" :class="{'is-active':activeSection===section.id}" :aria-current="activeSection===section.id?'page':undefined" @click="selectSection(section)"><component :is="icons[section.icon]" :size="19" :stroke-width="1.65" /><span>{{ t(`workspaceNav.sections.${section.id}`) }}</span></button>
         </nav>
         <footer v-if="!context" class="drawer-footer"><button type="button" @click="action('search')"><Search :size="18" />{{ t('workspaceNav.search') }}</button><button type="button" @click="action('trash')"><Trash2 :size="18" />{{ t('workspaceNav.trash') }}</button><button type="button" @click="action('manage')"><Settings2 :size="18" />{{ t('workspaceNav.manage') }}</button></footer>
       </div>
@@ -232,19 +199,13 @@ onBeforeUnmount(() => {
 .rail-category:hover{background:hsl(var(--secondary)/.7);color:hsl(var(--foreground))}
 .rail-category.is-active{color:hsl(var(--primary));background:hsl(var(--primary)/.09);border-color:hsl(var(--primary)/.1)}
 .rail-category-label{font-size:12px;font-weight:550;flex:1;opacity:0;transition:opacity 130ms ease}
-.rail-category-chevron{color:hsl(var(--muted-foreground)/.7);margin-right:8px;opacity:0;transition:opacity 130ms ease}
-.is-expanded .rail-category-label,.is-expanded .rail-category-chevron{opacity:1}
-.rail-modules{border-top:1px solid hsl(var(--border)/.6);padding:13px 10px 14px;min-width:calc(var(--workspace-rail-open-width,224px) - 22px)}
-.rail-section-heading{display:flex;align-items:center;justify-content:space-between;padding:0 9px 9px;color:hsl(var(--muted-foreground));font-size:10px;line-height:16px;font-weight:550;letter-spacing:.025em}
-.rail-section-heading>span:last-child{color:hsl(var(--muted-foreground)/.75);font-variant-numeric:tabular-nums}
+.is-expanded .rail-category-label{opacity:1}
 .rail-module{display:flex;align-items:center;gap:10px;position:relative;width:100%;min-height:38px;padding:8px 10px;border:1px solid transparent;border-radius:10px;color:hsl(var(--muted-foreground));font-size:12px;text-align:left;transition:background 150ms,color 150ms,border-color 150ms}
 .rail-module>svg{flex-shrink:0;color:hsl(var(--muted-foreground)/.85)}
-.rail-module>span:not(.rail-current-dot){flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.rail-module>span{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .rail-module:hover{background:hsl(var(--secondary)/.6);color:hsl(var(--foreground))}
 .rail-module.is-active{border-color:hsl(var(--primary)/.12);background:hsl(var(--primary)/.075);color:hsl(var(--foreground));font-weight:550}
 .rail-module.is-active>svg{color:hsl(var(--primary))}
-.rail-current-dot{width:5px;height:5px;flex:0 0 5px;border-radius:50%;background:hsl(var(--primary))}
-.rail-finance-views{margin:4px 0 0 17px;padding-left:7px;border-left:1px solid hsl(var(--border)/.6)}.rail-finance-views .rail-module{font-size:11px;min-height:35px}
 .rail-footer{padding:10px 9px;display:flex;flex-direction:column;gap:2px;border-top:1px solid hsl(var(--border)/.5);flex-shrink:0}
 .rail-action{display:flex;align-items:center;gap:13px;width:100%;height:37px;padding:0 10px;white-space:nowrap;border-radius:10px;color:hsl(var(--muted-foreground));text-align:left;transition:background 150ms,color 150ms}
 .rail-action>svg{flex:0 0 19px}
@@ -256,7 +217,6 @@ onBeforeUnmount(() => {
 .rail-mark:hover{background:hsl(var(--muted)/.55);color:hsl(var(--foreground));border-color:hsl(var(--border))}
 .rail-mobile-trigger{display:none;align-items:center;gap:7px;border:1px solid hsl(var(--border)/.65);border-radius:10px;padding:7px 10px;background:hsl(var(--card)/.75);color:hsl(var(--muted-foreground));font-size:11px;line-height:16px;white-space:nowrap;transition:background 150ms,color 150ms}
 .rail-mobile-trigger:hover{background:hsl(var(--secondary));color:hsl(var(--foreground))}
-.rail-details-enter-active{transition:opacity 150ms ease,transform 190ms ease}.rail-details-leave-active{transition:opacity 80ms ease}.rail-details-enter-from{opacity:0;transform:translateX(-5px)}.rail-details-leave-to{opacity:0}
 .rail-drawer{position:fixed;inset:0 auto 0 0;margin:0;padding:0;border:0;width:min(320px,calc(100vw - 32px));max-width:none;max-height:none;height:100dvh;overflow:visible;background:transparent;color:hsl(var(--foreground));outline:none}
 .rail-drawer::backdrop{background:hsl(var(--foreground)/.18);backdrop-filter:blur(4px)}
 .drawer-surface{display:flex;flex-direction:column;height:100%;overflow:hidden;border-right:1px solid hsl(var(--border)/.7);background:hsl(var(--card));box-shadow:12px 0 54px hsl(var(--foreground)/.1)}
@@ -265,11 +225,10 @@ onBeforeUnmount(() => {
 .drawer-heading>div{min-width:0}.drawer-heading h2{margin:4px 0 0;font-size:15px;line-height:21px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .drawer-close{display:flex;align-items:center;justify-content:center;border-radius:9px;width:32px;height:32px;flex-shrink:0;color:hsl(var(--muted-foreground))}.drawer-close:hover{background:hsl(var(--secondary))}
 .drawer-sections{flex:1;min-height:0;overflow-y:auto;padding:15px 14px;overscroll-behavior:contain;scrollbar-width:thin}
-.drawer-section+.drawer-section{margin-top:18px}.drawer-section h3{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:550;line-height:16px;color:hsl(var(--muted-foreground));padding:0 9px;margin:0 0 6px;letter-spacing:.025em}
-.drawer-section .rail-module{min-height:42px;font-size:12px;margin-top:2px}
+.drawer-sections .rail-module{min-height:44px;font-size:12px;margin-top:3px}
 .drawer-footer{display:flex;gap:2px;padding:10px 12px max(12px,env(safe-area-inset-bottom));border-top:1px solid hsl(var(--border)/.65)}
 .drawer-footer button{display:flex;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:7px;padding:9px 3px;border-radius:10px;font-size:10px;color:hsl(var(--muted-foreground))}.drawer-footer button:hover{background:hsl(var(--secondary));color:hsl(var(--foreground))}
 @keyframes drawer-enter{from{opacity:.6;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
 @media(max-width:1023px){.workspace-rail{display:none}.rail-mobile-trigger{display:inline-flex}}
-@media(prefers-reduced-motion:reduce){.workspace-rail,.workspace-rail *,.rail-mobile-trigger,.rail-details-enter-active,.rail-details-leave-active{transition:none!important}.rail-drawer[open] .drawer-surface{animation:none}}
+@media(prefers-reduced-motion:reduce){.workspace-rail,.workspace-rail *,.rail-mobile-trigger{transition:none!important}.rail-drawer[open] .drawer-surface{animation:none}}
 </style>

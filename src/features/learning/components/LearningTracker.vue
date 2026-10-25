@@ -14,14 +14,14 @@ import { studyTopics,studyStatuses,studyNameLimit,topicNameLimit,validStudyName,
 import { useStudyOrder } from '../lib/useStudyOrder'
 import type { ExamImport } from '../lib/examTemplates'
 import { uploadStudyImage,discardStudyImage,signStudyImage } from '../lib/images'
-import { useModuleAccess,useModuleLoad,useWorkspaceDraft } from '@/lib/workspaceScope'
+import { useModuleAccess,useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { workspaceNavigationKey,workspaceActiveViewKey,workspaceOpenItemKey } from '@/lib/workspaceNavigation'
 import { useUIStore } from '@/stores/ui'
 import { usePomodoroStore } from '@/features/pomodoro/stores/pomodoro'
 const store=useLearningStore(),ui=useUIStore(),timer=usePomodoroStore(),{t}=useI18n(),{canWrite}=useModuleAccess('learning')
 const navigation=inject(workspaceNavigationKey,null),reportView=inject(workspaceActiveViewKey,()=>{}),openItem=inject(workspaceOpenItemKey,()=>{})
-const view=useWorkspaceDraft<LearningView>('subject-view','topics'),query=ref(''),status=ref('all'),showArchive=ref(false),expanded=ref<string|null>(null),today=ref(studyToday())
+const view=ref<LearningView>('topics'),query=ref(''),status=ref('all'),showArchive=ref(false),expanded=ref<string|null>(null),today=ref(studyToday())
 const disabled=computed(()=>store.busy||store.isLoading||store.setupRequired),mistakeFilter=ref('open')
 const statusOptions=computed(()=>studyStatuses.map(value=>({value,label:t('study.status.'+value)})))
 const filterOptions=computed(()=>[{value:'all',label:t('study.all')},...statusOptions.value])
@@ -30,14 +30,16 @@ const groups=computed(()=>store.subjects.map(subject=>({subject,topics:studyTopi
 const dueTopics=computed(()=>store.subjects.flatMap(subject=>subject.topics.filter(topic=>!topic.archived&&isStudyDue(store.state(subject.id,topic.id).review_on,today.value)).map(topic=>({subject,topic}))))
 const dueMistakes=computed(()=>store.dueMistakes.filter(m=>isStudyDue(m.review_on,today.value)))
 const visibleMistakes=computed(()=>store.mistakes.filter(m=>(mistakeFilter.value==='archive'?!!m.deleted_at:!m.deleted_at&&m.resolved===(mistakeFilter.value==='resolved'))&&(!query.value||`${m.prompt} ${m.source} ${topicLabel(m.subject_id,m.topic_id)}`.toLocaleLowerCase().includes(query.value.toLocaleLowerCase()))))
-let active=true
+let active=true,entryGeneration=0
 useModuleLoad(async()=>{today.value=studyToday();await store.fetchSubjects();if(view.value==='mistakes')await store.fetchMistakes(mistakeFilter.value)})
 watch(()=>navigation?.value,intent=>{if(intent?.module==='learning'&&['topics','today','mistakes'].includes(intent.view))view.value=intent.view as LearningView},{immediate:true})
 watch(view,next=>{reportView('learning',next);query.value='';if(next==='mistakes')void store.fetchMistakes(mistakeFilter.value)},{immediate:true})
-watch(mistakeFilter,next=>void store.fetchMistakes(next))
+watch(mistakeFilter,next=>{if(active&&view.value==='mistakes')void store.fetchMistakes(next)})
 watch(()=>timer.taskStatsSequence,()=>{if(active&&!disabled.value)void store.fetchSubjects()})
 function refreshVisible(){if(active&&document.visibilityState==='visible'&&!disabled.value){today.value=studyToday();void store.fetchSubjects();if(view.value==='mistakes')void store.fetchMistakes(mistakeFilter.value)}}
-onMounted(()=>document.addEventListener('visibilitychange',refreshVisible));onActivated(()=>{active=true});onDeactivated(()=>{active=false;closePanel(true)})
+onMounted(()=>document.addEventListener('visibilitychange',refreshVisible));onActivated(()=>{active=true});onDeactivated(()=>{
+ active=false;entryGeneration++;closePanel(true);view.value='topics';query.value='';status.value='all';showArchive.value=false;expanded.value=null;mistakeFilter.value='open';newStudy.value=false
+})
 onBeforeUnmount(()=>{document.removeEventListener('visibilitychange',refreshVisible);closePanel(true)})
 useSearchReveal('learning',async(hit,isCurrent)=>{await store.fetchSubjects(hit.record_id);if(!isCurrent())return;view.value='topics';query.value='';status.value='all';expanded.value=hit.record_id;showArchive.value=Boolean(store.subjects.find(s=>s.id===hit.record_id)?.topics.find(topic=>topic.id===hit.child_id)?.archived)})
 
@@ -71,12 +73,14 @@ function closePanel(force=false){if(panelBusy.value&&!force)return;panel.value=n
 async function beginStudy(){if(disabled.value||!canWrite.value)return;if(!newStudy.value){newTitle.value='';newId.value=crypto.randomUUID();newStudy.value=true}await nextTick();newInput.value?.focus()}
 async function saveSubject(){
  if(!canWrite.value||!newStudy.value||!validStudyName(newTitle.value,studyNameLimit))return
- if(await run(()=>store.mutate('subject.create',newId.value,null,{title:newTitle.value.trim()}))){expanded.value=newId.value;newStudy.value=false;newTitle.value='';query.value='';status.value='all';showArchive.value=false}
+ const entry=entryGeneration
+ if(await run(()=>store.mutate('subject.create',newId.value,null,{title:newTitle.value.trim()}))&&entry===entryGeneration){expanded.value=newId.value;newStudy.value=false;newTitle.value='';query.value='';status.value='all';showArchive.value=false}
 }
 async function saveTopics(s:Subject,titles:string[]){
  if(!canWrite.value||!titles.length||titles.length>100||!titles.every(title=>validStudyName(title,topicNameLimit)))return false
+ const entry=entryGeneration
  const saved=await run(()=>store.mutate('topic.add',s.id,null,{titles}))
- if(saved){expanded.value=s.id;query.value='';status.value='all';showArchive.value=false}return saved
+ if(saved&&entry===entryGeneration){expanded.value=s.id;query.value='';status.value='all';showArchive.value=false}return saved
 }
 async function rename(s:Subject,topic:Topic|null,title:string,version?:number){
  if(!canWrite.value||topic?.archived||!validStudyName(title,topic?topicNameLimit:studyNameLimit))return false

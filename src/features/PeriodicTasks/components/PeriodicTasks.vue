@@ -25,11 +25,11 @@
 
 <script setup lang="ts">
 import { useModuleLoad } from '@/lib/workspaceScope'
-import { computed, ref } from 'vue'
+import { computed, ref, onDeactivated } from 'vue'
 import { Bell } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { useUIStore } from '@/stores/ui'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { usePeriodicTasksStore, type PeriodicTask, type PeriodicTaskInput } from '../stores/periodicTasks'
@@ -40,7 +40,8 @@ const {canWrite}=useModuleAccess('periodic'),{t}=useI18n()
 const uiStore=useUIStore(),workspaces=useWorkspacesStore(),taskStore=usePeriodicTasksStore()
 const editingTask=ref<PeriodicTask|null>(null),formRef=ref<{resetForm:()=>void}|null>(null)
 const submitting=ref(false)
-const viewMode=useWorkspaceDraft<'today'|'all'>('routine-view','all')
+const viewMode=ref<'today'|'all'>('all')
+onDeactivated(()=>{viewMode.value='all';editingTask.value=null})
 const browserPermission=ref(getBrowserPermission())
 const visibleTasks=computed(()=>viewMode.value==='today'?taskStore.todaysTasks:taskStore.tasks)
 useModuleLoad(async()=>{await taskStore.loadTasks();browserPermission.value=getBrowserPermission()})

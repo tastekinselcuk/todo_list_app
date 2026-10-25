@@ -38,7 +38,7 @@
  </section>
 </template>
 <script setup lang="ts">
-import { computed,nextTick,ref } from 'vue'
+import { computed,nextTick,ref,onDeactivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown,MoreHorizontal,Plus,RotateCcw,Trash2,GripVertical,Check,X } from 'lucide-vue-next'
 import draggable from 'vuedraggable'
@@ -49,6 +49,7 @@ import { useStudyOrder } from '../lib/useStudyOrder'
 const props=defineProps<{subject:Subject;topics:Topic[];isExpanded:boolean;canWrite:boolean;disabled:boolean;canReorder:boolean;archivedView:boolean;createTopics:(titles:string[])=>Promise<boolean>;saveOrder:(ids:string[],version?:number)=>Promise<boolean>}>()
 defineEmits<{toggle:[];manage:[];delete:[];archive:[topic:Topic];restore:[topic:Topic];status:[topic:Topic,status:StudyStatus]}>()
 const {t}=useI18n(),store=useLearningStore(),adding=ref(false),creating=ref(false),bulkMode=ref(false),singleDraft=ref(''),bulkDraft=ref(''),topicInput=ref<HTMLTextAreaElement>(),detailTopic=ref('')
+onDeactivated(()=>{detailTopic.value='';adding.value=false})
 const topicDraft=computed({get:()=>bulkMode.value?bulkDraft.value:singleDraft.value,set:value=>{if(bulkMode.value)bulkDraft.value=value;else singleDraft.value=value}})
 const {ordered,blocked,saving,reducedMotion,announcement,start,finish,move}=useStudyOrder(()=>props.topics,()=>props.disabled||!props.canWrite||!props.canReorder||adding.value,()=>({version:props.subject.version,ids:props.subject.topics.map(t=>t.id)}),(ids,context)=>props.saveOrder(mergeStudyOrder(context.ids,ids),context.version))
 const statusOptions=computed(()=>['todo','doing','done'].map(value=>({value,label:t('study.status.'+value)})))

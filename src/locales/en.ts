@@ -36,6 +36,7 @@ export default {
     pinOpen: 'Keep sidebar open', pinClosed: 'Collapse sidebar',
     navigation: 'Workspace navigation', workspace: 'Workspace', sectionsLabel: 'Sections',
     search: 'Search', trash: 'Trash', manage: 'Settings', close: 'Close sections',
+    moduleOptions: '{section} options',
     sections: { notes: 'Notes', planning: 'Calendar', focus: 'Focus', learning: 'Learning', life: 'Life', finance: 'Finance' },
   },
   tasks: {
@@ -840,6 +841,7 @@ app: {
     workoutComplete: 'All exercises completed.',
     greatJob: 'Great job crushing this routine.',
     resetRoutine: 'Clear checkmarks',
+    resetFilters: 'Reset',
     exerciseDatabase: 'Exercise Database',
     searchAPI: 'Search by muscle group, equipment or exercise name',
     searchPlaceholder: 'Search for \'squat\', \'chest\', \'dumbbell\'...',

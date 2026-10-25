@@ -52,8 +52,8 @@
 <script setup lang="ts">
 import { useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
-import { ref, computed } from 'vue'
+import { useModuleAccess } from '@/lib/workspaceScope'
+import { ref, computed, onDeactivated } from 'vue'
 import { CheckSquare, Loader2 } from 'lucide-vue-next'
 import { useTodoStore, type Todo, type Category } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
@@ -67,9 +67,9 @@ import CategoryModal from './CategoryModal.vue'
 const { canWrite } = useModuleAccess('detailed')
 const todoStore = useTodoStore(), uiStore = useUIStore()
 const { t, locale } = useI18n()
-const selectedCategories = useWorkspaceDraft<string[]>('todo-categories', [])
-const showCompleted = useWorkspaceDraft('todo-show-completed', true)
-const isGrouped = useWorkspaceDraft('todo-grouped', false)
+const selectedCategories = ref<string[]>([])
+const showCompleted = ref(true)
+const isGrouped = ref(false)
 const query = ref('')
 const showCategoryDialog = ref(false), loading = ref(true), loadFailed = ref(false)
 const pendingIds = ref(new Set<string>())
@@ -112,6 +112,7 @@ const getCategoryName = (id: string | null) => todoStore.categories.find(categor
 function clearFilters() {
   query.value = ''; selectedCategories.value = []; showCompleted.value = true
 }
+onDeactivated(() => { clearFilters(); isGrouped.value = false; showCategoryDialog.value = false })
 async function handleToggleTodo(id: string) {
   if (!canWrite.value || pendingIds.value.has(id)) return
   pendingIds.value.add(id)

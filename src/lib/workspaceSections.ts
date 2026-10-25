@@ -68,3 +68,18 @@ export function chooseWorkspaceSectionModule(section: WorkspaceSection, remember
   if (section.id === 'planning' && section.modules.includes('tasks')) return 'tasks'
   return section.modules[0]
 }
+
+export interface WorkspaceModuleOption {value:string;module:ModuleId;view?:string;label:string;icon:string}
+/** The content picker contains only the active section's enabled modules and their existing views. */
+export function getWorkspaceModuleOptions(enabled:readonly string[],activeModule:string):WorkspaceModuleOption[] {
+  const section=getWorkspaceSections(enabled).find(item=>item.id===workspaceSectionFor(activeModule))
+  if(!section)return []
+  const views:Partial<Record<ModuleId,{view:string;label:string;icon:string}[]>>={
+    learning:[{view:'topics',label:'study.views.topics',icon:'BookOpen'},{view:'today',label:'study.views.today',icon:'CalendarDays'},{view:'mistakes',label:'study.views.mistakes',icon:'NotebookPen'}],
+    finance:[{view:'transaction',label:'finance.cashflow',icon:'ArrowLeftRight'},{view:'position',label:'finance.positions',icon:'TrendingUp'}],
+  }
+  return section.modules.flatMap((module):WorkspaceModuleOption[]=>{
+    if(views[module])return views[module]!.map(view=>({value:`${module}:${view.view}`,module,...view}))
+    return [{value:module,module,label:module==='tasks'?'tasks.calendar':module==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module}Name`,icon:moduleCatalog.find(item=>item.id===module)!.icon}]
+  })
+}

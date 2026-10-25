@@ -370,7 +370,7 @@ test('month cells show three events, then two plus the remaining count, and open
  const {JSDOM}=require('jsdom'),dom=new JSDOM('<!doctype html><div id="calendar"></div>',{pretendToBeVisual:true})
  const previous=new Map(),globals={window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,getComputedStyle:dom.window.getComputedStyle.bind(dom.window)}
  const blocks=[...[3,4].flatMap((count,day)=>Array.from({length:count},(_,i)=>({id:`${day}-${i}`,title:`Event ${i}`,starts_at:`2026-10-${20+day}T09:00`,ends_at:`2026-10-${20+day}T10:00`})))]
- const f=calendarFixture({blocks},{'tasks-calendar-period':'dayGridMonth'});let calendar
+ const f=calendarFixture({blocks});f.state.period.value='dayGridMonth';let calendar
  for(const[key,value]of Object.entries(globals)){previous.set(key,global[key]);global[key]=value}
  // Supply event dimensions for JSDOM's otherwise zero-height layout engine.
  dom.window.HTMLElement.prototype.getBoundingClientRect=function(){const event=this.classList.contains('fc-daygrid-event-harness'),cell=this.closest('.fc-daygrid-day'),x=cell?Number(cell.dataset.date?.slice(-2))%7*100:0;return{x,y:0,left:x,top:0,right:x+100,bottom:event?18:100,width:cell?100:700,height:event?18:100}}

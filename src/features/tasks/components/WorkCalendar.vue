@@ -58,15 +58,15 @@ import type { CalendarOptions, EventInput, EventDropArg } from '@fullcalendar/co
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, GripVertical, ListTodo, Loader2, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { localDay, type WorkBlock, type WorkTask } from '../lib/tasks'
 const props=defineProps<{blocks:WorkBlock[];tasks:WorkTask[];deadlines:Pick<WorkTask,'id'|'title'|'due_on'|'status'>[];busy:boolean;loading:boolean;failed?:boolean;paging?:boolean;hasMore:boolean;saveMove:(block:WorkBlock,start:string,end:string)=>Promise<boolean>;taskDraft?:string;canCreateTask?:boolean}>()
 const emit=defineEmits<{range:[start:string,end:string];create:[date:Date,end?:Date];edit:[block:WorkBlock];task:[id:string];schedule:[task:WorkTask,date?:Date];'drop-task':[task:WorkTask,date:Date];'toggle-task':[id:string];more:[];'update:taskDraft':[value:string];'add-task':[]}>()
 const {t,locale}=useI18n(),calendar=ref<InstanceType<typeof FullCalendar>>(),dragArea=ref<HTMLElement>(),heading=ref('')
 const calendarRoot=ref<HTMLElement>(),calendarSurface=ref<HTMLElement>(),inspector=ref<HTMLElement>(),inspectorTitle=ref<HTMLElement>()
-const period=useWorkspaceDraft('tasks-calendar-period',typeof window!=='undefined'&&window.matchMedia('(max-width:639px)').matches?'listWeek':'timeGridWeek')
-const savedDay=useWorkspaceDraft('tasks-calendar-day',localDay()),selectedDay=useWorkspaceDraft('tasks-calendar-selected-day',localDay()),panel=useWorkspaceDraft('tasks-calendar-panel','day')
-const showCompleted=useWorkspaceDraft('tasks-calendar-completed',false),showDeadlines=useWorkspaceDraft('tasks-calendar-deadlines',true),showWorkingHours=useWorkspaceDraft('tasks-calendar-working-hours',true)
+const defaultPeriod=typeof window!=='undefined'&&window.matchMedia('(max-width:639px)').matches?'listWeek':'timeGridWeek'
+const period=ref(defaultPeriod)
+const savedDay=ref(localDay()),selectedDay=ref(localDay()),panel=ref('day')
+const showCompleted=ref(false),showDeadlines=ref(true),showWorkingHours=ref(true)
 const validDay=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&value>='1900-01-01'&&value<='2100-12-31'&&localDay(new Date(`${value}T12:00:00`))===value
 if(!['dayGridMonth','timeGridWeek','timeGridDay','listWeek'].includes(period.value))period.value='timeGridWeek'
 if(!validDay(savedDay.value))savedDay.value=localDay()
@@ -173,8 +173,12 @@ function pauseCalendarSize(){sizingActive=false;sizeObserver?.disconnect();sizeO
 function windowResized(){closeFilters();queueCalendarResize()}
 function layoutTransitionEnded(event:Event){const target=event.target as HTMLElement|null;if(target?.contains(calendarRoot.value||null)||target?.matches('.pomodoro-host'))queueCalendarResize()}
 onMounted(()=>{activateCalendarSize();document.addEventListener('pointerdown',dismissInspector);document.addEventListener('transitionend',layoutTransitionEnded,true);window.visualViewport?.addEventListener('resize',windowResized);window.addEventListener('resize',windowResized);window.addEventListener('scroll',closeFilters,{passive:true})})
-onActivated(activateCalendarSize)
-onDeactivated(()=>{pauseCalendarSize();closeFilters()})
+onActivated(()=>{activateCalendarSize();calendar.value?.getApi().changeView(period.value,selectedDay.value)})
+onDeactivated(()=>{
+ pauseCalendarSize();closeFilters();selectedBlock.value='';inspectorOpen.value=false;panel.value='day'
+ period.value=defaultPeriod;savedDay.value=localDay();selectedDay.value=localDay()
+ showCompleted.value=false;showDeadlines.value=true;showWorkingHours.value=true
+})
 onBeforeUnmount(()=>{document.removeEventListener('pointerdown',dismissInspector);document.removeEventListener('transitionend',layoutTransitionEnded,true);window.visualViewport?.removeEventListener('resize',windowResized);draggable?.destroy();pauseCalendarSize();closeFilters();window.removeEventListener('resize',windowResized);window.removeEventListener('scroll',closeFilters)})
 </script>
 <style scoped>

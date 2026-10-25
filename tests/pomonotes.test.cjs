@@ -93,6 +93,20 @@ test('failed addition and conflicting edits retain text and the version captured
  }finally{f.close()}
 })
 
+test('PomoNotes starts each new entry with one session and resets filters when leaving without stopping the timer or losing a title draft',async()=>{
+ const f=componentFixture();try{
+  assert.equal(f.state.estimate.value,1)
+  f.state.title.value='A multi-session task';f.state.estimate.value=4;f.succeed();await f.state.add()
+  assert.equal(f.operations[0][2].estimate,4);assert.equal(f.state.estimate.value,1)
+  f.state.title.value='Unfinished title';f.state.estimate.value=8;f.store.filter='completed';f.store.search='old filter'
+  f.timer.currentTarget={id:'running'};f.state.deactivate();await settle()
+  assert.equal(f.state.estimate.value,1);assert.equal(f.state.title.value,'Unfinished title')
+  assert.equal(f.store.filter,'active');assert.equal(f.store.search,'');assert.equal(f.store.revealedId,'')
+  assert.equal(f.timer.currentTarget.id,'running','navigation does not change the global focus session')
+  const before=f.loads.length;f.state.activate();await settle();assert.equal(f.loads.length,before+1)
+ }finally{f.close()}
+})
+
 test('readers may edit their goal without mutating the shared title or completion',async()=>{
  const f=componentFixture(true);try {
   await f.state.toggle(task('A'));assert.equal(f.operations.length,0)

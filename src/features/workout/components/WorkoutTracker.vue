@@ -69,7 +69,7 @@
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { ArrowLeft, CheckCircle2, Copy, Dumbbell, Loader2, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
@@ -88,7 +88,7 @@ const days = ['Any', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Sa
 const dayLabel = (day: string) => t(day === 'Any' ? 'workout.anyDay' : 'workout.' + day.toLowerCase())
 const dayOptions = computed(() => days.map(value => ({ value, label: dayLabel(value) })))
 const newRoutineTitle = useWorkspaceDraft('routine-title', ''), newRoutineDay = useWorkspaceDraft('routine-day', 'Any')
-const activeId = useWorkspaceDraft('workout-active-routine', ''), query = ref('')
+const activeId = ref(''), query = ref('')
 const activeRoutine = computed(() => store.routines.find(routine => routine.id === activeId.value))
 const filtered = computed(() => store.routines.filter(routine => fold(routine.title).includes(fold(query.value))))
 const completed = computed(() => activeRoutine.value?.exercises.filter(exercise => exercise.isCompleted).length || 0)
@@ -97,6 +97,13 @@ const showLibrary = ref(false), editedExercise = ref<Exercise | null>(null), loa
 const previewExercise = ref<Exercise | null>(null)
 const programDialog = ref<HTMLDialogElement>(), editingProgram = ref<Routine | null>(null), editingTitle = ref(''), editingDay = ref('Any')
 const failed = () => ui.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
+let entryGeneration = 0
+onDeactivated(() => {
+  entryGeneration++
+  activeId.value = ''; query.value = ''; showLibrary.value = false
+  editedExercise.value = null; previewExercise.value = null; editingProgram.value = null
+  programDialog.value?.close()
+})
 
 async function loadPrograms() { loadFailed.value = !await store.fetchRoutines() }
 useModuleLoad(loadPrograms)
@@ -106,18 +113,21 @@ watch(activeId, () => { previewExercise.value = null })
 async function createProgram() {
   if (!canWrite.value || store.isSaving || store.isLoading || !newRoutineTitle.value.trim()) return
   const title = newRoutineTitle.value
+  const entry = entryGeneration
   const saved = await store.addRoutine(title, newRoutineDay.value)
   if (!saved) { failed(); return }
   if (newRoutineTitle.value === title) newRoutineTitle.value = ''
+  if (entry !== entryGeneration) return
   activeId.value = saved.id
   editedExercise.value = null; showLibrary.value = true
 }
 async function editProgram(routine: Routine) {
   if (!canWrite.value || store.isSaving) return
+  const entry = entryGeneration
   editingProgram.value = { ...routine }
   editingTitle.value = routine.title; editingDay.value = routine.day_of_week
   await nextTick()
-  programDialog.value?.showModal()
+  if (entry === entryGeneration) programDialog.value?.showModal()
 }
 async function saveProgram() {
   const routine = editingProgram.value
@@ -130,9 +140,10 @@ async function duplicateProgram(id: string) {
   if (!canWrite.value || store.isSaving) return
   const routine = store.routines.find(item => item.id === id)
   if (!routine) return
+  const entry = entryGeneration
   const result = await store.duplicateRoutine(id, routine.title + ' (' + t('workout.copySuffix') + ')')
   if (!result) { failed(); return }
-  activeId.value = result.id
+  if (entry === entryGeneration) activeId.value = result.id
   ui.addToast(t('workout.programCopied'), 'success')
 }
 async function deleteProgram(id: string) {

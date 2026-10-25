@@ -91,6 +91,7 @@ function harness(authOverride) {
     '@/views/DashboardHome.vue': { default: placeholder('Home') }, '@/views/WorkspaceCustomizer.vue': { default: placeholder('Settings') },
     '@/components/ui/WorkspaceSearch.vue': { default: placeholder('Search') },
     '@/components/ui/WorkspaceRail.vue': { default: placeholder('Workspace rail') },
+    '@/components/ui/WorkspaceModulePicker.vue': { default: placeholder('Module picker') },
     '@/views/WorkspaceTabs.vue': { default: placeholder('Workspace') }, '@/views/LoginSignup.vue': { default: placeholder('Login') },
     '@/components/ui/ToastContainer.vue': { default: placeholder('Toasts') }, '@/components/ui/ConfirmModal.vue': { default: placeholder('Confirm') },
   }
@@ -622,6 +623,12 @@ test('content search chooses only enabled safe modules and passes the specific d
   state.selectModule('tasks');await settle()
   props.navigationRequest++;await settle()
   assert.equal(state.activeTab.value,'quick','repeated parent navigation still returns to its target after manual section changes')
+  state.selectModuleView('tasks','board');await settle();assert.equal(state.activeTab.value,'tasks');assert.equal(state.activeModuleView.value,'board');assert.equal(state.navigationIntent.value.view,'board')
+  state.selectModuleView('tasks','unknown');assert.equal(state.activeModuleView.value,'board')
+  state.selectModuleView('learning','mistakes');assert.equal(state.activeTab.value,'tasks','disabled module views remain inaccessible')
+  state.selectModuleView('finance','position');state.selectModule('quick');state.selectModule('finance');assert.equal(state.activeModuleView.value,'transaction','ordinary navigation returns to the module home view')
+  assert.equal(state.navigationIntent.value.view,'transaction');assert.equal(state.destination.value,null,'ordinary navigation clears a previous search destination')
+  state.selectModule('tasks');assert.equal(state.activeModuleView.value,'calendar','the planning category immediately reflects its calendar entry point')
   h.enabled.value=['finance'];await settle()
   assert.equal(state.activeTab.value,'finance')
   state.selectModule('tasks');assert.equal(state.activeTab.value,'finance','disabled module commands are ignored')
@@ -837,6 +844,7 @@ test('module transitions retain each tab instance and its unsaved local state ac
   const app = h.renderer.createApp(h.component('src/views/WorkspaceTabs.vue'))
   app.mount(h.root)
   await settle()
+  assert.equal(h.find(node=>node.props['aria-label']==='search.title'),undefined,'search remains in the rail instead of duplicating a header action')
   h.click(h.find(node => node.tag === 'button' && h.text(node) === 'Edit plans'))
   await settle()
   drafts.get('last-tab').value = 'quick'

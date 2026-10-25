@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page page-width-transition mx-auto w-full min-w-0 max-w-5xl space-y-4 pb-8">
     <header class="flex flex-wrap items-center justify-between gap-2">
-      <div class="flex items-center gap-2"><WorkspaceRail v-model="settingsSection" :context="settingsNavigation" :workspace-name="workspaces.active?.name" /><h1 class="text-lg font-semibold tracking-tight">{{ t(`pageNav.settings.${settingsSection}`) }}</h1></div>
+      <div class="flex items-center gap-2"><WorkspaceRail v-model="settingsSection" :context="settingsNavigation" :workspace-name="workspaces.active?.name" @manage="settingsSection='workspaces'" /><h1 class="text-lg font-semibold tracking-tight">{{ t(`pageNav.settings.${settingsSection}`) }}</h1></div>
       <span class="text-xs text-muted-foreground">{{ t('settingsPage.autoSave') }}</span>
     </header>
 

@@ -274,6 +274,24 @@ test('exercise editor retains drafts and original version when another member up
   app.unmount()
 })
 
+test('exercise filters reset together and reopening the picker starts with the full library without changing exercise data',async()=>{
+  const props=vue.reactive({show:false,busy:false,exercise:null})
+  const {app,state}=setupState('src/features/workout/components/ExerciseLibraryModal.vue',props)
+  state.dialog.value={open:false,showModal(){this.open=true},close(){this.open=false}}
+  try{
+    props.show=true;await settle()
+    state.query.value='bench';state.group.value='chest';state.equipment.value='barbell';await settle()
+    assert.equal(state.hasFilters.value,true);assert.ok(state.matches.value.length<catalog.length)
+    state.draft.value.notes='Keep my exercise notes';state.resetFilters();await settle()
+    assert.equal(state.hasFilters.value,false);assert.equal(state.matches.value.length,catalog.length)
+    assert.equal(state.draft.value.notes,'Keep my exercise notes','reset changes only search filters')
+    state.group.value='legs';state.query.value='squat';state.limit.value=96
+    props.show=false;await settle();props.show=true;await settle()
+    assert.equal(state.query.value,'');assert.equal(state.group.value,'all');assert.equal(state.equipment.value,'all')
+    assert.equal(state.limit.value,24);assert.equal(state.matches.value.length,catalog.length)
+  }finally{app.unmount()}
+})
+
 test('program creation keeps failed drafts and opens exercise selection after successful saving', async () => {
   const h = fixture()
   const drafts = new Map(), toasts = []

@@ -36,6 +36,7 @@ export default {
     pinOpen: 'Menüyü açık sabitle', pinClosed: 'Menüyü daralt',
     navigation: 'Çalışma alanı gezinmesi', workspace: 'Çalışma alanı', sectionsLabel: 'Bölümler',
     search: 'Ara', trash: 'Çöp kutusu', manage: 'Ayarlar', close: 'Bölümleri kapat',
+    moduleOptions: '{section} seçenekleri',
     sections: { notes: 'Notlar', planning: 'Takvim', focus: 'Odak', learning: 'Öğrenme', life: 'Yaşam', finance: 'Finans' },
   },
   tasks: {
@@ -844,6 +845,7 @@ app: {
     workoutComplete: 'Tüm hareketler tamamlandı.',
     greatJob: 'Bu rutini harika bir şekilde bitirdin.',
     resetRoutine: 'İşaretleri temizle',
+    resetFilters: 'Sıfırla',
     exerciseDatabase: 'Egzersiz Veritabanı',
     searchAPI: 'Kas grubuna, ekipmana veya hareket adına göre ara',
     searchPlaceholder: 'Hareket, kas grubu veya ekipman ara…',

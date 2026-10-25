@@ -83,6 +83,7 @@ function fixture({ selected = 'quick', enabled = registry.moduleCatalog.map(modu
     vue: { ...vue, onMounted: callback => mounted.push(callback), onBeforeUnmount: callback => unmounted.push(callback) },
     'vue-i18n': { useI18n: () => ({ t: key => key }) }, 'lucide-vue-next': {},
     '@/lib/workspaceSections': navigation,
+    './WorkspacePicker.vue':{default:{}},
     '@/lib/workspaceScope': { useWorkspaceDraft: () => vue.ref(savedMode) },
   }, { document, window })
   const scope = vue.effectScope()
@@ -113,13 +114,13 @@ test('context sidebar changes only declared page sections and retains hover, pin
   }
 })
 
-test('hover keeps the active submenu; category clicks remember selection and deep links update the active section', async () => {
+test('hover keeps the active section; category clicks remember selection and deep links update the active section', async () => {
   const f = fixture(), s = f.state
   s.pointerEnter({ pointerType: 'mouse' })
   assert.equal(s.expanded.value, true)
-  assert.equal(s.shownSection.value.id, 'notes')
+  assert.equal(s.activeSection.value, 'notes')
   s.focusEnter({target:{}})
-  assert.equal(s.shownSection.value.id,'notes','keyboard focus on another category cannot replace the active submenu')
+  assert.equal(s.activeSection.value,'notes','keyboard focus on another category cannot change the active section')
   assert.equal(f.props.modelValue, 'quick')
   assert.deepEqual(f.events, [])
   s.selectSection(s.sections.value.find(section => section.id === 'planning'))
@@ -129,7 +130,7 @@ test('hover keeps the active submenu; category clicks remember selection and dee
   f.props.modelValue = 'code'
   await vue.nextTick()
   assert.equal(s.activeSection.value, 'notes')
-  assert.equal(s.shownSection.value.id, 'notes')
+  assert.equal(s.activeSection.value, 'notes')
   s.selectSection(s.sections.value.find(section => section.id === 'notes'))
   assert.deepEqual(f.events.pop(), ['update:modelValue', 'code'])
   f.props.enabled = ['detailed', 'finance']
@@ -214,25 +215,14 @@ test('mouse focus cannot hold a preview open after leaving, while keyboard focus
   f.close()
 })
 
-test('keyboard users can reach each category submenu and return without changing content',async()=>{
+test('an open workspace picker keeps a temporary rail expanded until it closes without setting a pin',async()=>{
   const f=fixture(),s=f.state
-  const category={focus(){f.document.activeElement=this}},module={focus(){f.document.activeElement=this}}
-  const submenu={contains:target=>target===module}
-  s.desktop.value={querySelector:selector=>selector==='.rail-modules'?submenu:selector==='.rail-modules .rail-module'?module:category}
-  await s.focusSectionModules(s.sections.value.find(section=>section.id==='notes'))
-  assert.equal(s.expanded.value,true);assert.equal(s.shownSection.value.id,'notes')
-  assert.equal(s.pinned.value,false,'keyboard submenu access must not permanently shift the page')
-  assert.equal(f.document.activeElement,module)
-  s.focusCategory();assert.equal(f.document.activeElement,category)
-  await s.focusSectionModules(s.sections.value.find(section=>section.id==='planning'))
-  assert.equal(s.shownSection.value.id,'notes','an inactive category must first be explicitly selected')
-  f.props.modelValue='tasks';await vue.nextTick()
-  await s.focusSectionModules(s.sections.value.find(section=>section.id==='planning'))
-  assert.equal(s.shownSection.value.id,'planning')
-  s.closeDesktop()
-  assert.equal(f.document.activeElement,category,'Escape restores a visible control before removing the submenu')
-  assert.equal(s.expanded.value,false)
-  assert.equal(f.props.modelValue,'tasks');assert.deepEqual(f.events,[])
+  s.desktop.value={contains:()=>false};s.desktopPicker.value={close(){s.workspacePickerOpen.value=false}}
+  s.pointerEnter({pointerType:'mouse'});s.workspacePickerOpen.value=true;s.pointerLeave()
+  assert.equal(s.expanded.value,true);assert.equal(s.pinned.value,false)
+  f.listeners.get('pointerdown')({target:{}});assert.equal(s.workspacePickerOpen.value,true,'the picker handles its own teleported popup boundary')
+  s.closeDesktop();assert.equal(s.expanded.value,false);assert.equal(s.workspacePickerOpen.value,false)
+  assert.equal(f.props.modelValue,'quick');assert.deepEqual(f.events,[])
   f.close()
 })
 
@@ -269,14 +259,15 @@ test('mobile drawer traps focus, restores scroll and focus, and footer actions c
   assert.equal(f.document.body.style.overflow, 'auto')
 })
 
-test('financial shortcuts navigate to existing real views and do not bypass disabled modules', () => {
-  const f = fixture()
-  f.state.selectFinanceView('position')
-  assert.deepEqual(f.events, [['update:modelValue', 'finance'], ['navigate', 'finance', 'position']])
-  f.props.enabled = ['quick']
-  f.state.selectFinanceView('transaction')
-  assert.equal(f.events.length, 2)
-  f.close()
+test('the content picker exposes enabled sibling modules and existing views without mixing sections', () => {
+  const enabled=registry.moduleCatalog.map(module=>module.id)
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'quick').map(item=>item.value)),['plans','detailed','quick','secure','code','pomodoro'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'finance').map(item=>item.value)),['finance:transaction','finance:position'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'learning').map(item=>item.value)),['learning:topics','learning:today','learning:mistakes','flashcards'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'tasks').map(item=>item.value)),['tasks','periodic'])
+  assert.equal(navigation.getWorkspaceModuleOptions(enabled,'tasks')[0].label,'tasks.calendar')
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['quick','finance'],'quick').map(item=>item.value)),['quick'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['quick'],'finance')),[])
 })
 
 test('a failed native drawer open does not leave page scroll locked', async () => {

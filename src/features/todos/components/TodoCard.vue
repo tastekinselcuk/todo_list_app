@@ -103,7 +103,7 @@ function closeEditorDialog(){editDialogRef.value?.close();releaseEditorScroll()}
 function leaveEditing(){if(!saving.value && !mediaBusy.value)isEditing.value=false}
 function onEditDialogClosed(){if(!editDialogRef.value?.open){releaseEditorScroll();if(isEditing.value)isEditing.value=false}}
 onBeforeUnmount(()=>{dialogDisposed=true;dialogEpoch++;closeEditorDialog()})
-onDeactivated(()=>{dialogEpoch++;isEditing.value=false;closeEditorDialog()})
+onDeactivated(()=>{dialogEpoch++;isEditing.value=false;isExpanded.value=false;closeEditorDialog()})
 
 const isExpanded = ref(false), isEditing = ref(false)
 const editConflict = ref(false), draftRefreshed = ref(false), saving = ref(false), mediaBusy = ref(false)

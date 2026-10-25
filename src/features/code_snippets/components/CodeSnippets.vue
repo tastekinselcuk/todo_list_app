@@ -62,7 +62,7 @@
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { computed, ref } from 'vue'
+import { computed, ref, onDeactivated } from 'vue'
 import { Code2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n' 
 import { useUIStore } from '@/stores/ui' 
@@ -82,7 +82,8 @@ const { t } = useI18n()
 
 const saving = ref(false)
 
-const isDrafting = useWorkspaceDraft('code-drafting', false)
+const isDrafting = ref(false)
+onDeactivated(() => { isDrafting.value = false })
 const snippetForm = useWorkspaceDraft('code-draft', {
   title: '',
   language: 'javascript', 

@@ -35,7 +35,7 @@
         v-if="isOpen"
         ref="dropdownRef"
         :popover="popover ? 'manual' : undefined"
-        class="absolute z-[9999] min-w-full py-1 rounded-xl border border-border/60 bg-card backdrop-blur-xl shadow-xl shadow-black/10 overflow-hidden"
+        class="select-menu absolute z-[9999] min-w-full py-1 rounded-xl border border-border/60 bg-card backdrop-blur-xl shadow-xl shadow-black/10 overflow-hidden"
         :class="popover ? '' : openAbove ? 'bottom-full mb-1' : 'top-full mt-1'"
         :style="{ minWidth: dropdownMinWidth, ...floatingStyle }"
       >
@@ -43,7 +43,7 @@
           <Search aria-hidden="true" class="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
           <input ref="searchRef" v-model="query" type="search" autocomplete="off" spellcheck="false" :aria-label="searchPlaceholder" :placeholder="searchPlaceholder" class="h-9 w-full min-w-0 bg-transparent pl-7 pr-2 text-xs font-normal text-foreground outline-none placeholder:text-muted-foreground/60" @keydown.enter.stop.prevent="selectFirstMatch" />
         </div>
-        <div class="max-h-[200px] overflow-y-auto custom-scrollbar" :style="popover ? {maxHeight:'min(200px, var(--select-menu-height))'} : undefined">
+        <div class="select-options max-h-[200px] overflow-y-auto custom-scrollbar" :style="popover ? {maxHeight:'min(200px, var(--select-menu-height))'} : undefined">
           <button
             v-for="option in filteredOptions"
             :key="option.value"
@@ -51,10 +51,10 @@
             :disabled="option.disabled"
             @mousedown="preserveFocus && $event.preventDefault()"
             @click="selectOption(option)"
-            class="w-full flex items-center gap-2 px-3 text-left text-sm font-medium transition-colors duration-100 hover:bg-primary/10 hover:text-primary disabled:cursor-default disabled:opacity-40"
+            class="select-option w-full flex items-center gap-2 px-3 text-left text-sm font-medium transition-colors duration-100 hover:bg-primary/10 hover:text-primary disabled:cursor-default disabled:opacity-40"
             :class="[
               modelValue === option.value
-                ? 'bg-primary/10 text-primary font-semibold'
+                ? 'select-option-selected bg-primary/10 text-primary font-semibold'
                 : 'text-foreground',
               size === 'sm' ? 'py-1.5 text-xs' : 'py-2 text-sm'
             ]"

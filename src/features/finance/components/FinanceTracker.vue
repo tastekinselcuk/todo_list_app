@@ -68,7 +68,7 @@
 </template>
 <script setup lang="ts">
 import { useModuleLoad } from '@/lib/workspaceScope'
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, watch, onDeactivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronDown, TrendingUp, Pause, Pencil, Play, RefreshCw, Repeat2, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
@@ -99,6 +99,7 @@ const metrics=computed(()=>{
   {label:t('finance.unrealizedGain'),value:formatMoney(s.portfolio.count?s.portfolio.gain:0),color:gainColor(s.portfolio.gain)}]
 })
 function resetForm(){editing.value=null;editingSchedule.value=null;draftId.value=crypto.randomUUID()}
+onDeactivated(()=>{tab.value='transaction';resetForm()})
 function edit(row:FinanceTransaction|FinancePosition){resetForm();editing.value=row;store.error=''}
 function editSchedule(row:FinanceSchedule){resetForm();editingSchedule.value=row;store.error=''}
 function changeTab(view:FinanceEntity){if(store.saving)return;tab.value=view;resetForm();store.error=''}
