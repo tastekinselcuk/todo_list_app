@@ -206,28 +206,30 @@ test('category creation retains failed drafts, blocks duplicate submissions and 
   const listeners=new Map(),props=vue.reactive({open:true})
   const pending=new Promise(resolve=>release=resolve)
   const store={async addCategory(payload){writes++;await pending;return{success:false,message:'OFFLINE'}}}
-  const document={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name),querySelector:()=>({focus(){focused++}})}
+  const trigger={isConnected:true,closest:()=>null,focus(){focused++}}
+  const document={activeElement:trigger,body:{style:{overflow:''}},documentElement:{style:{overflow:''}},addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)}
   const h=setupState('src/features/todos/components/CategoryModal.vue',store,props,false,{document})
   try{
     h.state.newCategory.value={name:'  Project notes  ',color:'#287755',icon:'folder'}
     const write=h.state.handleSubmit();await h.state.handleSubmit()
     h.state.closeModal(true)
     assert.equal(writes,1)
-    assert.equal(h.events.length,0,'a pending save keeps the form open')
+    assert.equal(h.events.filter(event=>event[0]!=='busy-change').length,0,'a pending save keeps the form open')
+    assert.deepEqual(h.events[0],['busy-change',true])
     release();await write
     assert.equal(h.state.saving.value,false)
     assert.equal(h.state.newCategory.value.name,'  Project notes  ')
     assert.equal(h.state.newCategory.value.color,'#287755')
-    assert.equal(h.events.length,0,'a failed save preserves the editable draft')
+    assert.equal(h.events.filter(event=>event[0]!=='busy-change').length,0,'a failed save preserves the editable draft')
+    assert.deepEqual(h.events.at(-1),['busy-change',false])
     assert.equal(h.toasts.at(-1)[1],'error')
     h.state.closeModal(true)
     assert.deepEqual(h.events.at(-1),['update:open',false])
-    assert.equal(focused,1)
+    await settle();assert.equal(focused,1)
     props.open=false;await settle()
     assert.equal(listeners.size,0)
     props.open=true;await settle()
-    h.state.resetDraft()
-    assert.equal(h.state.newCategory.value.name,'  Project notes  ','a cancelled closing animation must not erase a reopened draft')
+    assert.equal(h.state.newCategory.value.name,'','reopening starts a fresh category without a stored draft')
   }finally{release();h.app.unmount()}
   assert.equal(listeners.size,0)
 })
@@ -357,7 +359,19 @@ test('composer prevents duplicate submits, retains failed drafts and saves categ
   app.unmount()
 })
 
-test('creating a note moves the same editor into the fitted dialog and back, preserves failed saves and releases page scroll', async () => {
+test('the focused composer opens category creation inside the editor without discarding the note draft',async()=>{
+  const f=setupState('src/features/todos/components/TodoQuickAdd.vue',{categories:[]})
+  try{
+    f.state.quickTodoTitle.value='A new note';f.state.quickTodoDescription.value='<p>Keep this draft</p>'
+    f.state.openFocusedEditor();assert.equal(f.state.isFocused.value,true)
+    await f.state.requestCategory()
+    assert.equal(f.state.isFocused.value,true);assert.equal(f.state.categoryOpen.value,true);assert.equal(f.state.quickTodoTitle.value,'A new note')
+    assert.equal(f.state.quickTodoDescription.value,'<p>Keep this draft</p>');assert.deepEqual(f.events,[])
+    f.state.categorySaving.value=true;f.state.closeFocusedEditor();assert.equal(f.state.isFocused.value,true,'pending category saves also protect the note dialog')
+  }finally{f.app.unmount()}
+})
+
+test('Enter opens the focused note composer without saving, preserves the editor and category across closing, and retains failed saves', async () => {
   const {JSDOM}=require('jsdom'),runtime=require('@vue/runtime-dom')
   const dom=new JSDOM('<!doctype html><body><main id="app"></main></body>',{pretendToBeVisual:true}),doc=dom.window.document
   const keys=['document','window','Document','ShadowRoot','Element','HTMLElement','SVGElement','getComputedStyle','requestAnimationFrame','cancelAnimationFrame'],previous=new Map(keys.map(key=>[key,global[key]]))
@@ -376,8 +390,10 @@ test('creating a note moves the same editor into the fitted dialog and back, pre
     '@/lib/workspaceScope':{useWorkspaceDraft:(_key,value)=>vue.ref(value)},
     '@/features/todos/stores/todo':{useTodoStore:()=>h.store,TODO_TITLE_MAX_LENGTH:120},
     '@/stores/ui':{useUIStore:()=>({addToast(){}})},'vue-i18n':{useI18n:()=>({t:key=>key})},
-    '@/components/ui/CustomSelect.vue':{default:{setup:()=>()=>vue.h('span','Category')}},'./RichTextEditor.vue':{__esModule:true,default:Editor},
+    '@/components/ui/CustomSelect.vue':{default:{props:['modelValue','options'],emits:['update:modelValue'],setup(props,{emit}){return()=>vue.h('select',{value:props.modelValue,onChange:event=>emit('update:modelValue',event.target.value)},props.options.map(option=>vue.h('option',{value:option.value},option.label)))}}},'./RichTextEditor.vue':{__esModule:true,default:Editor},
   }
+  dependencies['@/components/ui/CustomSelect.vue']={default:load(compileScript(parse(fs.readFileSync('src/components/ui/CustomSelect.vue','utf8')).descriptor,{id:'category-select-dom',inlineTemplate:true}).content,dependencies,{document:doc,window:dom.window}).default}
+  dependencies['./CategoryModal.vue']={default:load(compileScript(parse(fs.readFileSync('src/features/todos/components/CategoryModal.vue','utf8')).descriptor,{id:'embedded-category-dom',inlineTemplate:true}).content,{...dependencies,'@/components/ui/ColorPalette.vue':{default:{setup:()=>()=>vue.h('span','Colors')}}},{document:doc,window:dom.window}).default}
   const component=load(compileScript(parse(fs.readFileSync('src/features/todos/components/TodoQuickAdd.vue','utf8')).descriptor,{id:'composer-dom',inlineTemplate:true}).content,dependencies,{document:doc}).default
   const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,
     createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),
@@ -387,16 +403,43 @@ test('creating a note moves the same editor into the fitted dialog and back, pre
   const app=renderer.createApp(component)
   try{
     app.mount(doc.getElementById('app'));await settle()
-    const title=doc.querySelector('input');title.value='Focused draft';title.dispatchEvent(new dom.window.Event('input',{bubbles:true}));title.focus()
+    const title=doc.querySelector('input'),dialog=doc.querySelector('dialog'),origin=doc.querySelector('[data-shared-editing]')
+    assert.equal(origin.querySelectorAll('input').length,1);assert.equal(origin.querySelector('svg,select,button'),null,'the entry toolbar contains only the title field')
+    const enter=(composing=false)=>title.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',isComposing:composing,bubbles:true,cancelable:true}))
+    enter();await settle();assert.equal(dialog.open,false,'an empty title cannot open a composer')
+    title.value='Focused draft';title.dispatchEvent(new dom.window.Event('input',{bubbles:true}));title.focus()
     await settle();await settle()
-    const editor=doc.querySelector('[data-editor-body]'),dialog=doc.querySelector('dialog'),origin=doc.querySelector('[data-shared-editing]')
-    assert.equal(dialog.open,false,'typing a title only expands the inline details')
+    assert.equal(dialog.open,false,'typing and focusing the title keep the toolbar compact')
+    assert.equal(doc.querySelector('[data-editor-body],.note-reveal'),null);assert.equal(editorMounts,0)
     assert.equal(doc.querySelector('button[aria-label="todo.addTodo"]'),null,'the duplicate plus action stays removed')
+    enter(true);await settle();assert.equal(dialog.open,false,'IME composition must not open the editor')
+    enter();await settle();await settle()
+    const editor=dialog.querySelector('[data-editor-body]')
+    assert.equal(dialog.open,true);assert.ok(editor);assert.equal(doc.activeElement,editor)
+    assert.equal(dialog.querySelector('input').value,'Focused draft');assert.equal(editorMounts,1)
+    assert.equal(h.calls.some(call=>call.operation==='insert'),false,'Enter opens the dialog without adding a note')
+    assert.equal(origin.style.height,'','opening the dialog does not change the toolbar height')
+    const category=dialog.querySelector('[aria-label="todo.category"]');category.click();await settle();Array.from(dialog.querySelectorAll('.select-option')).find(button=>button.textContent.includes(h.store.categories.find(item=>item.id==='personal').name)).click();await settle()
     editor.innerHTML='<p>Keep this rich draft</p>';editor.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await settle()
-    origin.getBoundingClientRect=()=>({height:240})
-    editor.focus();await settle();await settle()
-    assert.equal(dialog.open,true);assert.ok(dialog.contains(editor));assert.equal(origin.style.height,'240px')
-    assert.equal(editorMounts,1,'opening the dialog moves the editor instead of recreating its undo and selection state')
+    const categoryTrigger=category;categoryTrigger.click();await settle();dialog.querySelector('[data-select-action]').click();await settle()
+    const categoryDialog=doc.querySelector('dialog.category-dialog'),panel=categoryDialog.querySelector('#todo-category-form'),name=panel.querySelector('input')
+    assert.equal(categoryDialog.open,true);assert.equal(panel.tagName,'FORM');assert.equal(dialog.querySelectorAll('form').length,1,'category form lives in a separate top-layer dialog')
+    assert.equal(dialog.querySelector('[data-select-action]'),null,'the dropdown closes before the category popup opens')
+    assert.equal(doc.activeElement,name);assert.equal(name.maxLength,60)
+    name.value='Research';name.dispatchEvent(new dom.window.Event('input',{bubbles:true}));h.failures.add('categories:insert')
+    panel.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await settle();await settle()
+    assert.equal(name.value,'Research');assert.ok(categoryDialog.contains(name));assert.equal(dialog.open,true)
+    assert.equal(h.calls.some(call=>call.table==='todos'&&call.operation==='insert'),false,'creating a category never submits the note')
+    h.failures.delete('categories:insert');h.hold()
+    try{
+      panel.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await settle()
+      assert.equal(dialog.querySelector('button[type="submit"]').disabled,true)
+      categoryDialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await settle();assert.equal(categoryDialog.open,true);assert.equal(dialog.open,true)
+    }finally{h.resume()}
+    await settle();await settle()
+    const createdCategory=h.store.categories.find(item=>item.name==='Research')
+    assert.ok(createdCategory);assert.match(category.textContent,/Research/);assert.equal(categoryDialog.open,false)
+    assert.equal(dialog.open,true);assert.equal(doc.activeElement,categoryTrigger);assert.equal(dialog.querySelector('[data-editor-body]'),editor)
     assert.equal(doc.body.style.overflow,'hidden')
     dialog.click();await settle()
     assert.equal(dialog.open,true,'backdrop clicks must not dismiss an unsaved focused draft')
@@ -406,37 +449,35 @@ test('creating a note moves the same editor into the fitted dialog and back, pre
     editor.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:200,clientY:200}));await settle()
     assert.equal(dialog.open,true,'separate clicks and double-clicking text preserve the focused editor')
     dialog.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:20,clientY:20}));await settle();await settle()
-    assert.equal(dialog.open,false,'a deliberate double-click on the backdrop returns the same draft to the page')
-    assert.equal(title.value,'Focused draft');assert.equal(editorMounts,1)
-    editor.focus();await settle();await settle()
+    assert.equal(dialog.open,false,'a deliberate double-click closes the dialog and retains the draft')
+    assert.equal(title.value,'Focused draft');assert.equal(editorMounts,1);assert.equal(doc.activeElement,title)
+    enter();await settle();await settle();assert.equal(dialog.querySelector('[data-editor-body]'),editor,'reopening preserves editor undo and selection state')
+    assert.match(dialog.querySelector('[aria-label="todo.category"]').textContent,/Research/)
     dialog.querySelector('button[aria-label="common.close"]').click();await settle();await settle()
-    assert.equal(dialog.open,false);assert.ok(origin.contains(editor));assert.equal(title.value,'Focused draft')
+    assert.equal(dialog.open,false);assert.ok(dialog.contains(editor));assert.equal(title.value,'Focused draft')
     assert.match(editor.innerHTML,/Keep this rich draft/);assert.equal(editorMounts,1);assert.equal(doc.body.style.overflow,'')
-    editor.focus();await settle();await settle();h.failures.add('insert')
+    enter();await settle();category.click();await settle()
+    category.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await settle();assert.equal(dialog.open,true,'first Escape closes only the open category dropdown')
+    category.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await settle()
+    assert.equal(dialog.open,false);assert.equal(doc.activeElement,title)
+    enter();await settle();await settle();h.failures.add('insert')
     dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await settle();await settle()
     assert.equal(dialog.open,true,'failed saves keep the focused draft available')
     assert.equal(title.value,'Focused draft');assert.match(editor.innerHTML,/Keep this rich draft/)
     h.failures.clear();dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await settle();await settle()
     assert.equal(dialog.open,false);assert.equal(doc.body.style.overflow,'');assert.equal(title.value,'')
-    assert.match(h.store.todos[0].description,/Keep this rich draft/)
+    assert.match(h.store.todos[0].description,/Keep this rich draft/);assert.equal(h.store.todos[0].categoryId,createdCategory.id)
   }finally{app.unmount();for(const[key,value]of previous){if(value===undefined)delete global[key];else global[key]=value}dom.window.close()}
 })
 
-test('category color strip stays beside its trigger, fits narrow screens and closes after a valid selection',async()=>{
-  const props=vue.reactive({open:true})
-  const viewport={innerWidth:1200,innerHeight:900,addEventListener(){},removeEventListener(){}}
-  const f=setupState('src/features/todos/components/CategoryModal.vue',{},props,false,{window:viewport})
-  let shown=0,hidden=0
-  f.state.colorTriggerRef.value={getBoundingClientRect:()=>({top:200,bottom:240,left:100,right:140})}
-  f.state.colorMenuRef.value={showPopover(){shown++},hidePopover(){hidden++}}
-  try{
-    f.state.toggleColorMenu();assert.equal(shown,1);assert.equal(f.state.colorPosition.value.left,'146px');assert.equal(f.state.colorPosition.value.top,'200px')
-    f.state.colorOpen.value=true;f.state.chooseColor('#AABBCC')
-    assert.equal(f.state.newCategory.value.color,'#AABBCC');assert.equal(f.state.colorOpen.value,false);assert.equal(hidden,1)
-    f.state.chooseColor('invalid');assert.equal(f.state.newCategory.value.color,'#AABBCC')
-    viewport.innerWidth=320;viewport.innerHeight=280;f.state.toggleColorMenu()
-    assert.equal(f.state.colorPosition.value.left,'8px');assert.equal(f.state.colorPosition.value.top,'202px')
-  }finally{f.app.unmount()}
+test('category dialog uses the shared palette and rejects invalid colors or changes during a save',async()=>{
+ const f=setupState('src/features/todos/components/CategoryModal.vue',{},vue.reactive({open:true}))
+ try{
+  f.state.chooseColor('#AABBCC');assert.equal(f.state.newCategory.value.color,'#AABBCC')
+  f.state.chooseColor('invalid');assert.equal(f.state.newCategory.value.color,'#AABBCC')
+  f.state.saving.value=true;f.state.chooseColor('#123456');assert.equal(f.state.newCategory.value.color,'#AABBCC')
+  assert.equal(f.state.categoryColors.value.length,9)
+ }finally{f.app.unmount()}
 })
 
 test('quick notes group by the local calendar day instead of the UTC timestamp prefix',async()=>{
@@ -478,7 +519,7 @@ test('open edit preserves rich text and the captured version on conflict and ref
   state.cancelEdit()
   assert.equal(state.editForm.value.title, 'Other member')
   assert.equal(state.isEditing.value, false)
-  assert.equal(state.isExpanded.value, true)
+  assert.equal(state.isOpen.value, true)
   app.unmount()
 })
 
@@ -522,7 +563,7 @@ test('notes open in reading mode, enter editing explicitly and retain failed cha
   try{
     const count=h.calls.length
     state.onCardClick()
-    assert.equal(state.isExpanded.value,true);assert.equal(state.isEditing.value,false)
+    assert.equal(state.isOpen.value,true);assert.equal(state.isEditing.value,false)
     props.todo={...props.todo,title:'Remote updated title',version:4}
     await settle()
     assert.equal(state.editForm.value.title,'Remote updated title')
@@ -531,18 +572,18 @@ test('notes open in reading mode, enter editing explicitly and retain failed cha
     h.failures.add('update');await state.saveEdit()
     assert.equal(state.isEditing.value,true);assert.equal(state.editForm.value.description,'<p>A detailed draft</p>')
     h.failures.clear();await state.saveEdit()
-    assert.equal(state.isExpanded.value,true);assert.equal(state.isEditing.value,false)
+    assert.equal(state.isOpen.value,true);assert.equal(state.isEditing.value,false)
     assert.equal(h.store.todos[0].description,'<p>A detailed draft</p>')
-    state.closeEdit();assert.equal(state.isExpanded.value,false)
+    state.closeEdit();assert.equal(state.isOpen.value,false)
   }finally{app.unmount()}
   const viewer=setupState('src/features/todos/components/TodoCard.vue',h.store,props,true)
   viewer.state.onCardClick();viewer.state.startEdit()
-  assert.equal(viewer.state.isExpanded.value,true);assert.equal(viewer.state.isEditing.value,false)
+  assert.equal(viewer.state.isOpen.value,true);assert.equal(viewer.state.isEditing.value,false)
   viewer.app.unmount()
 })
 
-test('cards toggle from the summary and padding while expanded details, selection and controls stay open',async()=>{
-  const {JSDOM}=require('jsdom'),dom=new JSDOM('<article><div class="note-summary"><p>Preview text</p></div><div class="note-reveal"><div class="note-reveal-body"><p>Readable text</p><time>Today</time><a href="https://example.test">Link</a><button>Edit</button><summary>Toggle</summary><img src="https://example.test/photo.png"></div></div></article>')
+test('cards open the focused reader from the summary and padding while text selection and controls keep their behavior',async()=>{
+  const {JSDOM}=require('jsdom'),dom=new JSDOM('<article><div class="note-summary"><p>Preview text</p></div><a href="https://example.test">Link</a><button>Edit</button><input><img src="https://example.test/photo.png"></article>')
   const h=fixture();await h.store.fetchTodos()
   const props=vue.reactive({todo:copy(h.store.todos[0]),color:'#64748b',categoryName:'Work',disabled:false})
   const f=setupState('src/features/todos/components/TodoCard.vue',h.store,props,false,{window:dom.window})
@@ -550,23 +591,21 @@ test('cards toggle from the summary and padding while expanded details, selectio
   f.state.itemRef.value=article
   const click=target=>f.state.onCardClick({target})
   try{
-    click(article);assert.equal(f.state.isExpanded.value,true)
-    click(paragraph);assert.equal(f.state.isExpanded.value,false,'preview text closes the card')
-    click(paragraph);assert.equal(f.state.isExpanded.value,true)
-    for(const element of article.querySelectorAll('.note-reveal,.note-reveal-body,.note-reveal p,time')){
-      click(element);assert.equal(f.state.isExpanded.value,true,'reading text or clicking blank detail space must not close the note')
-    }
-    for(const element of article.querySelectorAll('a,button,summary,img')){
-      click(element);assert.equal(f.state.isExpanded.value,true,'interactive content must keep its own behavior')
+    click(article);assert.equal(f.state.isOpen.value,true)
+    click(paragraph);assert.equal(f.state.isOpen.value,true,'repeated summary clicks cannot toggle the reader closed')
+    f.state.closeEdit();click(paragraph);assert.equal(f.state.isOpen.value,true,'preview text opens the reader')
+    f.state.closeEdit()
+    for(const element of article.querySelectorAll('a,button,input,img')){
+      click(element);assert.equal(f.state.isOpen.value,false,'interactive controls must not open the reader')
     }
     const selection=dom.window.getSelection(),range=dom.window.document.createRange()
     range.selectNodeContents(paragraph);selection.addRange(range)
-    click(paragraph);assert.equal(f.state.isExpanded.value,true,'selecting text must not close the note')
-    selection.removeAllRanges();click(article);assert.equal(f.state.isExpanded.value,false)
-    props.disabled=true;click(article);assert.equal(f.state.isExpanded.value,false)
-    props.disabled=false;f.state.mediaBusy.value=true;click(article);assert.equal(f.state.isExpanded.value,false)
+    click(paragraph);assert.equal(f.state.isOpen.value,false,'selecting text must not open the note')
+    selection.removeAllRanges()
+    props.disabled=true;click(article);assert.equal(f.state.isOpen.value,false)
+    props.disabled=false;f.state.mediaBusy.value=true;click(article);assert.equal(f.state.isOpen.value,false)
     f.state.mediaBusy.value=false;f.state.startEdit();click(article)
-    assert.equal(f.state.isEditing.value,true);assert.equal(f.state.isExpanded.value,true)
+    assert.equal(f.state.isEditing.value,true);assert.equal(f.state.isOpen.value,true)
     assert.equal(f.events.length,0,'body clicks must not complete or delete notes')
   }finally{f.app.unmount();dom.window.close()}
 })
@@ -585,7 +624,7 @@ test('editing dialog locks the page, protects in-flight changes and restores scr
     f.state.saving.value=true;f.state.leaveEditing();assert.equal(f.state.isEditing.value,true)
     f.state.saving.value=false;f.state.mediaBusy.value=true;f.state.leaveEditing();assert.equal(f.state.isEditing.value,true)
     f.state.mediaBusy.value=false;f.state.leaveEditing();await settle()
-    assert.equal(dialog.open,false);assert.equal(f.state.isExpanded.value,true)
+    assert.equal(dialog.open,false);assert.equal(f.state.isOpen.value,false)
     assert.equal(f.state.editForm.value.title,'A retained draft')
     assert.equal(browser.body.style.overflow,'auto');assert.equal(browser.documentElement.style.overflow,'scroll')
     assert.equal(browser.documentElement.style.scrollbarGutter,'auto')

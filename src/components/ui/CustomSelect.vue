@@ -1,5 +1,5 @@
 <template>
-  <div class="relative" ref="containerRef" @keydown="handleKeydown" @keydown.esc.stop.prevent="close()">
+  <div class="relative" ref="containerRef" @keydown="handleKeydown" @keydown.esc="event => { if (isOpen) { event.preventDefault(); event.stopPropagation(); close() } }">
     <button
       type="button"
       ref="triggerRef"
@@ -8,11 +8,11 @@
       :disabled="disabled"
       @mousedown="preserveFocus && $event.preventDefault()"
       @click="toggle"
-      class="appearance-none w-full flex items-center justify-between gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default disabled:opacity-50 transition-all duration-200 truncate"
+      class="select-trigger appearance-none w-full flex items-center justify-between gap-2 cursor-pointer outline-none disabled:cursor-default disabled:opacity-50 transition-colors duration-200 truncate"
       :class="[
         sizeClasses,
         variantClasses,
-        { 'ring-2 ring-primary/30 border-primary/50': isOpen }
+        { 'select-trigger-open': isOpen }
       ]"
       :style="buttonStyle"
     >
@@ -35,7 +35,7 @@
         v-if="isOpen"
         ref="dropdownRef"
         :popover="popover ? 'manual' : undefined"
-        class="select-menu absolute z-[9999] min-w-full py-1 rounded-xl border border-border/60 bg-card backdrop-blur-xl shadow-xl shadow-black/10 overflow-hidden"
+        class="select-menu absolute left-0 z-[9999] border border-border/60 bg-card overflow-hidden"
         :class="popover ? '' : openAbove ? 'bottom-full mb-1' : 'top-full mt-1'"
         :style="{ minWidth: dropdownMinWidth, ...floatingStyle }"
       >
@@ -66,7 +66,10 @@
             <div v-else class="w-1.5 shrink-0" />
             <slot name="option" :option="option"><span class="truncate">{{ option.label }}</span></slot>
           </button>
-          <p v-if="!filteredOptions.length" role="status" class="px-3 py-3 text-xs text-muted-foreground">{{ emptyText }}</p>
+          <p v-if="!filteredOptions.length && (searchable || !actionLabel)" role="status" class="px-3 py-3 text-xs text-muted-foreground">{{ emptyText }}</p>
+        </div>
+        <div v-if="actionLabel" class="select-action-row">
+          <button type="button" data-select-action class="select-action" @click="selectAction"><Plus class="h-3.5 w-3.5 shrink-0" />{{ actionLabel }}</button>
         </div>
       </div>
     </Transition>
@@ -75,7 +78,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { ChevronDown, Search } from 'lucide-vue-next'
+import { ChevronDown, Plus, Search } from 'lucide-vue-next'
 
 export interface SelectOption {
   value: string
@@ -98,6 +101,7 @@ const props = withDefaults(defineProps<{
   searchPlaceholder?: string
   emptyText?: string
   buttonStyle?: Record<string, string>
+  actionLabel?: string
 }>(), {
   placeholder: 'Seçiniz',
   size: 'md',
@@ -111,6 +115,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   'open-change': [value: boolean]
+  action: []
 }>()
 
 const isOpen = ref(false)
@@ -151,14 +156,14 @@ function updatePosition() {
   if (!containerRef.value) return
   const rect = containerRef.value.getBoundingClientRect()
   const spaceBelow = window.innerHeight - rect.bottom
-  const height=props.searchable?260:220
+  const height=(props.searchable?260:220)+(props.actionLabel?41:0)
   openAbove.value = spaceBelow < height && rect.top > height
   dropdownMinWidth.value = `${Math.max(rect.width, 160)}px`
   if(props.popover){
-    const width=Math.max(rect.width,160),height=dropdownRef.value?.offsetHeight||Math.min(props.options.length*34+8,220)
+    const width=Math.max(rect.width,160),height=dropdownRef.value?.offsetHeight||Math.min(props.options.length*34+8+(props.actionLabel?41:0),260)
     const top=Math.max(8,openAbove.value?rect.top-height-4:rect.bottom+4)
     const available=Math.max(64,window.innerHeight-top-8)
-    floatingStyle.value={position:'fixed',inset:'auto',left:`${Math.max(8,Math.min(rect.left,window.innerWidth-width-8))}px`,top:`${top}px`,margin:'0',maxWidth:'calc(100vw - 16px)',maxHeight:`${available}px`,'--select-menu-height':`${Math.max(32,available-10-(props.searchable?42:0))}px`}
+    floatingStyle.value={position:'fixed',inset:'auto',left:`${Math.max(8,Math.min(rect.left,window.innerWidth-width-8))}px`,top:`${top}px`,margin:'0',maxWidth:'calc(100vw - 16px)',maxHeight:`${available}px`,'--select-menu-height':`${Math.max(32,available-10-(props.searchable?42:0)-(props.actionLabel?41:0))}px`}
   }
 }
 
@@ -200,6 +205,11 @@ function selectFirstMatch(){
   const option=filteredOptions.value.find(option=>!option.disabled)
   if(option)selectOption(option)
 }
+function selectAction() {
+  if (props.disabled) return
+  close()
+  emit('action')
+}
 
 function close(restoreFocus = true) {
   if (!isOpen.value) return
@@ -210,7 +220,7 @@ function close(restoreFocus = true) {
 }
 
 function popoverScroll(event:Event){if(props.popover&&isOpen.value&&!dropdownRef.value?.contains(event.target as Node))close(false)}
-defineExpose({ close })
+defineExpose({ close, focus: () => triggerRef.value?.focus({ preventScroll: true }) })
 
 function handleClickOutside(e: Event) {
   if (
@@ -234,6 +244,17 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.select-trigger { box-sizing:border-box; min-width:0; outline:none; }
+.select-trigger-open,.select-trigger:focus-visible { border-color:hsl(var(--primary)/.35); box-shadow:inset 0 0 0 1px hsl(var(--primary)/.12); }
+.select-menu { box-sizing:border-box; padding:4px; border-radius:12px; box-shadow:0 12px 32px hsl(var(--foreground)/.09),0 2px 6px hsl(var(--foreground)/.04); }
+.select-options { display:flex; flex-direction:column; gap:2px; border-radius:8px; }
+.select-option { box-sizing:border-box; min-width:0; flex-shrink:0; border-radius:8px; outline:none; font-weight:400; }
+.select-option-selected { font-weight:500; }
+.select-option:focus-visible { background:hsl(var(--primary)/.07); box-shadow:inset 0 0 0 1px hsl(var(--primary)/.22); }
+.select-action-row { margin-top:4px; padding-top:4px; border-top:1px solid hsl(var(--border)/.55); }
+.select-action { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; padding:7px 10px; border-radius:8px; color:hsl(var(--muted-foreground)); text-align:left; font-size:12px; font-weight:500; outline:none; transition:background 150ms,color 150ms; }
+.select-action:hover,.select-action:focus-visible { background:hsl(var(--primary)/.07); color:hsl(var(--primary)); }
+.select-action:focus-visible { box-shadow:inset 0 0 0 1px hsl(var(--primary)/.22); }
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

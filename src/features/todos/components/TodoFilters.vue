@@ -26,7 +26,7 @@
         role="menu"
         :aria-label="t('todo.category')"
         :style="categoryMenuStyle"
-        class="category-menu rounded-xl border border-slate-300 bg-card p-1.5 text-card-foreground shadow-xl shadow-black/10 dark:border-slate-600"
+        class="category-menu rounded-xl border border-border/60 bg-card p-1 text-card-foreground shadow-xl shadow-black/10"
         @beforetoggle="handleCategoryMenuToggle"
         @keydown="handleCategoryMenuKeydown"
       >
@@ -179,7 +179,8 @@ async function handleDeleteCategory(id: string) {
 .category-option-selected { @apply bg-muted/50; }
 .category-checkbox { @apply inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-muted-foreground/50; }
 .category-checkbox.is-checked { @apply border-primary bg-primary text-primary-foreground; }
-.filter-button { @apply inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-border/60 bg-card/70 px-2.5 text-xs font-medium transition-colors hover:border-border hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30; }
+.filter-button { @apply inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-border/60 bg-card/70 px-2.5 text-xs font-medium transition-colors hover:border-border hover:bg-muted/40 focus-visible:outline-none; }
+.filter-button:focus-visible,.filter-button[aria-expanded=true] { border-color:hsl(var(--primary)/.35);box-shadow:inset 0 0 0 1px hsl(var(--primary)/.12); }
 .filter-active { @apply border-border text-foreground; }
 .filter-idle { @apply text-muted-foreground hover:text-foreground; }
 @media (hover: hover) {

@@ -61,7 +61,6 @@
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { computed, ref, onDeactivated } from 'vue'
 import { Code2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n' 
@@ -83,8 +82,8 @@ const { t } = useI18n()
 const saving = ref(false)
 
 const isDrafting = ref(false)
-onDeactivated(() => { isDrafting.value = false })
-const snippetForm = useWorkspaceDraft('code-draft', {
+onDeactivated(() => { isDrafting.value = false; snippetForm.value={title:'',language:'javascript',code:''} })
+const snippetForm = ref({
   title: '',
   language: 'javascript', 
   code: '',

@@ -15,17 +15,6 @@ const registry = load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'))
 const navigation = load(fs.readFileSync('src/lib/workspaceSections.ts', 'utf8'), { './moduleCatalog': registry })
 const copy = value => JSON.parse(JSON.stringify(value))
 
-test('page navigation consolidates related content and resolves retired saved sections',()=>{
-  assert.deepEqual(copy(navigation.getPageNavigation('dashboard').items.map(item=>item.id)),['overview'])
-  assert.deepEqual(copy(navigation.getPageNavigation('analytics').items.map(item=>item.id)),['overview','finance'])
-  assert.deepEqual(copy(navigation.getPageNavigation('settings').items.map(item=>item.id)),['general','workspaces'])
-  for(const id of ['agenda','modules'])assert.equal(navigation.resolvePageSection('dashboard',id),'overview')
-  for(const id of ['focus','tasks','plans','daily'])assert.equal(navigation.resolvePageSection('analytics',id),'overview')
-  assert.equal(navigation.resolvePageSection('settings','account'),'general')
-  assert.equal(navigation.resolvePageSection('settings','modules'),'workspaces')
-  for(const page of ['dashboard','analytics','settings'])assert.equal(navigation.resolvePageSection(page,'unknown'),undefined)
-})
-
 test('every registered module has exactly one section and keeps its catalog order', () => {
   const ids = registry.moduleCatalog.map(module => module.id)
   const groups = copy(navigation.getWorkspaceSections(ids))
@@ -63,7 +52,7 @@ test('category entry returns to an enabled remembered module and otherwise uses 
   assert.equal(navigation.chooseWorkspaceSectionModule(navigation.getWorkspaceSections(['periodic'])[0], 'tasks'), 'periodic')
 })
 
-function fixture({ selected = 'quick', enabled = registry.moduleCatalog.map(module => module.id), finePointer = true, savedMode = 'auto', context } = {}) {
+function fixture({ selected = 'quick', enabled = registry.moduleCatalog.map(module => module.id), finePointer = true, savedMode = 'auto', activePage = 'workspace' } = {}) {
   const events = [], mounted = [], unmounted = [], listeners = new Map(), mediaListeners = new Map()
   const focus = { isConnected: true, focused: 0, focus() { this.focused++; document.activeElement = this } }
   const document = {
@@ -77,7 +66,7 @@ function fixture({ selected = 'quick', enabled = registry.moduleCatalog.map(modu
     addEventListener(name, handler) { mediaListeners.set(name, handler) },
     removeEventListener(name, handler) { if (mediaListeners.get(name) === handler) mediaListeners.delete(name) },
   }) }
-  const props = vue.reactive({ modelValue: selected, enabled: [...enabled], workspaceName: 'Personal', context })
+  const props = vue.reactive({ modelValue: selected, enabled: [...enabled], workspaceName: 'Personal', activePage })
   const descriptor = parse(fs.readFileSync('src/components/ui/WorkspaceRail.vue', 'utf8')).descriptor
   const component = load(compileScript(descriptor, { id: 'workspace-rail-test' }).content, {
     vue: { ...vue, onMounted: callback => mounted.push(callback), onBeforeUnmount: callback => unmounted.push(callback) },
@@ -95,23 +84,20 @@ function fixture({ selected = 'quick', enabled = registry.moduleCatalog.map(modu
   }
 }
 
-test('context sidebar changes only declared page sections and retains hover, pin and mobile scroll behavior',async()=>{
-  for(const page of ['dashboard','analytics','settings']){
-    const context=navigation.getPageNavigation(page),f=fixture({context,selected:context.items[0].id,enabled:[]}),s=f.state
-    try{
-      s.pointerEnter({pointerType:'mouse'});assert.equal(s.expanded.value,true);assert.deepEqual(f.events,[])
-      s.togglePin();s.pointerLeave();assert.equal(s.pinned.value,true)
-      s.selectPage('not-a-section');s.selectModule('quick');assert.deepEqual(f.events,[])
-      const target=context.items.at(-1).id
-      s.selectPage(target);assert.deepEqual(f.events.at(-1),['update:modelValue',target])
-      s.drawer.value={showModal(){},close(){},querySelector:()=>null}
-      await s.openMobile();assert.equal(f.document.body.style.overflow,'hidden')
-      s.selectPage(context.items[0].id)
-      assert.equal(s.mobileOpen.value,false);assert.equal(f.document.body.style.overflow,'auto')
-      assert.deepEqual(f.events.at(-1),['update:modelValue',context.items[0].id])
-      context.items.pop();assert.notEqual(context.items.length,navigation.getPageNavigation(page).items.length,'each consumer receives an independent menu')
-    }finally{f.close()}
+test('fixed sidebar keeps workspace groups on every page and clears their active state outside the workspace',async()=>{
+ const f=fixture(),s=f.state
+ try{
+  const sections=copy(s.sections.value)
+  for(const page of ['analytics','settings','workspace']){
+   f.props.activePage=page;await vue.nextTick()
+   assert.deepEqual(copy(s.sections.value),sections)
+   assert.equal(s.activeSection.value,page==='workspace'?'notes':undefined)
+   s.action(page==='workspace'?'search':page)
+   assert.deepEqual(f.events.at(-1),[page==='workspace'?'search':page])
   }
+  f.props.activePage='analytics';s.selectSection(s.sections.value.find(item=>item.id==='planning'))
+  assert.deepEqual(f.events.at(-1),['update:modelValue','tasks'])
+ }finally{f.close()}
 })
 
 test('hover keeps the active section; category clicks remember selection and deep links update the active section', async () => {

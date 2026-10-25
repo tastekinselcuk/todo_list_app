@@ -2,8 +2,7 @@
   <div class="workspace-content mx-auto space-y-4">
     <div class="workspace-toolbar space-y-4">
       <div v-if="canWrite">
-        <TodoQuickAdd :category-open="showCategoryDialog" @open-category-dialog="showCategoryDialog = !showCategoryDialog" />
-        <CategoryModal v-model:open="showCategoryDialog" />
+        <TodoQuickAdd />
       </div>
 
       <div class="relative z-30">
@@ -62,7 +61,6 @@ import draggable from 'vuedraggable'
 import TodoQuickAdd from './TodoQuickAdd.vue'
 import TodoFilters from './TodoFilters.vue'
 import TodoCardItem from './TodoCard.vue'
-import CategoryModal from './CategoryModal.vue'
 
 const { canWrite } = useModuleAccess('detailed')
 const todoStore = useTodoStore(), uiStore = useUIStore()
@@ -71,7 +69,7 @@ const selectedCategories = ref<string[]>([])
 const showCompleted = ref(true)
 const isGrouped = ref(false)
 const query = ref('')
-const showCategoryDialog = ref(false), loading = ref(true), loadFailed = ref(false)
+const loading = ref(true), loadFailed = ref(false)
 const pendingIds = ref(new Set<string>())
 
 async function loadNotes() {
@@ -112,7 +110,7 @@ const getCategoryName = (id: string | null) => todoStore.categories.find(categor
 function clearFilters() {
   query.value = ''; selectedCategories.value = []; showCompleted.value = true
 }
-onDeactivated(() => { clearFilters(); isGrouped.value = false; showCategoryDialog.value = false })
+onDeactivated(() => { clearFilters(); isGrouped.value = false })
 async function handleToggleTodo(id: string) {
   if (!canWrite.value || pendingIds.value.has(id)) return
   pendingIds.value.add(id)

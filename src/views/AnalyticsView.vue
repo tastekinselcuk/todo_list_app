@@ -1,16 +1,14 @@
 <template>
   <div :class="['page-width-transition mx-auto w-full min-w-0 space-y-5 pb-8', settings.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
     <header class="flex flex-wrap items-center justify-between gap-3">
-      <div><div class="flex items-center gap-2"><WorkspaceRail :model-value="analyticsPage" :context="analyticsNavigation" @update:model-value="selectPage" /><h1 class="text-lg font-semibold tracking-tight">{{ t(`pageNav.analytics.${analyticsPage}`) }}</h1></div><p class="mt-1 text-xs text-muted-foreground">{{ t('analytics.subtitle') }}</p></div>
+      <div><h1 class="text-lg font-semibold tracking-tight">{{ t('app.analytics') }}</h1><p class="mt-1 text-xs text-muted-foreground">{{ t('analytics.subtitle') }}</p></div>
       <div class="flex flex-wrap items-center gap-2">
         <CustomSelect v-model="workspace" :options="workspaceOptions" :aria-label="t('analytics.workspace')" size="sm" class="w-40" />
-        <CustomSelect v-if="section==='activity'" v-model="preset" :options="presetOptions" :aria-label="t('analytics.period')" size="sm" class="w-32" />
-        <button v-if="section==='activity'" type="button" class="analytics-icon" :disabled="refreshing" :title="t('analytics.refresh')" :aria-label="t('analytics.refresh')" @click="load"><RefreshCw :class="['h-3.5 w-3.5', refreshing && 'animate-spin motion-reduce:animate-none']" /></button>
-        <button v-if="section==='activity'" type="button" class="analytics-icon" :disabled="!report" :title="t('analytics.export')" :aria-label="t('analytics.export')" @click="exportReport"><Download class="h-3.5 w-3.5" /></button>
+        <CustomSelect v-model="preset" :options="presetOptions" :aria-label="t('analytics.period')" size="sm" class="w-32" />
+        <button type="button" class="analytics-icon" :disabled="refreshing" :title="t('analytics.refresh')" :aria-label="t('analytics.refresh')" @click="load"><RefreshCw :class="['h-3.5 w-3.5', refreshing && 'animate-spin motion-reduce:animate-none']" /></button>
+        <button type="button" class="analytics-icon" :disabled="!report" :title="t('analytics.export')" :aria-label="t('analytics.export')" @click="exportReport"><Download class="h-3.5 w-3.5" /></button>
       </div>
     </header>
-    <FinanceReport v-if="section==='finance'" class="context-panel" :workspace-id="workspace" />
-    <template v-else>
     <div class="flex flex-wrap items-center justify-between gap-3 text-xs">
       <div class="flex items-center gap-1 rounded-xl border border-border/60 bg-card/60 p-1" role="group" :aria-label="t('analytics.activityScope')">
         <button v-for="choice in [true,false]" :key="String(choice)" type="button" :aria-pressed="personal===choice" :class="['rounded-lg px-3 py-1.5 transition-colors',personal===choice ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground']" @click="personal=choice">{{ t(choice ? 'analytics.myActivity' : 'analytics.areaActivity') }}</button>
@@ -61,48 +59,51 @@
         <ul class="flex flex-col gap-2 text-xs leading-5 text-muted-foreground"><li v-for="insight in insights" :key="insight.key"><button type="button" class="flex items-start gap-2 text-left hover:text-foreground" @click="chooseMetric(insight.target)"><span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/60" />{{ insight.text }}</button></li></ul>
       </section>
 
-      <section ref="detailsPanel" class="context-panel workspace-card bg-card/40">
+      <section v-for="panel in reportPanels" :key="panel" :ref="element => setReportPanel(panel, element as HTMLElement | null)" :aria-labelledby="`analytics-${panel}-heading`" class="context-panel workspace-card bg-card/40">
         <header class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-3">
-          <CustomSelect v-model="detail" :options="detailOptions" :aria-label="t('analytics.detailView')" size="sm" class="w-44" />
-          <span class="text-[11px] text-muted-foreground">{{ detail==='daily' ? (selectedDay ? formatDate(selectedDay) : dateLabel) : t('analytics.currentState') }}</span>
+          <h2 :id="`analytics-${panel}-heading`" class="text-sm font-medium">{{ t(`analytics.${panel}`) }}</h2>
+          <span class="text-[11px] text-muted-foreground">{{ panel==='daily' ? (selectedDay ? formatDate(selectedDay) : dateLabel) : t('analytics.currentState') }}</span>
         </header>
-        <template v-if="detail==='backlog'">
+        <template v-if="panel==='backlog'">
           <div class="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
-            <button v-for="(bucket,index) in buckets" :key="bucket.min" type="button" :aria-pressed="ageFilter===index" :class="['rounded-xl border px-3 py-2.5 text-left transition-colors', ageFilter===index ? 'border-primary/40 bg-primary/5' : 'border-border/60 hover:bg-muted/40']" @click="ageFilter=ageFilter===index ? null : index; limit=12">
+            <button v-for="(bucket,index) in buckets" :key="bucket.min" type="button" :aria-pressed="ageFilter===index" :class="['rounded-xl border px-3 py-2.5 text-left transition-colors', ageFilter===index ? 'border-primary/40 bg-primary/5' : 'border-border/60 hover:bg-muted/40']" @click="ageFilter=ageFilter===index ? null : index; limits.backlog=12">
               <span class="text-[11px] text-muted-foreground">{{ t(`analytics.age${index}`) }}</span><span class="mt-1 block text-sm font-semibold tabular-nums">{{ bucket.count }}</span><span class="mt-2 block h-1 overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full bg-primary/60" :style="{width:`${bucket.count/Math.max(1,...buckets.map(b=>b.count))*100}%`}" /></span>
             </button>
           </div>
         </template>
-        <div v-if="detail==='plans'" class="grid gap-3 border-b border-border/50 p-4 sm:grid-cols-2">
+        <div v-if="panel==='plans'" class="grid gap-3 border-b border-border/50 p-4 sm:grid-cols-2">
           <div v-for="period in periods" :key="period.key"><div class="mb-1.5 flex justify-between text-xs"><span>{{ t(`dashboard.home.periods.${period.key}`) }}</span><span class="text-muted-foreground">{{ t('analytics.planCompleted',{done:period.done,total:period.total}) }}</span></div><div class="flex h-1.5 overflow-hidden rounded-full bg-muted"><span class="bg-primary/65" :style="{width:`${period.done/Math.max(1,period.total)*100}%`}" /><span class="bg-amber-500/55" :style="{width:`${period.carried/Math.max(1,period.total)*100}%`}" /></div></div>
           <p class="text-[11px] text-muted-foreground sm:col-span-2">{{ t('analytics.planLegend') }}</p>
         </div>
-        <div v-if="detail==='daily'" class="overflow-x-auto">
+        <div v-if="panel==='daily'" class="overflow-x-auto">
           <table class="w-full text-left text-xs"><caption class="sr-only">{{ t('analytics.daily') }}</caption><thead class="text-muted-foreground"><tr><th v-for="key in ['day','focus','created','completed','reopened','deleted','pending']" :key="key" class="whitespace-nowrap px-4 py-3 font-normal">{{ t(`analytics.${key}`) }}</th></tr></thead><tbody><tr v-for="day in visibleDays" :key="day.day" class="border-t border-border/40 hover:bg-muted/30"><td class="whitespace-nowrap px-4 py-3">{{ formatDate(day.day) }}</td><td class="px-4 py-3 tabular-nums">{{ knownDay(day.day) || day.seconds>0 ? `${Math.round(Number(day.seconds)/60)} ${t('analytics.minShort')}` : '—' }}</td><td v-for="key in ['created','completed','reopened','deleted','pending'] as const" :key="key" class="px-4 py-3 tabular-nums">{{ knownDay(day.day) ? day[key] ?? '—' : '—' }}</td></tr></tbody></table>
           <button v-if="selectedDay" type="button" class="m-4 text-xs text-primary" @click="selectedDay=null">{{ t('analytics.allDays') }}</button>
         </div>
         <template v-else>
-          <ul v-if="detailItems.length" class="divide-y divide-border/40 px-4">
-            <li v-for="item in detailItems.slice(0,limit)" :key="`${item.module}:${item.record_id}`" class="flex items-center justify-between gap-4 py-3"><div class="min-w-0"><p class="truncate text-sm">{{ item.title || t('analytics.untitled') }}</p><p class="mt-1 text-[11px] text-muted-foreground">{{ moduleLabel(item.module) }} · {{ t('analytics.daysOld',{count:itemAge(item,today,timezone)}) }}<span v-if="item.carry_count"> · {{ t('analytics.carriedTimes',{count:item.carry_count}) }}</span></p></div><button type="button" class="analytics-icon shrink-0" :disabled="!canOpen(item)" :title="!canOpen(item) ? t('analytics.unavailableModule') : undefined" :aria-label="t('analytics.openModule',{module:moduleLabel(item.module)})" @click="openItem(item)"><ArrowUpRight class="h-3.5 w-3.5" /></button></li>
+          <ul v-if="detailItems[panel].length" class="divide-y divide-border/40 px-4">
+            <li v-for="item in detailItems[panel].slice(0,limits[panel])" :key="`${item.module}:${item.record_id}`" class="flex items-center justify-between gap-4 py-3"><div class="min-w-0"><p class="truncate text-sm">{{ item.title || t('analytics.untitled') }}</p><p class="mt-1 text-[11px] text-muted-foreground">{{ moduleLabel(item.module) }} · {{ t('analytics.daysOld',{count:itemAge(item,today,timezone)}) }}<span v-if="item.carry_count"> · {{ t('analytics.carriedTimes',{count:item.carry_count}) }}</span></p></div><button type="button" class="analytics-icon shrink-0" :disabled="!canOpen(item)" :title="!canOpen(item) ? t('analytics.unavailableModule') : undefined" :aria-label="t('analytics.openModule',{module:moduleLabel(item.module)})" @click="openItem(item)"><ArrowUpRight class="h-3.5 w-3.5" /></button></li>
           </ul>
-          <p v-else class="p-6 text-center text-xs text-muted-foreground">{{ t(detail==='plans' ? 'analytics.plansEmpty' : 'analytics.backlogEmpty') }}</p>
-          <button v-if="detailItems.length>limit" type="button" class="w-full border-t border-border/40 py-3 text-xs text-muted-foreground hover:text-foreground" @click="limit+=12">{{ t('analytics.more',{count:detailItems.length-limit}) }}</button>
+          <p v-else class="p-6 text-center text-xs text-muted-foreground">{{ t(panel==='plans' ? 'analytics.plansEmpty' : 'analytics.backlogEmpty') }}</p>
+          <button v-if="detailItems[panel].length>limits[panel]" type="button" class="w-full border-t border-border/40 py-3 text-xs text-muted-foreground hover:text-foreground" @click="limits[panel]+=12">{{ t('analytics.more',{count:detailItems[panel].length-limits[panel]}) }}</button>
         </template>
       </section>
       <p class="text-[11px] leading-5 text-muted-foreground">{{ t('analytics.privacy') }}</p>
     </template>
-    </template>
+    <section ref="financePanel" class="context-panel space-y-4 border-t border-border/50 pt-5" aria-labelledby="finance-analysis-heading">
+      <header class="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="finance-analysis-heading" class="text-sm font-semibold">{{ t('pageNav.analytics.finance') }}</h2>
+        <CustomSelect v-if="!workspace" v-model="financeWorkspace" :options="financeWorkspaceOptions" :aria-label="t('finance.selectWorkspace')" size="sm" class="w-40" />
+      </header>
+      <FinanceReport :workspace-id="workspace || financeWorkspace" />
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowUpRight, Clock3, Download, Info, ListTodo, RefreshCw, Repeat2, Timer } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
-import { getPageNavigation, resolvePageSection } from '@/lib/workspaceSections'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import AnalyticsChart from '@/features/analytics/components/AnalyticsChart.vue'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useSettingsStore } from '@/stores/settings'
@@ -112,19 +113,18 @@ const emit=defineEmits<{'enter-workspace':[id:string]}>()
 const {t,locale}=useI18n(),workspaces=useWorkspacesStore(),settings=useSettingsStore()
 const FinanceReport=defineAsyncComponent(()=>import('@/features/finance/components/FinanceReport.vue'))
 const props=defineProps<{initialSection?:'activity'|'finance'}>()
-const analyticsNavigation=getPageNavigation('analytics')
-const analyticsPage=useWorkspaceDraft('analytics-section','overview')
-const savedPage=analyticsPage.value
-if(props.initialSection==='finance')analyticsPage.value='finance'
-analyticsPage.value=resolvePageSection('analytics',analyticsPage.value)||'overview'
-const section=computed(() => analyticsPage.value==='finance'?'finance':'activity'),activityEnabled=computed(()=>section.value==='activity')
+const financePanel = ref<HTMLElement>()
+async function revealFinance() { await nextTick(); scroll(financePanel.value) }
+watch(() => props.initialSection, value => { if (value === 'finance') void revealFinance() })
+onMounted(() => { if (props.initialSection === 'finance') void revealFinance() })
 const workspace=ref(workspaces.activeId),preset=ref<DatePreset>('week'),personal=ref(true)
+const financeWorkspace=ref(workspaces.activeId)
 const timezone=ref(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
 const today=computed(()=>localDay(new Date(),timezone.value))
 const initial=reportRange('week',timezone.value),from=ref(initial.from),to=ref(initial.to)
-const {report,previous,status,error,refreshing,pending,storageFailed,load}=useAnalyticsReport({workspace,preset,from,to,personal,timezone,enabled:activityEnabled})
-const workspaceOptions=computed(()=>[...(section.value==='finance'?[]:[{value:'',label:t('analytics.allWorkspaces')}]),...workspaces.items.map(w=>({value:w.id,label:w.name+(w.archived_at ? ` · ${t('analytics.archived')}` : '')}))])
-watch(section,value=>{if(value==='finance' && !workspace.value)workspace.value=workspaces.activeId})
+const {report,previous,status,error,refreshing,pending,storageFailed,load}=useAnalyticsReport({workspace,preset,from,to,personal,timezone})
+const workspaceOptions=computed(()=>[{value:'',label:t('analytics.allWorkspaces')},...workspaces.items.map(w=>({value:w.id,label:w.name+(w.archived_at ? ` · ${t('analytics.archived')}` : '')}))])
+const financeWorkspaceOptions=computed(()=>workspaceOptions.value.filter(option=>option.value))
 const presetOptions=computed(()=>['week','month','custom'].map(value=>({value,label:t(`analytics.${value}`)})))
 const formatDate=(day:string)=>new Date(`${day}T12:00:00Z`).toLocaleDateString(locale.value,{day:'numeric',month:'short',timeZone:'UTC'})
 const dateLabel=computed(()=>report.value ? `${formatDate(report.value.date_from)} – ${formatDate(report.value.date_to)}` : '')
@@ -152,27 +152,26 @@ const metrics=computed(()=>[
   {key:'backlog',label:t('analytics.olderThan30'),icon:Clock3,value:oldItems.value.length,hint:t('analytics.currentState')},
   {key:'plans',label:t('analytics.carried'),icon:Repeat2,value:carried.value.length,hint:t('analytics.carriedHint')},
 ])
-const selectedDay=ref<string|null>(null),detail=ref<'backlog'|'plans'|'daily'>(savedPage==='plans'?'plans':savedPage==='daily'?'daily':'backlog'),ageFilter=ref<number|null>(null),limit=ref(12)
-const detailOptions=computed(()=>['backlog','plans','daily'].map(value=>({value,label:t(`analytics.${value}`)})))
-watch(detail,value=>{ageFilter.value=null;limit.value=12;if(value!=='daily')selectedDay.value=null})
-function selectPage(page:string){
- const section=resolvePageSection('analytics',page)
- if(!section)return
- selectedDay.value=null;analyticsPage.value=section
- if(page==='plans'||page==='daily')detail.value=page
- else if(page==='tasks')detail.value='backlog'
+const reportPanels = ['backlog', 'plans', 'daily'] as const
+type ReportPanel = typeof reportPanels[number]
+const selectedDay=ref<string|null>(null),ageFilter=ref<number|null>(null)
+const limits=reactive<Record<ReportPanel,number>>({backlog:12,plans:12,daily:12})
+const focusPanel=ref<HTMLElement>(),reportPanelElements=ref<Partial<Record<ReportPanel,HTMLElement>>>({})
+function setReportPanel(panel:ReportPanel,element:HTMLElement|null) {
+  if(element)reportPanelElements.value[panel]=element
+  else delete reportPanelElements.value[panel]
 }
-const focusPanel=ref<HTMLElement>(),detailsPanel=ref<HTMLElement>()
-watch(()=>[workspace.value,preset.value,from.value,to.value,personal.value],()=>{selectedDay.value=null;ageFilter.value=null;limit.value=12})
+watch(()=>[workspace.value,preset.value,from.value,to.value,personal.value],()=>{selectedDay.value=null;ageFilter.value=null;limits.backlog=12;limits.plans=12})
 const focusRows=computed(()=>report.value?.daily.map((d,index)=>({day:d.day,current:knownDay(d.day) || d.seconds>0 ? Number(d.seconds)/60 : null,previous:comparison.value ? Number(previous.value?.daily[index]?.seconds || 0)/60 : null})) || [])
 const focusSeries=computed(()=>[...(comparison.value ? [{key:'previous',label:t('analytics.previousPeriod'),color:'hsl(var(--muted-foreground) / .25)'}] : []),{key:'current',label:t('analytics.selectedPeriod'),color:'hsl(var(--primary))'}])
 const taskRows=computed(()=>report.value?.daily.map(d=>({day:d.day,created:knownDay(d.day) ? d.created : null,completed:knownDay(d.day) ? d.completed : null,pending:d.pending})) || [])
 const taskSeries=computed(()=>[{key:'created',label:t('analytics.created'),color:'hsl(var(--muted-foreground) / .35)'},{key:'completed',label:t('analytics.completed'),color:'hsl(var(--primary))'},{key:'pending',label:t('analytics.pending'),color:'hsl(var(--foreground) / .65)',type:'line' as const}])
 const buckets=computed(()=>ageBuckets(report.value?.items || [],today.value,timezone.value))
-const detailItems=computed(()=>{
-  const items=detail.value==='plans' ? carried.value : openItems.value
-  return [...items].filter(i=>detail.value!=='backlog' || ageFilter.value===null || (itemAge(i,today.value,timezone.value)>=buckets.value[ageFilter.value].min && itemAge(i,today.value,timezone.value)<=buckets.value[ageFilter.value].max)).sort((a,b)=>a.item_created_at.localeCompare(b.item_created_at))
-})
+const detailItems=computed(()=>({
+  backlog:[...openItems.value].filter(item=>ageFilter.value===null || (itemAge(item,today.value,timezone.value)>=buckets.value[ageFilter.value].min && itemAge(item,today.value,timezone.value)<=buckets.value[ageFilter.value].max)).sort((a,b)=>a.item_created_at.localeCompare(b.item_created_at)),
+  plans:[...carried.value].sort((a,b)=>a.item_created_at.localeCompare(b.item_created_at)),
+  daily:[],
+}))
 const periods=computed(()=>['daily','weekly','monthly','yearly'].map(key=>{const items=report.value?.items.filter(i=>i.module==='plans' && i.period===key) || [];return {key,total:items.length,done:items.filter(i=>i.completed).length,carried:items.filter(i=>!i.completed && i.carry_count>0).length}}))
 const visibleDays=computed(()=>report.value?.daily.filter(d=>!selectedDay.value || d.day===selectedDay.value) || [])
 const insights=computed(()=>{
@@ -185,12 +184,13 @@ const insights=computed(()=>{
 const moduleLabel=(module:string)=>t(module==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module}Name`)
 function scroll(panel?:HTMLElement) {panel?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'})}
 async function chooseMetric(key:string) {
- if(!['focus','backlog','plans','daily'].includes(key))return
- analyticsPage.value='overview';selectedDay.value=null;ageFilter.value=null;limit.value=12
- if(key==='backlog'||key==='plans'||key==='daily')detail.value=key
- await nextTick();scroll(key==='focus'?focusPanel.value:detailsPanel.value)
+ if(key!=='focus' && !reportPanels.includes(key as ReportPanel))return
+ selectedDay.value=null
+ if(key==='backlog'){ageFilter.value=null;limits.backlog=12}
+ if(key==='plans')limits.plans=12
+ await nextTick();scroll(key==='focus'?focusPanel.value:reportPanelElements.value[key as ReportPanel])
 }
-async function selectDay(day:string) {selectedDay.value=selectedDay.value===day ? null : day;analyticsPage.value='overview';detail.value='daily';await nextTick();scroll(detailsPanel.value)}
+async function selectDay(day:string) {selectedDay.value=selectedDay.value===day ? null : day;await nextTick();scroll(reportPanelElements.value.daily)}
 function canOpen(item:AnalyticsItem) {return workspaces.available.some(w=>w.id===(item.workspace_id || workspace.value) && w.active_modules.includes(item.module))}
 function openItem(item:AnalyticsItem) {
   if(!canOpen(item))return
@@ -214,6 +214,6 @@ function exportReport() {
 .analytics-date { height:2rem; max-width:10rem; padding:0 .6rem; border:1px solid hsl(var(--border)/.6); border-radius:.65rem; background:hsl(var(--card)/.6); color:hsl(var(--foreground)); color-scheme:light; }
 :global(.dark) .analytics-date { color-scheme:dark; }
 button:focus-visible,.analytics-date:focus-visible { outline:2px solid hsl(var(--primary)/.45);outline-offset:3px; }
-section { scroll-margin-top:7rem; }
+section { scroll-margin-top:5rem; }
 @media(prefers-reduced-motion:reduce) { * {transition:none !important;} }
 </style>

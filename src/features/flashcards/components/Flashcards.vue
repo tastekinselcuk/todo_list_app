@@ -182,7 +182,6 @@
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { ref, computed, watch, onDeactivated } from 'vue'
 import { Layers, Plus, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
 import { useFlashcardStore, type Deck } from '@/features/flashcards/stores/flashcards'
@@ -209,10 +208,10 @@ watch(() => store.decks, decks => {
 watch(currentView, view => {
   if (view === 'study' && activeDeck.value) activeDeck.value = store.decks.find(deck => deck.id === activeDeck.value!.id) || null
 })
-const newDeckTitle = useWorkspaceDraft('deck-title', '')
+const newDeckTitle = ref('')
 const newDeckColor = ref('#f97316') 
-const newCardFront = useWorkspaceDraft('card-front', '')
-const newCardBack = useWorkspaceDraft('card-back', '')
+const newCardFront = ref('')
+const newCardBack = ref('')
 const flippedCards = ref<string[]>([]) 
 
 // Results State
@@ -220,6 +219,7 @@ const testResults = ref<{cardId: string, isCorrect: boolean}[]>([])
 const gameScore = ref(0)
 const gameErrors = ref(0)
 onDeactivated(() => {
+  newDeckTitle.value='';newCardFront.value='';newCardBack.value='';newDeckColor.value='#f97316'
   currentView.value = 'decks'; activeDeck.value = null; flippedCards.value = []
   testResults.value = []; gameScore.value = 0; gameErrors.value = 0
 })

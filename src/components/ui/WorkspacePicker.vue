@@ -81,5 +81,6 @@ defineExpose({close})
 </template>
 
 <style scoped>
+.workspace-picker-trigger:focus-visible{outline:none;box-shadow:inset 0 0 0 1px hsl(var(--primary)/.3)}
 .workspace-picker-trigger.is-rail{flex:1;width:100%;max-width:none;justify-content:space-between;padding:6px;gap:6px;border-radius:9px;text-align:left}.workspace-picker-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}.workspace-picker-copy>span{font-size:9px;font-weight:500;letter-spacing:.025em;color:hsl(var(--muted-foreground))}.workspace-picker-copy>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;font-weight:550;color:hsl(var(--foreground))}.workspace-picker-menu{max-height:calc(100dvh - 110px);overflow-y:auto;overscroll-behavior:contain}.workspace-picker-enter-active,.workspace-picker-leave-active{transition:opacity 140ms ease,transform 180ms cubic-bezier(.22,1,.36,1);transform-origin:top left}.workspace-picker-enter-from,.workspace-picker-leave-to{opacity:0;transform:translateY(-4px)}@media(prefers-reduced-motion:reduce){.workspace-picker-enter-active,.workspace-picker-leave-active{transition:none}}
 </style>

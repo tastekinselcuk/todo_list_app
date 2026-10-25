@@ -30,6 +30,18 @@ export function storageKeys(prefix: string): string[] {
     return keys
   } catch { return [] }
 }
+
+/** Retire only unsaved form drafts; saved data, preferences, auth and outboxes stay intact. */
+export function discardStoredInputDrafts(owner: string) {
+  if (!owner) return
+  const prefix = `workspace:${owner}:`
+  const draftName = /^(?:todo-(?:title|input-category|description|edit:[^:]+)|quick-note|plan-title|code-(?:draft|edit:[^:]+|edit-version:[^:]+)|pomo-note-title|tasks-title|deck-title|card-(?:front|back)|routine-(?:title|day|form:[^:]+))(?::|$)/
+  for (const key of storageKeys(prefix)) {
+    const workspaceEnd = key.indexOf(':', prefix.length)
+    if (workspaceEnd < 0 || !draftName.test(key.slice(workspaceEnd + 1))) continue
+    try { localStorage.removeItem(key) } catch { /* Storage remains optional. */ }
+  }
+}
 export function supportedLanguage(): 'en' | 'tr' {
   return readStorage('ui_language') === 'tr' ? 'tr' : 'en'
 }

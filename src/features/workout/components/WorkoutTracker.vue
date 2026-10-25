@@ -72,7 +72,7 @@ import { useSearchReveal } from '@/lib/searchNavigation'
 import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { ArrowLeft, CheckCircle2, Copy, Dumbbell, Loader2, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { useModuleAccess, useWorkspaceDraft } from '@/lib/workspaceScope'
+import { useModuleAccess } from '@/lib/workspaceScope'
 import { useUIStore } from '@/stores/ui'
 import { useWorkoutStore, type Exercise, type Routine } from '../stores/workout'
 import { fold, type ExerciseInput } from '../lib/exercises'
@@ -87,7 +87,7 @@ const { canWrite } = useModuleAccess('workout')
 const days = ['Any', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const dayLabel = (day: string) => t(day === 'Any' ? 'workout.anyDay' : 'workout.' + day.toLowerCase())
 const dayOptions = computed(() => days.map(value => ({ value, label: dayLabel(value) })))
-const newRoutineTitle = useWorkspaceDraft('routine-title', ''), newRoutineDay = useWorkspaceDraft('routine-day', 'Any')
+const newRoutineTitle = ref(''), newRoutineDay = ref('Any')
 const activeId = ref(''), query = ref('')
 const activeRoutine = computed(() => store.routines.find(routine => routine.id === activeId.value))
 const filtered = computed(() => store.routines.filter(routine => fold(routine.title).includes(fold(query.value))))
@@ -100,6 +100,7 @@ const failed = () => ui.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
 let entryGeneration = 0
 onDeactivated(() => {
   entryGeneration++
+  newRoutineTitle.value='';newRoutineDay.value='Any';editingTitle.value='';editingDay.value='Any'
   activeId.value = ''; query.value = ''; showLibrary.value = false
   editedExercise.value = null; previewExercise.value = null; editingProgram.value = null
   programDialog.value?.close()

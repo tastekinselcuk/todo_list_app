@@ -10,7 +10,6 @@
 
       <div ref="workspaceNavigation" class="workspace-navigation relative !mt-0">
         <div class="relative z-20 flex min-w-0 items-center gap-1 pr-8 !mt-0">
-          <WorkspaceRail :model-value="activeTab" :enabled="activeModules.map(tab=>tab.id)" :workspace-name="workspaces.active?.name" @update:model-value="selectModule" @search="openTabSearch" @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
           <WorkspaceModulePicker :model-value="activeTab" :active-view="activeModuleView" :enabled="activeModules.map(tab=>tab.id)" @update:model-value="selectModule" @navigate="selectModuleView" />
         </div>
 
@@ -54,7 +53,6 @@ import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
 import { Expand, Shrink } from 'lucide-vue-next'
 import WorkspaceModulePicker from '@/components/ui/WorkspaceModulePicker.vue'
-import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
 import { workspaceNavigationKey, workspaceActiveViewKey, workspaceOpenItemKey, type WorkspaceNavigationIntent } from '@/lib/workspaceNavigation'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import WorkspaceSearch from '@/components/ui/WorkspaceSearch.vue'
@@ -191,6 +189,7 @@ const stopTrashChanges=onTrashChange(change=>{if(change.owner===workspaces.userI
 onBeforeUnmount(()=>{stopTrashMoves();stopTrashChanges()})
 watch(() => workspaces.sessionKey, () => { destination.value = null;contentSearch.value?.close() })
 async function openTabSearch() { await contentSearch.value?.open() }
+defineExpose({ openSearch: openTabSearch, openTrash: () => { trashOpen.value = true }, selectModule })
 function selectSearchHit(hit: SearchHit) {
   if (['secure','finance'].includes(hit.module) || !activeModules.value.some(tab => tab.id === hit.module)) return
   destination.value = { ...hit, sequence: ++searchSequence }
@@ -198,6 +197,7 @@ function selectSearchHit(hit: SearchHit) {
 }
 provide(workspaceOpenItemKey,selectSearchHit)
 function handleShortcut(event: KeyboardEvent) {
+  if (event.defaultPrevented) return
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
     if (document.querySelector('dialog[open]') && !document.querySelector('.workspace-search[open]')) return
     event.preventDefault()
@@ -209,7 +209,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
 
 watch([() => props.initialTab, () => props.navigationRequest, () => props.initialView], ([newVal]) => {
   if (newVal && activeModules.value.find(t => t.id === newVal)) {
-    activeTab.value = newVal
+    selectModule(newVal)
     applyInitialView()
   }
 })

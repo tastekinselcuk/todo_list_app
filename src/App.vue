@@ -18,26 +18,15 @@
 
   <div v-else class="min-h-screen bg-gradient-to-br from-background to-muted relative selection:bg-primary/30">
     
-    <AppNavigation
-      v-if="!isTimerDocked"
-      :active-view="currentView"
-      :visible="isNavbarVisible"
-      :docked="isTimerDocked"
-      :attached="workspacePinned"
-      :header-offset="headerOffset"
-      :workspace="true"
-      @navigate="navigate"
-      @reveal="revealNavigation"
-    />
+    <WorkspaceRail :model-value="currentWorkspaceModule" :active-page="currentView" :enabled="enabledModules" :workspace-name="workspaces.active?.name" @update:model-value="goToWorkspace" @search="openWorkspaceAction('search')" @trash="openWorkspaceAction('trash')" @analytics="navigate('analytics')" @settings="navigate('settings')" @manage="openWorkspaceSettings" />
 
-    <UserProfileMenu v-if="!isTimerDocked" :active-view="currentView" :visible="isNavbarVisible" :docked="false" :attached="workspacePinned" :header-offset="headerOffset" @edit="openAccountSettings" @logout="handleLogout('local')" @reveal="revealNavigation" />
+    <UserProfileMenu v-if="!isTimerDocked" class="app-profile" :active-view="currentView" :visible="isNavbarVisible" :docked="false" @edit="openAccountSettings" @logout="handleLogout('local')" @reveal="revealNavigation" />
 
-    <div class="app-content workspace-layout px-4 sm:px-6" :data-workspace-wide="settingsStore.isFullScreen ? '' : undefined" :data-page-layout="currentView !== 'workspace' ? '' : undefined" :class="currentView === 'workspace' ? 'pb-0' : 'pb-8'" :style="{ paddingTop: isTimerDocked ? '5rem' : isCalendarWorkspace || currentView === 'settings' ? '5.25rem' : '7rem' }">
+    <div class="app-content workspace-layout px-4 sm:px-6" :data-workspace-wide="settingsStore.isFullScreen ? '' : undefined" :data-page-layout="currentView !== 'workspace' ? '' : undefined" :class="currentView === 'workspace' ? 'pb-0' : 'pb-8'" :style="{ '--app-top-space': isTimerDocked ? '5rem' : showTimerCard ? '2rem' : '4.25rem' }">
 
       <div v-show="showTimerCard || isTimerDocked || hasActiveFocus" class="pomodoro-host mx-auto grid" :style="{ gridTemplateRows: isTimerDocked ? '0fr' : '1fr' }" :class="[isTimerDocked ? 'mb-0' : 'mb-6', settingsStore.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
         <div class="min-h-0 overflow-hidden">
           <PomodoroTimer :navbar-visible="isNavbarVisible" :docked="isTimerDocked" :attached="workspacePinned" :header-offset="headerOffset" @expand="isNavbarExpanded = true" @collapse="restoreTimerCard" @focus-task="openFocusTask">
-            <template #navigation><AppNavigation :embedded="true" :active-view="currentView" :visible="isNavbarVisible" :docked="true" @navigate="navigate" @reveal="revealNavigation" /></template>
             <template #profile><UserProfileMenu :embedded="true" :active-view="currentView" :visible="isNavbarVisible" :docked="true" @edit="openAccountSettings" @logout="handleLogout('local')" @reveal="revealNavigation" /></template>
           </PomodoroTimer>
         </div>
@@ -45,18 +34,10 @@
       
       <transition name="fade-slide" mode="out-in">
         
-        <DashboardHome 
-          v-if="currentView === 'dashboard'" 
-          :key="workspaces.sessionKey"
-          @enter-workspace="goToWorkspace" 
-          @manage-workspaces="openWorkspaceSettings"
-          @open-analytics="navigate('analytics')"
-        />
-
-        <AnalyticsView v-else-if="currentView === 'analytics'" :initial-section="analyticsSection" @enter-workspace="goToWorkspace" />
+        <AnalyticsView v-if="currentView === 'analytics'" :initial-section="analyticsSection" @enter-workspace="goToWorkspace" />
 
         <div v-else-if="currentView === 'settings'" class="min-w-0">
-          <WorkspaceCustomizer :focus-account="accountFocusRequest" :initial-section="settingsSection" @logout="handleLogout" />
+          <WorkspaceCustomizer :focus-account="accountFocusRequest" :focus-workspaces="workspaceFocusRequest" :initial-section="settingsSection" @logout="handleLogout" />
         </div>
 
         <div 
@@ -67,7 +48,7 @@
           ]"
         >
           <div class="space-y-8">
-            <WorkspaceTabs :key="workspaces.sessionKey" :initialTab="targetWorkspaceTab" :initial-view="targetWorkspaceView" :navigation-request="workspaceNavigationRequest" :header-inset="isNavbarVisible ? workspaceHeaderHeight : 0" @pinned="workspacePinned = $event" @header-offset="headerOffset = $event" @active-module="rememberWorkspaceModule" @active-view="rememberWorkspaceView" @manage-workspaces="openWorkspaceSettings" @open-finance-analysis="openFinanceAnalysis" />
+            <WorkspaceTabs ref="workspaceTabs" :key="workspaces.sessionKey" :initialTab="targetWorkspaceTab" :initial-view="targetWorkspaceView" :navigation-request="workspaceNavigationRequest" :header-inset="isTimerDocked && isNavbarVisible ? workspaceHeaderHeight : 0" @pinned="workspacePinned = $event" @header-offset="headerOffset = $event" @active-module="rememberWorkspaceModule" @active-view="rememberWorkspaceView" @manage-workspaces="openWorkspaceSettings" @open-finance-analysis="openFinanceAnalysis" />
             
           </div>
         </div>
@@ -84,7 +65,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import AppNavigation from '@/components/ui/AppNavigation.vue'
+import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
 import UserProfileMenu from '@/components/ui/UserProfileMenu.vue'
 import { createNavigationScrollState, updateNavigationScroll, workspaceHeaderHeight } from '@/lib/navigationScroll'
 import { useAuthStore } from '@/stores/auth'
@@ -96,9 +77,10 @@ import { useWorkspacesStore } from '@/stores/workspaces'
 import { startWorkspaceReminders } from '@/lib/workspaceReminders'
 import { useSharingStore } from '@/stores/sharing'
 import { workspaceSectionFor } from '@/lib/workspaceSections'
+import { moduleCatalog } from '@/lib/moduleCatalog'
+import { discardStoredInputDrafts } from '@/lib/storage'
 import SharingDialog from '@/components/SharingDialog.vue'
 
-import DashboardHome from '@/views/DashboardHome.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
 import WorkspaceTabs from '@/views/WorkspaceTabs.vue'
 import LoginSignup from '@/views/LoginSignup.vue'
@@ -122,10 +104,12 @@ watch(() => `${authStore.user?.id || ''}:${authStore.sessionPersistent}`, () => 
 })
 
 const isNavbarExpanded = computed({ get: () => settingsStore.isPomodoroDocked, set: value => { settingsStore.isPomodoroDocked = value } })
-const currentView = ref<'dashboard' | 'workspace' | 'analytics' | 'settings'>('workspace')
+const currentView = ref<'workspace' | 'analytics' | 'settings'>('workspace')
+const enabledModules = computed<string[]>(() => moduleCatalog.filter(module => settingsStore.isModuleActive(module.id)).map(module => module.id))
+const workspaceTabs = ref<InstanceType<typeof WorkspaceTabs>>()
+const pendingWorkspaceAction = ref<'search' | 'trash' | null>(null)
 const currentWorkspaceModule = ref('plans')
 const currentWorkspaceView = ref<string>()
-const isCalendarWorkspace=computed(()=>currentView.value==='workspace' && currentWorkspaceModule.value==='tasks' && currentWorkspaceView.value==='calendar')
 function rememberWorkspaceModule(module:string){
   if(currentWorkspaceModule.value!==module){currentWorkspaceView.value=undefined;targetWorkspaceView.value=undefined}
   currentWorkspaceModule.value=module
@@ -143,9 +127,10 @@ const targetWorkspaceTab = ref<string | undefined>()
 const targetWorkspaceView = ref<string>()
 const workspaceNavigationRequest = ref(0)
 const accountFocusRequest = ref(0)
+const workspaceFocusRequest = ref(0)
 const settingsSection=ref('general')
 function openAccountSettings() { accountFocusRequest.value++; navigate('settings');settingsSection.value='account' }
-function openWorkspaceSettings() { navigate('settings');settingsSection.value='workspaces' }
+function openWorkspaceSettings() { workspaceFocusRequest.value++;navigate('settings');settingsSection.value='workspaces' }
 const isNavbarVisible = ref(true)
 const workspaceScrollDistances = { reveal: 40, hide: 56 }
 let navigationScroll = createNavigationScrollState()
@@ -173,10 +158,15 @@ function handleScroll() {
 }
 function handleNavigationKey(event: KeyboardEvent) {
   if (event.key === 'Tab') revealNavigation()
+  if (currentView.value !== 'workspace' && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) {
+    event.preventDefault()
+    openWorkspaceAction('search')
+  }
 }
 function handleSharingConflict() { uiStore.addToast(t('sharing.conflict'), 'warning') }
 function handleSharingSaveError() { uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error') }
-function navigate(view: 'dashboard' | 'workspace' | 'analytics' | 'settings') {
+function navigate(view: 'workspace' | 'analytics' | 'settings') {
+  pendingWorkspaceAction.value = null
   if(view==='analytics')analyticsSection.value='activity'
   if(view==='settings')settingsSection.value='general'
   revealNavigation()
@@ -192,13 +182,29 @@ watch(currentView, async () => {
 })
 
 const goToWorkspace = (moduleId: string) => {
+  if (!enabledModules.value.includes(moduleId)) return
+  pendingWorkspaceAction.value = null
   if(currentWorkspaceModule.value!==moduleId)currentWorkspaceView.value=undefined
   currentWorkspaceModule.value = moduleId
   targetWorkspaceTab.value = moduleId
-  targetWorkspaceView.value = undefined
+  targetWorkspaceView.value = ({ tasks: 'calendar', finance: 'transaction', learning: 'topics' } as Record<string, string>)[moduleId]
   workspaceNavigationRequest.value++
   currentView.value = 'workspace'
 }
+function openWorkspaceAction(action: 'search' | 'trash') {
+  if (currentView.value !== 'workspace') {
+    targetWorkspaceTab.value = currentWorkspaceModule.value
+    targetWorkspaceView.value = currentWorkspaceView.value
+  }
+  pendingWorkspaceAction.value = action
+  currentView.value = 'workspace'
+}
+watch([workspaceTabs, pendingWorkspaceAction], async ([tabs, action]) => {
+  if (!tabs || !action) return
+  pendingWorkspaceAction.value = null
+  if (action === 'search') await tabs.openSearch()
+  else tabs.openTrash()
+}, { flush: 'post' })
 async function openFocusTask(wid: string) {
   if (!workspaces.available.some(item => item.id === wid)) return
   workspaces.switchTo(wid)
@@ -232,11 +238,13 @@ onUnmounted(() => {
 watch(() => authStore.user?.id, async (id, previous) => {
   if (previous && previous !== id) uiStore.clearUndoToasts()
   workspaces.reset()
+  pendingWorkspaceAction.value = null
   targetWorkspaceTab.value = undefined
   targetWorkspaceView.value = undefined;currentWorkspaceView.value=undefined
-  if (id) await workspaces.load()
+  if (id) { discardStoredInputDrafts(id);await workspaces.load() }
 }, { immediate: true, flush: 'sync' })
 watch(() => workspaces.activeId, (id,previous) => {
+  pendingWorkspaceAction.value = null
   const enabled=workspaces.available?.find(item=>item.id===id)?.active_modules || []
   const carry=Boolean(previous&&id&&enabled.includes(currentWorkspaceModule.value))
   targetWorkspaceTab.value=carry?currentWorkspaceModule.value:undefined
@@ -257,7 +265,7 @@ const handleLogout = async (scope: 'local' | 'global' = 'local') => {
     void settingsStore.flushPreferences()
     const result = await authStore.logout(scope)
     if (!result.success) { uiStore.addToast(t('account.errors.SIGN_OUT_FAILED'), 'error'); return }
-    currentView.value = 'dashboard'
+    currentView.value = 'workspace'
     isNavbarVisible.value = true 
     
     uiStore.addToast(t('app.signOutSuccess'), 'success')
@@ -267,7 +275,9 @@ const handleLogout = async (scope: 'local' | 'global' = 'local') => {
 
 <style>
 :root { --workspace-rail-open-width:224px; }
-.app-content { transition: padding-top 260ms cubic-bezier(.22,1,.36,1), padding-left 240ms cubic-bezier(.22,1,.36,1), padding-right 240ms cubic-bezier(.22,1,.36,1); }
+.profile-host.app-profile { position:absolute; }
+.app-content { padding-top:var(--app-top-space,4.25rem); transition: padding-top 260ms cubic-bezier(.22,1,.36,1), padding-left 240ms cubic-bezier(.22,1,.36,1), padding-right 240ms cubic-bezier(.22,1,.36,1); }
+@media (max-width:1023px) { .app-content { padding-top:max(4.25rem,var(--app-top-space,4.25rem)); } }
 .workspace-width-transition, .page-width-transition { transition: max-width 300ms cubic-bezier(.22,1,.36,1); }
 .pomodoro-host { transition: grid-template-rows 240ms cubic-bezier(.22,1,.36,1), margin-bottom 240ms cubic-bezier(.22,1,.36,1); }
 @media (min-width:1024px) {

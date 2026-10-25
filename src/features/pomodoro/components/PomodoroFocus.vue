@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Check, ChevronsRight, Circle, CloudRain, Flame, Hash, Music2, Pause, Play, RotateCcw, SlidersHorizontal, Volume2, VolumeX } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { readStoredJSON, writeStoredJSON } from '@/lib/storage'
@@ -91,6 +91,7 @@ const counterStyle=ref<CounterStyle>(saved.counter)
 const background=ref<BackgroundId>(saved.background),track=ref<TrackId>(saved.track),volume=ref(saved.volume),soundStatus=ref<FocusSoundStatus>('idle')
 const soundPosition=ref<FocusSoundPosition>({track:null,currentTime:0,duration:0}),seekDraft=ref<number|null>(null)
 const player=new FocusSoundPlayer(status=>{soundStatus.value=status},()=>new Audio(),position=>{soundPosition.value=position})
+const musicStarted=ref(false)
 const selectedBackground=computed(()=>focusBackgrounds.find(scene=>scene.id===background.value)!),selectedTrack=computed(()=>focusTracks.find(song=>song.id===track.value)!)
 const audioDuration=computed(()=>soundPosition.value.track===track.value?soundPosition.value.duration:selectedTrack.value.duration)
 const audioTime=computed(()=>Math.min(audioDuration.value,seekDraft.value??(soundPosition.value.track===track.value?soundPosition.value.currentTime:0)))
@@ -103,7 +104,7 @@ function saveAppearance(){writeStoredJSON(appearanceKey,{counter:counterStyle.va
 function chooseCounter(counter:CounterStyle){counterStyle.value=counter;saveAppearance()}
 function chooseBackground(id:BackgroundId){background.value=id;backgroundAttempt.value++;saveAppearance()}
 function chooseTrack(id:TrackId){if(id===track.value)return;const resume=soundStatus.value==='playing'||soundStatus.value==='loading';seekDraft.value=null;track.value=id;player.select(selectedTrack.value);saveAppearance();if(resume)void player.play(selectedTrack.value,volume.value)}
-function toggleMusic(){if(soundStatus.value==='playing'||soundStatus.value==='loading')player.pause();else void player.play(selectedTrack.value,volume.value)}
+function toggleMusic(){if(soundStatus.value==='playing'||soundStatus.value==='loading')player.pause();else{musicStarted.value=true;void player.play(selectedTrack.value,volume.value)}}
 function formatAudioTime(seconds:number){const value=Math.max(0,Math.floor(seconds));return Math.floor(value/60)+':'+String(value%60).padStart(2,'0')}
 function beginSeeking(event:PointerEvent){seekDraft.value=audioTime.value;try{(event.currentTarget as HTMLInputElement).setPointerCapture(event.pointerId)}catch{}}
 function seekAudio(seconds:number){if(seekDraft.value!==null)seekDraft.value=seconds;player.select(selectedTrack.value);player.seek(seconds)}
@@ -156,10 +157,8 @@ async function open(){
   document.body.style.overflow='hidden';document.documentElement.style.overflow='hidden'
   document.addEventListener('keydown',trap,true)
   document.addEventListener('fullscreenchange',fullscreenChanged)
-  window.addEventListener('pagehide',stopMusic)
   release=()=>{
     document.removeEventListener('keydown',trap,true);document.removeEventListener('fullscreenchange',fullscreenChanged)
-    window.removeEventListener('pagehide',stopMusic)
     document.body.style.overflow=bodyOverflow;document.documentElement.style.overflow=rootOverflow
     inert.forEach(([node,value])=>{if(value===null)node.removeAttribute('inert');else node.setAttribute('inert',value)})
     release=()=>{}
@@ -175,15 +174,16 @@ async function open(){
 }
 function close(){
   if(!isOpen.value)return
-  generation++;isOpen.value=false;native=false;appearanceOpen.value=false;seekDraft.value=null;player.dispose()
+  generation++;isOpen.value=false;native=false;appearanceOpen.value=false;seekDraft.value=null
   const element=screen.value,origin=previous;previous=null
   release()
   if(element&&document.fullscreenElement===element){
     void document.exitFullscreen().catch(()=>{}).finally(()=>{if(!isOpen.value)restoreFocus(origin)})
   }else restoreFocus(origin)
 }
-onBeforeUnmount(close)
-defineExpose({open,close})
+onMounted(()=>window.addEventListener('pagehide',stopMusic))
+onBeforeUnmount(()=>{close();player.dispose();window.removeEventListener('pagehide',stopMusic)})
+defineExpose({open,close,toggleMusic,musicStarted,soundStatus})
 </script>
 
 <style scoped>
@@ -197,7 +197,7 @@ defineExpose({open,close})
 .focus-status-dot{flex:0 0 5px;width:5px;height:5px;border-radius:50%;background:hsl(var(--muted-foreground)/.45)}[data-running='true'] .focus-status-dot{background:hsl(var(--primary));box-shadow:0 0 0 4px hsl(var(--primary)/.07)}
 .focus-dial{position:relative;display:grid;place-items:center;max-width:100%}
 .focus-time{display:flex;align-items:center;font-family:'Segoe UI Variable Display','SF Pro Display','Helvetica Neue',sans-serif;font-size:clamp(72px,min(22vw,30dvh),280px);font-weight:300;font-variant-numeric:tabular-nums lining-nums;font-feature-settings:'tnum','lnum';font-synthesis:none;letter-spacing:-.055em;line-height:1;white-space:nowrap;user-select:none;text-rendering:optimizeLegibility}
-.focus-time-pair{min-width:2ch;text-align:center}.focus-colon{width:.32em;padding-bottom:.12em;text-align:center;font-size:.72em;font-weight:300;color:hsl(var(--foreground)/.38)}
+.focus-time-pair{min-width:2ch;text-align:center}.focus-colon{width:.32em;padding-bottom:.12em;text-align:center;font-size:.72em;font-weight:300;letter-spacing:0;color:inherit}
 [data-counter='ring'] .focus-dial{width:min(68vw,54dvh,560px);aspect-ratio:1}[data-counter='ring'] .focus-time{font-size:clamp(46px,min(12vw,14dvh),124px)}
 .focus-ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;transform:rotate(-90deg);pointer-events:none}.focus-ring-track{stroke:hsl(var(--border)/.65);stroke-width:.7}.focus-ring-progress{stroke:hsl(var(--primary)/.7);stroke-width:1.2;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
 .focus-actions{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:clamp(30px,6vh,58px)}

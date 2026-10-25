@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { computed, ref, nextTick, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowUpRight, Check, Clock3, Copy, History, Trash2, X } from 'lucide-vue-next'
@@ -44,7 +43,7 @@ const emptyMessage = computed(() => tr.value
   : `No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
 const inputPeriod = ref<Period>(selected.value)
 const periodOptions = computed(() => periods.map(value => ({ value, label: copy.value[value] })))
-const title = useWorkspaceDraft('plan-title', '')
+const title = ref('')
 const showHistory = ref(false)
 const editing = ref<Plan | null>(null)
 const dialog = ref<HTMLDialogElement | null>(null)
@@ -140,7 +139,7 @@ function watchDay() { clearInterval(timer); timer = setInterval(() => { if (peri
 onMounted(watchDay)
 onActivated(watchDay)
 useModuleLoad(() => refresh(true))
-onDeactivated(() => { clearInterval(timer); editing.value = null; dialog.value?.close(); showHistory.value=false; selected.value='daily'; inputPeriod.value='daily'; periodChosen=false })
+onDeactivated(() => { title.value='';reason.value=''; clearInterval(timer); editing.value = null; dialog.value?.close(); showHistory.value=false; selected.value='daily'; inputPeriod.value='daily'; periodChosen=false })
 onUnmounted(() => clearInterval(timer))
 useSearchReveal('plans', async (hit, isCurrent) => {
   if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period

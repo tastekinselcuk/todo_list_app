@@ -1,11 +1,11 @@
 <template>
   <div class="settings-page page-width-transition mx-auto w-full min-w-0 max-w-5xl space-y-4 pb-8">
     <header class="flex flex-wrap items-center justify-between gap-2">
-      <div class="flex items-center gap-2"><WorkspaceRail v-model="settingsSection" :context="settingsNavigation" :workspace-name="workspaces.active?.name" @manage="settingsSection='workspaces'" /><h1 class="text-lg font-semibold tracking-tight">{{ t(`pageNav.settings.${settingsSection}`) }}</h1></div>
+      <h1 class="text-lg font-semibold tracking-tight">{{ t('app.settings') }}</h1>
       <span class="text-xs text-muted-foreground">{{ t('settingsPage.autoSave') }}</span>
     </header>
 
-    <AccountSettings v-if="settingsSection==='general'" class="context-panel" :focus-request="focusAccount" @logout="emit('logout', $event)">
+    <AccountSettings class="context-panel" :focus-request="focusAccount" @logout="emit('logout', $event)">
       <template #preferences>
       <section class="flex h-full min-w-0 flex-col rounded-2xl border border-border/60 bg-card/60 shadow-sm" aria-labelledby="general-preferences">
         <header class="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
@@ -53,9 +53,9 @@
       </template>
     </AccountSettings>
 
-    <div v-if="settingsSection==='workspaces'" class="context-panel"><WorkspaceManager /></div>
+    <div ref="workspacePanel" class="context-panel scroll-mt-20"><WorkspaceManager /></div>
 
-    <section v-if="settingsSection==='workspaces'" class="context-panel" aria-labelledby="workspace-tools">
+    <section class="context-panel" aria-labelledby="workspace-tools">
       <header class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <h2 id="workspace-tools" class="text-sm font-semibold">{{ t('settingsPage.tools') }}</h2>
@@ -113,15 +113,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CalendarDays, Check, CheckSquare, Clapperboard, Code2, Dumbbell, Globe, Layers, Link2, ListTodo, Loader2, Moon, Palette, Repeat, ShieldCheck, SlidersHorizontal, Sun, Target, Timer, Users, Wallet, Zap } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
 import AccountSettings from '@/components/AccountSettings.vue'
-import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
-import { getPageNavigation, resolvePageSection } from '@/lib/workspaceSections'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { useSettingsStore } from '@/stores/settings'
 import { useThemeStore } from '@/stores/theme'
 import { useUIStore } from '@/stores/ui'
@@ -132,7 +129,7 @@ import { moduleCatalog } from '@/lib/moduleCatalog'
 import { getThemePalette, isThemePaletteId, themePalettes } from '@/lib/themePalettes'
 
 const settingsStore = useSettingsStore()
-const props=withDefaults(defineProps<{ focusAccount?: number;initialSection?:string }>(), { focusAccount: 0 })
+const props=withDefaults(defineProps<{ focusAccount?: number;focusWorkspaces?:number;initialSection?:string }>(), { focusAccount: 0,focusWorkspaces:0 })
 const emit = defineEmits<{ logout: [scope: 'local' | 'global'] }>()
 const themeStore = useThemeStore()
 const workspaces = useWorkspacesStore()
@@ -140,11 +137,13 @@ const sharing = useSharingStore()
 const canShare = (id: string) => shareableModules.some(module => module === id) && (!workspaces.sharingAvailable || Boolean(workspaces.binding(id)))
 const ui = useUIStore()
 const { t, locale } = useI18n()
-const settingsNavigation=getPageNavigation('settings')
-const settingsSection=useWorkspaceDraft('settings-section','general')
-settingsSection.value=resolvePageSection('settings',settingsSection.value)||'general'
-watch(()=>props.focusAccount,value=>{if(value)settingsSection.value='general'})
-watch(()=>props.initialSection,value=>{const section=value&&resolvePageSection('settings',value);if(section)settingsSection.value=section},{immediate:true})
+const workspacePanel = ref<HTMLElement>()
+async function scrollToWorkspace() {
+  await nextTick()
+  workspacePanel.value?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+}
+watch(() => [props.initialSection, props.focusWorkspaces], ([value]) => { if (value === 'workspaces' || value === 'modules') void scrollToWorkspace() })
+onMounted(() => { if (props.initialSection === 'workspaces' || props.initialSection === 'modules') void scrollToWorkspace() })
 const pendingModuleId = ref('')
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const languageOptions = [{ value: 'tr', label: 'Türkçe' }, { value: 'en', label: 'English' }]

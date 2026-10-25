@@ -1,101 +1,102 @@
-﻿<template>
-  <Transition name="category-reveal" @after-leave="resetDraft">
-    <div v-if="open" class="category-reveal">
-      <div class="category-reveal-inner">
-        <form id="todo-category-form" ref="formContainerRef" @submit.prevent="handleSubmit" @keydown.esc.stop.prevent="closeModal(true)" class="category-form mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card/50 p-3" :aria-label="t('todo.addNewCategory')" :aria-busy="saving">
-          <div class="flex min-w-0 flex-1 basis-48 items-center gap-2">
-            <button ref="colorTriggerRef" type="button" class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background/50 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :title="t('todo.color')" :aria-label="t('todo.color')" :aria-expanded="colorOpen" aria-haspopup="dialog" :disabled="saving" @click="toggleColorMenu">
-              <span aria-hidden="true" class="h-4 w-4 rounded-full ring-1 ring-inset ring-foreground/10" :style="{backgroundColor:newCategory.color}" />
-            </button>
-            <div ref="colorMenuRef" popover="auto" role="dialog" :aria-label="t('todo.color')" class="category-color-menu" :style="colorPosition" @toggle="colorOpen=$event.newState==='open'" @keydown.esc.stop.prevent="closeColorMenu();colorTriggerRef?.focus({preventScroll:true})">
-              <ColorPalette :model-value="newCategory.color" :options="categoryColors" :label="t('todo.color')" :allow-custom="true" horizontal @update:model-value="chooseColor" />
-            </div>
-            <input ref="nameInputRef" v-model="newCategory.name" type="text" required autocomplete="off" :disabled="saving" :aria-label="t('todo.categoryName')" :placeholder="t('todo.enterCategoryName')" class="finance-input !h-10 flex-1 !px-3 !text-xs" />
-          </div>
-          <div class="ml-auto flex items-center gap-1.5">
-            <button type="submit" :disabled="saving || !newCategory.name.trim()" class="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 disabled:opacity-40"><Loader2 v-if="saving" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-3.5 w-3.5" />{{ t('todo.createCategory') }}</button>
-            <button type="button" @click="closeModal(true)" :disabled="saving" :aria-label="t('common.close')" class="finance-icon !h-9 !w-9"><X class="h-4 w-4" /></button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </Transition>
+<template>
+  <Teleport to="body">
+    <dialog ref="dialogRef" class="category-dialog" :aria-label="t('todo.addNewCategory')" :aria-busy="saving" :closedby="saving ? 'none' : 'closerequest'" @cancel.prevent="closeModal(true)" @keydown.esc.stop.prevent="closeModal(true)" @click="event => { if (event.target === dialogRef) closeModal(true) }">
+      <form v-if="open" id="todo-category-form" @submit.stop.prevent="handleSubmit">
+        <header class="category-heading">
+          <h2>{{ t('todo.addNewCategory') }}</h2>
+          <button type="button" class="finance-icon" :disabled="saving" :aria-label="t('common.close')" @click="closeModal(true)"><X class="h-4 w-4" /></button>
+        </header>
+        <div class="category-fields">
+          <label class="category-name-field"><span>{{ t('todo.categoryName') }}</span><input ref="nameInputRef" v-model="newCategory.name" type="text" required maxlength="60" autocomplete="off" :aria-label="t('todo.categoryName')" :disabled="saving" :placeholder="t('todo.enterCategoryName')" class="finance-input" /></label>
+          <div class="space-y-2.5"><span class="category-field-label">{{ t('todo.color') }}</span><fieldset :disabled="saving" class="min-w-0"><ColorPalette :model-value="newCategory.color" :options="categoryColors" :label="t('todo.color')" :allow-custom="true" horizontal @update:model-value="chooseColor" /></fieldset></div>
+        </div>
+        <footer class="category-footer">
+          <button type="button" class="category-cancel" :disabled="saving" @click="closeModal(true)">{{ t('common.cancel') }}</button>
+          <button type="submit" :disabled="saving || !newCategory.name.trim()" class="category-submit"><Loader2 v-if="saving" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-3.5 w-3.5" />{{ t('todo.createCategory') }}</button>
+        </footer>
+      </form>
+    </dialog>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, onDeactivated } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount, onDeactivated } from 'vue'
 import { X, Loader2, Plus } from 'lucide-vue-next'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import ColorPalette from '@/components/ui/ColorPalette.vue'
 const props = defineProps<{ open: boolean }>()
-const emit = defineEmits<{ 'update:open': [value: boolean] }>()
-const todoStore = useTodoStore(), uiStore = useUIStore()
-const { t } = useI18n()
-const nameInputRef = ref<HTMLInputElement | null>(null), formContainerRef = ref<HTMLElement | null>(null)
-const newCategory = ref({ name: '', color: '#3B82F6', icon: 'folder' }), saving = ref(false)
-const colorTriggerRef=ref<HTMLButtonElement|null>(null),colorMenuRef=ref<HTMLElement|null>(null),colorOpen=ref(false),colorPosition=ref({top:'0px',left:'0px'})
-const categoryColors=computed(()=>Object.entries({gray:'#64748B',brown:'#94735C',orange:'#C9793F',yellow:'#C7A541',green:'#4D8B65',blue:'#4E7EB7',purple:'#8A6CB2',pink:'#B56791',red:'#C25B62'}).map(([name,value])=>({value,label:t('noteEditor.colorNames.'+name),color:value})))
-function closeColorMenu(){colorMenuRef.value?.hidePopover?.();colorOpen.value=false}
-function toggleColorMenu(){
+const emit = defineEmits<{ 'update:open': [value: boolean]; created: [id: string]; 'busy-change': [busy: boolean] }>()
+const todoStore = useTodoStore(), uiStore = useUIStore(), { t } = useI18n()
+const dialogRef = ref<HTMLDialogElement>(), nameInputRef = ref<HTMLInputElement>()
+const blankCategory = () => ({ name: '', color: '#4E7EB7', icon: 'folder' })
+const newCategory = ref(blankCategory()), saving = ref(false)
+const categoryColors = computed(() => Object.entries({gray:'#64748B',brown:'#94735C',orange:'#C9793F',yellow:'#C7A541',green:'#4D8B65',blue:'#4E7EB7',purple:'#8A6CB2',pink:'#B56791',red:'#C25B62'}).map(([name,value]) => ({value,label:t('noteEditor.colorNames.'+name),color:value})))
+let disposed=false, epoch=0, previousFocus:HTMLElement|null=null, lockedOverflow:{body:string;root:string}|undefined
+function releaseScroll() {
+  if (!lockedOverflow) return
+  document.body.style.overflow=lockedOverflow.body;document.documentElement.style.overflow=lockedOverflow.root;lockedOverflow=undefined
+}
+function dismiss() { dialogRef.value?.close();releaseScroll() }
+function restoreFocus() {
+  const target=previousFocus, parent=target?.closest('dialog')
+  if(target?.isConnected && (!parent || parent.open))target.focus({preventScroll:true})
+}
+function closeModal(restore=false) {
   if(saving.value)return
-  if(colorOpen.value){closeColorMenu();return}
-  const rect=colorTriggerRef.value?.getBoundingClientRect()
-  if(!rect)return
-  const width=Math.min(420,window.innerWidth-16)
-  const beside=rect.right+6+width<=window.innerWidth-8
-  const height=width<364?70:40
-  colorPosition.value={top:`${Math.max(8,Math.min(window.innerHeight-height-8,beside?rect.top:rect.bottom+6))}px`,left:`${beside?rect.right+6:Math.max(8,Math.min(window.innerWidth-width-8,rect.left))}px`}
-  colorMenuRef.value?.showPopover?.()
+  dismiss();emit('update:open',false)
+  if(restore)void nextTick(()=>{if(!disposed)restoreFocus()})
 }
-function chooseColor(value:string|null){if(saving.value||!value||!/^#[\da-f]{6}$/i.test(value))return;newCategory.value.color=value;closeColorMenu()}
-let disposed = false
-function resetDraft() { if (!props.open) newCategory.value = { name: '', color: '#3B82F6', icon: 'folder' } }
-function closeModal(restoreFocus = false) {
-  if (saving.value) return
-  closeColorMenu()
-  emit('update:open', false)
-  if (restoreFocus) document.querySelector<HTMLButtonElement>('[data-category-trigger]')?.focus({ preventScroll: true })
-}
-const handleClickOutside = (event: MouseEvent) => {
-  if (props.open && formContainerRef.value && !formContainerRef.value.contains(event.target as Node)) closeModal()
-}
-watch(() => props.open, open => {
-  if (open) {
-    nextTick(() => { if (!disposed && props.open) nameInputRef.value?.focus({ preventScroll: true }) })
-    document.addEventListener('click', handleClickOutside)
-  } else {
-    closeColorMenu()
-    document.removeEventListener('click', handleClickOutside)
+function chooseColor(value:string|null) { if(!saving.value && value && /^#[\da-f]{6}$/i.test(value))newCategory.value.color=value }
+watch(saving,busy=>emit('busy-change',busy),{flush:'sync'})
+watch(()=>props.open,async open=>{
+  const request=++epoch
+  if(!open){dismiss();newCategory.value=blankCategory();return}
+  previousFocus=document.activeElement as HTMLElement|null
+  newCategory.value=blankCategory()
+  await nextTick()
+  if(disposed || request!==epoch || !props.open || !dialogRef.value)return
+  if(document.body.style.overflow!=='hidden'){
+    lockedOverflow={body:document.body.style.overflow,root:document.documentElement.style.overflow}
+    document.body.style.overflow='hidden';document.documentElement.style.overflow='hidden'
   }
-}, { immediate: true })
-onMounted(()=>{window.addEventListener('resize',closeColorMenu);window.addEventListener('scroll',closeColorMenu,{passive:true})})
-onDeactivated(closeColorMenu)
-onUnmounted(() => { disposed = true; closeColorMenu();document.removeEventListener('click', handleClickOutside);window.removeEventListener('resize',closeColorMenu);window.removeEventListener('scroll',closeColorMenu) })
+  try{dialogRef.value.showModal();nameInputRef.value?.focus({preventScroll:true})}
+  catch{dismiss();emit('update:open',false)}
+},{immediate:true})
+onDeactivated(()=>{epoch++;dismiss();emit('update:open',false)})
+onBeforeUnmount(()=>{disposed=true;epoch++;dismiss()})
 async function handleSubmit() {
-  if (saving.value || !newCategory.value.name.trim()) return
-  saving.value = true
-  try {
-    const result = await todoStore.addCategory({ ...newCategory.value, name: newCategory.value.name.trim() })
-    if (result.success) { emit('update:open', false); uiStore.addToast(t('todo.categoryAdded'), 'success') }
-    else uiStore.addToast(result.message || t('todo.saveFailed'), 'error')
-  } catch {
-    uiStore.addToast(t('todo.saveFailed'), 'error')
-  } finally { saving.value = false }
+  const name=newCategory.value.name.trim()
+  if(!props.open || saving.value || !name || name.length>60)return
+  const request=epoch
+  saving.value=true
+  try{
+    const result=await todoStore.addCategory({...newCategory.value,name})
+    if(disposed || request!==epoch || !props.open)return
+    if(!result.success){uiStore.addToast(result.message || t('todo.saveFailed'),'error');return}
+    const created=todoStore.categories.find(category=>category.name.trim().toLocaleLowerCase()===name.toLocaleLowerCase())
+    if(created)emit('created',created.id)
+    dismiss();emit('update:open',false);uiStore.addToast(t('todo.categoryAdded'),'success')
+    void nextTick(()=>{if(!disposed)restoreFocus()})
+  }catch{if(!disposed && request===epoch)uiStore.addToast(t('todo.saveFailed'),'error')}
+  finally{saving.value=false}
 }
 </script>
 
 <style scoped>
-.category-reveal { display:grid; grid-template-rows:1fr; min-width:0; }
-.category-reveal-inner { min-height:0; overflow:hidden; }
-.category-form { transform:translateY(0); transition:transform 280ms cubic-bezier(.22,1,.36,1); }
-.category-reveal-enter-active,.category-reveal-leave-active { transition:grid-template-rows 280ms cubic-bezier(.22,1,.36,1),opacity 200ms ease; }
-.category-reveal-enter-from,.category-reveal-leave-to { grid-template-rows:0fr; opacity:0; }
-.category-reveal-enter-from .category-form,.category-reveal-leave-to .category-form { transform:translateY(-6px); }
-.category-color-menu{position:fixed;inset:auto;margin:0;width:420px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow-y:auto;padding:5px 6px;border:1px solid hsl(var(--border)/.6);border-radius:12px;background:hsl(var(--card));color:hsl(var(--foreground));box-shadow:0 6px 20px hsl(var(--foreground)/.08);opacity:0;transform:translateX(-8px) scaleX(.96);transform-origin:left center;transition:opacity 180ms ease,transform 220ms cubic-bezier(.22,1,.36,1),display 220ms allow-discrete,overlay 220ms allow-discrete}
-.category-color-menu:popover-open{opacity:1;transform:translateX(0) scaleX(1)}
-@starting-style{.category-color-menu:popover-open{opacity:0;transform:translateX(-8px) scaleX(.96)}}
-@media (prefers-reduced-motion: reduce) { .category-reveal-enter-active,.category-reveal-leave-active,.category-form { transition:none; } }
-@media (prefers-reduced-motion:reduce){.category-color-menu{transition:none}}
+.category-dialog{width:calc(100vw - 32px);max-width:440px;max-height:calc(100dvh - 32px);margin:auto;padding:0;overflow-y:auto;overscroll-behavior:contain;border:1px solid hsl(var(--border)/.75);border-radius:20px;background:hsl(var(--card));color:hsl(var(--foreground));box-shadow:0 24px 72px hsl(var(--foreground)/.16),0 4px 16px hsl(var(--foreground)/.04);outline:none}
+.category-dialog::backdrop{background:hsl(var(--background)/.6);backdrop-filter:blur(5px)}
+.category-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px 12px}
+.category-heading h2{font-size:14px;font-weight:600;letter-spacing:-.015em}
+.category-fields{display:flex;flex-direction:column;gap:20px;padding:4px 20px 22px}
+.category-name-field{display:flex;flex-direction:column;gap:8px}
+.category-name-field>span,.category-field-label{font-size:11px;font-weight:500;color:hsl(var(--muted-foreground))}
+.category-name-field input{font-size:13px;box-shadow:none;backdrop-filter:none}
+.category-footer{display:flex;justify-content:flex-end;gap:6px;padding:12px 20px;border-top:1px solid hsl(var(--border)/.5)}
+.category-cancel,.category-submit{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border-radius:10px;font-size:12px;font-weight:500;transition:background 150ms,color 150ms}
+.category-cancel{color:hsl(var(--muted-foreground))}.category-cancel:hover{background:hsl(var(--muted)/.6);color:hsl(var(--foreground))}
+.category-submit{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}.category-submit:hover{background:hsl(var(--primary)/.9)}
+.category-dialog button:disabled{opacity:.4}.category-dialog button:focus-visible{outline:2px solid hsl(var(--primary)/.35);outline-offset:2px}
+@media(prefers-reduced-motion:no-preference){.category-dialog[open]{animation:category-enter 220ms cubic-bezier(.22,1,.36,1)}@keyframes category-enter{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}}
 </style>

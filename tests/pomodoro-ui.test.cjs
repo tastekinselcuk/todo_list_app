@@ -117,19 +117,27 @@ test('card and dock enter the same focus view without moving placement or restar
   app.config.globalProperties.$t=key=>key;app.mount(f.doc.querySelector('main'));await f.flush()
   const compact=f.doc.querySelector('[data-teleport="compact"]'),up=compact.querySelector('[aria-label="pomodoro.expandToNavbar"]')
   assert.ok(up.querySelector('.lucide-arrow-up-icon'));assert.ok(up.classList.contains('timer-dock-button'));assert.ok(compact.querySelector('.timer-fullscreen-button [data-direction="outward"]'))
-  assert.ok(compact.querySelector('.pomodoro-card-time').classList.contains('text-primary'));assert.equal(compact.querySelector('.pomodoro-card-time').classList.contains('hover:text-primary'),false)
+  assert.ok(compact.querySelector('.pomodoro-card-time').classList.contains('text-foreground'));assert.equal(compact.querySelector('.pomodoro-card-time').classList.contains('text-primary'),false);assert.equal(compact.querySelector('.pomodoro-card-time').textContent,'24:57');assert.equal(compact.querySelector('.timer-music-button'),null)
   timer.currentTarget={title:'Mesleki çalışma · Sistem tasarımı'};await f.flush()
   compact.querySelector('[aria-label="pomodoro.fullscreen"]').click();await f.flush();assert.ok(f.screen);assert.equal(timer.isRunning,true);assert.equal(timer.formattedTime,'24:57');assert.equal(placement.value,false)
   assert.equal(f.screen.querySelector('.focus-mode-label').textContent,timer.currentTarget.title);timer.modeKey='shortBreak';await f.flush();assert.equal(f.screen.querySelector('.focus-mode-label').textContent,'pomodoro.shortBreak');timer.modeKey='focus';await f.flush()
-  f.screen.querySelector('.focus-exit').click();await f.flush();up.click();await f.flush();assert.equal(placement.value,true)
+  f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('[data-settings-tab="sound"]').click();await f.flush();f.screen.querySelector('.focus-music-toggle').click();await f.flush()
+  const audio=f.media[0];audio.readyState=1;audio.duration=249;audio.onloadedmetadata();audio.currentTime=73;audio.ontimeupdate();await f.flush()
+  f.screen.querySelector('.focus-exit').click();await f.flush();assert.equal(audio.paused,false);assert.equal(audio.currentTime,73)
+  const music=compact.querySelector('.timer-music-button');assert.ok(music);assert.equal(music.getAttribute('aria-label'),'pomodoro.pauseMusic');assert.equal(music.getAttribute('aria-pressed'),'true')
+  music.click();await f.flush();assert.equal(audio.paused,true);assert.equal(music.getAttribute('aria-label'),'pomodoro.playMusic');assert.equal(timer.isRunning,true,'music does not pause the timer')
+  music.click();await f.flush();assert.equal(audio.paused,false);assert.equal(audio.currentTime,73);assert.equal(f.media.length,1)
+  up.click();await f.flush();assert.equal(placement.value,true);assert.equal(audio.paused,false);assert.equal(f.doc.querySelector('.dock-right .timer-music-button').getAttribute('aria-pressed'),'true')
   f.doc.querySelector('[data-pomodoro-navigation] [aria-label="pomodoro.fullscreen"]').click();await f.flush();assert.ok(f.screen);assert.equal(placement.value,true)
   timer.formattedTime='24:55';await f.flush();assert.equal(f.screen.querySelector('.focus-time').textContent,'24:55')
+  f.screen.querySelector('.focus-appearance').click();await f.flush();assert.equal(Number(f.screen.querySelector('.focus-seek').value),73);assert.match(f.screen.querySelector('.focus-music-toggle').textContent,/pauseMusic/);f.key('Escape');await f.flush()
   f.screen.querySelector('.focus-toggle').click();await f.flush();assert.equal(timer.isRunning,false);assert.equal(toggles,1)
   f.screen.querySelector('.focus-next').click();await f.flush();assert.ok(f.screen);assert.equal(timer.modeKey,'shortBreak');assert.equal(f.screen.querySelector('.focus-time').textContent,'05:00');assert.equal(placement.value,true)
   f.screen.querySelector('.focus-next').click();await f.flush();assert.equal(timer.modeKey,'longBreak');assert.equal(f.screen.querySelector('.focus-time').textContent,'15:00')
   f.screen.querySelector('.focus-next').click();await f.flush();assert.equal(timer.modeKey,'focus');assert.equal(f.screen.querySelector('.focus-time').textContent,'25:00');assert.equal(advances,3);assert.equal(shutdown,0)
   f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('[data-settings-tab="duration"]').click();await f.flush();f.screen.querySelector('[data-duration-preset="extended"]').click();await f.flush();f.screen.querySelector('.focus-duration-apply').click();await f.flush();assert.equal(configured,1);assert.equal(timer.durations.focus,60);assert.ok(f.screen);f.key('Escape');await f.flush()
   f.key('Escape');await f.flush();assert.equal(f.screen,null);assert.equal(placement.value,true);assert.deepEqual(moves,['dock']);assert.equal(initialized,1);assert.equal(shutdown,0)
+  f.doc.querySelector('.dock-right .timer-music-button').click();await f.flush();assert.equal(audio.paused,true);assert.equal(f.doc.querySelector('.dock-right .timer-music-button').getAttribute('aria-pressed'),'false');assert.equal(toggles,1)
  }finally{app?.unmount();f.close()}
 })
 
@@ -189,7 +197,7 @@ test('backgrounds load only when chosen, keep contrast and reject stale image re
  }finally{f.close()}
 })
 
-test('music requires a play action, supports track and volume choices and stops when focus closes',async()=>{
+test('music requires a play action and retains playback, position and volume across focus view exits',async()=>{
  const f=fixture();try{
   await f.open();f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('.focus-settings-tabs button:nth-child(2)').click();await f.flush()
   assert.equal(f.screen.querySelectorAll('.focus-track-choice').length,5);assert.equal(f.media.length,0)
@@ -199,8 +207,22 @@ test('music requires a play action, supports track and volume choices and stops 
   f.screen.querySelector('[data-track="rhythm"]').click();await f.flush();assert.equal(first.paused,true);assert.equal(first.src,'');assert.equal(f.media[1].src,'/focus/audio/rhythm.mp3');assert.equal(f.media[1].volume,.6)
   assert.equal(f.screen.querySelector('a[href="https://creativecommons.org/licenses/by/4.0/"]').rel,'noopener noreferrer')
   f.dom.window.dispatchEvent(new f.dom.window.Event('pagehide'));await f.flush();assert.equal(f.media[1].paused,true);f.screen.querySelector('.focus-music-toggle').click();await f.flush();assert.equal(f.media[1].paused,false)
-  f.api.close();await f.flush();assert.ok(f.media.every(item=>item.paused));assert.ok(f.media.every(item=>item.src===''));await f.open();assert.equal(f.media.length,2,'reopening never resumes music automatically')
+  const audio=f.media[1],plays=audio.plays;audio.currentTime=82;audio.ontimeupdate();f.api.close();await f.flush();assert.equal(f.screen,null);assert.equal(audio.paused,false);assert.equal(audio.src,'/focus/audio/rhythm.mp3');assert.equal(audio.currentTime,82);assert.equal(audio.volume,.6)
+  audio.currentTime=85;audio.ontimeupdate();await f.open();assert.equal(f.media.length,2);assert.equal(audio.plays,plays,'reopening uses the same audio instance without restarting playback')
+  f.screen.querySelector('.focus-appearance').click();await f.flush();assert.equal(f.screen.querySelector('.focus-music-toggle').getAttribute('aria-pressed'),'true');assert.equal(Number(f.screen.querySelector('.focus-seek').value),85)
+  f.screen.querySelector('.focus-music-toggle').click();await f.flush();f.api.close();await f.flush();await f.open();assert.equal(audio.paused,true);assert.equal(audio.plays,plays,'a paused track stays paused on reopening')
+  f.api.toggleMusic();await f.flush();assert.equal(audio.paused,false);f.api.close();await f.flush();f.dom.window.dispatchEvent(new f.dom.window.Event('pagehide'));await f.flush();assert.equal(audio.paused,true,'page exit also pauses audio after focus view has closed')
+  await f.open();assert.equal(audio.paused,true);assert.equal(f.media.length,2);f.api.toggleMusic();await f.flush();f.api.close();await f.flush()
+  f.app.unmount();assert.ok(f.media.every(item=>item.paused));assert.ok(f.media.every(item=>item.src===''));assert.equal(audio.ontimeupdate,null);assert.equal(audio.onloadedmetadata,null)
   assert.deepEqual(f.events,[],'music controls do not mutate the focus session')
+ }finally{f.close()}
+})
+
+test('native fullscreen Escape and its close button both preserve user-started music',async()=>{
+ const f=fixture({native:true});try{
+  await f.open();f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('[data-settings-tab="sound"]').click();await f.flush();f.screen.querySelector('.focus-music-toggle').click();await f.flush()
+  const audio=f.media[0];audio.currentTime=39;f.nativeExit();await f.flush();assert.equal(f.screen,null);assert.equal(audio.paused,false);assert.equal(audio.currentTime,39);assert.equal(f.exits,0)
+  await f.open();f.screen.querySelector('.focus-exit').click();await f.flush();assert.equal(f.screen,null);assert.equal(audio.paused,false);assert.equal(audio.plays,1);assert.equal(f.media.length,1);assert.equal(f.exits,1);assert.deepEqual(f.events,[])
  }finally{f.close()}
 })
 
@@ -229,7 +251,7 @@ test('selected audio shows duration, supports scrubbing before play and keeps a 
   assert.ok(f.screen.querySelector('.focus-media-credit').textContent.includes('Ylmir'));assert.ok(f.screen.querySelector('a[href="https://creativecommons.org/publicdomain/zero/1.0/"]'))
   f.screen.querySelector('.focus-music-toggle').click();await f.flush();assert.equal(f.media[1].src,'/focus/audio/rain.mp3');assert.equal(f.media[1].loop,true)
   f.screen.querySelector('[data-track="fireplace"]').click();await f.flush();assert.equal(f.media[1].paused,true);assert.equal(f.media[2].src,'/focus/audio/fireplace.mp3');assert.ok(f.screen.querySelector('.focus-media-credit').textContent.includes('PagDev'))
-  f.api.close();await f.flush();assert.equal(f.media[2].ontimeupdate,null);assert.equal(f.media[2].onloadedmetadata,null);assert.deepEqual(f.events,[])
+  f.api.close();await f.flush();assert.equal(f.media[2].paused,false);assert.equal(typeof f.media[2].ontimeupdate,'function');assert.equal(typeof f.media[2].onloadedmetadata,'function');assert.deepEqual(f.events,[])
  }finally{f.close()}
 })
 

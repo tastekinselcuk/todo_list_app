@@ -57,8 +57,7 @@
 <script setup lang="ts">
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { computed } from 'vue'
+import { computed, ref, onDeactivated } from 'vue'
 import { useTodoStore } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
@@ -70,7 +69,8 @@ const todoStore = useTodoStore()
 const uiStore = useUIStore()
 const { t, locale } = useI18n()
 
-const quickNote = useWorkspaceDraft('quick-note', '')
+const quickNote = ref('')
+onDeactivated(() => { quickNote.value = '' })
 
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
 const getTodayKey = () => localDateKey(new Date())

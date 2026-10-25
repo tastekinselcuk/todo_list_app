@@ -96,7 +96,7 @@ function fixture(view = 'src/views/WorkspaceCustomizer.vue', count = 2, viewProp
       '@/components/ui/WorkspaceRail.vue':{default:{}}, '@/components/ui/WorkspacePicker.vue':{default:{}},
       '@/lib/workspaceSections':pageNavigation,
       '@/lib/workspaceScope':{useWorkspaceDraft:(_key,initial)=>vue.ref(initial)},
-    }).default
+    }, {window:{matchMedia:()=>({matches:true})}}).default
     state = component.setup(viewProps, { expose() {} })
   })
   return {
@@ -105,17 +105,16 @@ function fixture(view = 'src/views/WorkspaceCustomizer.vue', count = 2, viewProp
   }
 }
 
-test('settings navigation honors workspace and profile entry points without trapping later visits in the account section',async()=>{
-  const props=vue.reactive({initialSection:'workspaces',focusAccount:0})
-  const f=fixture('src/views/WorkspaceCustomizer.vue',2,props)
-  try{
-    assert.equal(f.state.settingsSection.value,'workspaces')
-    props.focusAccount=1;await vue.nextTick();assert.equal(f.state.settingsSection.value,'general')
-    props.initialSection='general';await vue.nextTick();assert.equal(f.state.settingsSection.value,'general')
-    props.initialSection='modules';await vue.nextTick();assert.equal(f.state.settingsSection.value,'workspaces')
-    props.initialSection='invalid';await vue.nextTick();assert.equal(f.state.settingsSection.value,'workspaces')
-    assert.equal(f.calls.length,0,'page navigation must not write module or account preferences')
-  }finally{f.close()}
+test('workspace settings entry scrolls without hiding preferences or account settings',async()=>{
+ const props=vue.reactive({initialSection:'general',focusAccount:0,focusWorkspaces:0}),f=fixture('src/views/WorkspaceCustomizer.vue',2,props),scrolls=[]
+ try{
+  f.state.workspacePanel.value={scrollIntoView:options=>scrolls.push(options)}
+  props.initialSection='workspaces';await new Promise(setImmediate);await vue.nextTick()
+  assert.equal(scrolls.length,1)
+  props.focusWorkspaces++;await new Promise(setImmediate);assert.equal(scrolls.length,2,'reopening workspace management scrolls even on the same page')
+  props.initialSection='general';props.focusAccount=1;await vue.nextTick()
+  assert.equal(scrolls.length,2);assert.equal(f.calls.length,0)
+ }finally{f.close()}
 })
 
 test('module selections show pending and success feedback and cannot submit twice', async () => {

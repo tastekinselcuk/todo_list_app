@@ -114,19 +114,6 @@
 /* A temporary search destination marker; card colors and dimensions stay intact. */
 .search-revealed { outline: 2px solid hsl(var(--primary) / .4);outline-offset: 3px;scroll-margin-top: 6rem; }
 
-/* Vue adds these transition classes at runtime; keep them outside purged layers. */
-.note-reveal { display: grid; grid-template-rows: 1fr; min-width: 0; }
-.note-reveal-inner { min-height: 0; }
-.note-reveal-body { transform: translateY(0); transition: transform 220ms cubic-bezier(.22,1,.36,1); }
-.note-reveal-enter-active, .note-reveal-leave-active { transition: grid-template-rows 220ms cubic-bezier(.22,1,.36,1), opacity 180ms ease; }
-.note-reveal-enter-active > .note-reveal-inner, .note-reveal-leave-active > .note-reveal-inner { overflow: hidden; }
-.note-reveal-enter-from, .note-reveal-leave-to { grid-template-rows: 0fr; opacity: 0; }
-.note-reveal-enter-from .note-reveal-body, .note-reveal-leave-to .note-reveal-body { transform: translateY(-6px); }
-@media (prefers-reduced-motion: reduce) {
-  .note-reveal-enter-active, .note-reveal-leave-active, .note-reveal-body { transition: none; }
-}
-
-
 /* The document owns the scrollbar; this frame stays flush with the viewport. */
 .workspace-shell {
   position: sticky;

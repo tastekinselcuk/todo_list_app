@@ -50,7 +50,7 @@ import { computed, defineAsyncComponent, inject, onActivated, onDeactivated, ref
 import { useI18n } from 'vue-i18n'
 import { Archive, ArchiveRestore, CalendarDays, Check, Columns3, FolderCog, List, Loader2, Pencil, RefreshCw, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import { useModuleLoad, useWorkspaceDraft } from '@/lib/workspaceScope'
+import { useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { workspaceNavigationKey, workspaceActiveViewKey } from '@/lib/workspaceNavigation'
 import { useWorkspacesStore } from '@/stores/workspaces'
@@ -61,11 +61,11 @@ import TaskRow from './TaskRow.vue'
 import WorkEditor from './WorkEditor.vue'
 const WorkCalendar=defineAsyncComponent(()=>import('./WorkCalendar.vue'))
 const {t}=useI18n(),store=useTasksStore(),spaces=useWorkspacesStore(),scope=spaces.sessionKey,wid=spaces.activeId,owner=spaces.userId
-const view=ref('calendar'),draftTitle=useWorkspaceDraft('tasks-title',''),showCompleted=ref(false)
+const view=ref('calendar'),draftTitle=ref(''),showCompleted=ref(false)
 const moduleActive=ref(true)
 watch([view,moduleActive],([mode,active])=>{void store.setCalendarActive(active&&mode==='calendar')},{immediate:true})
 onActivated(()=>{moduleActive.value=true;if(view.value==='calendar'&&store.calendarReady)void store.loadCalendar(undefined,undefined,true)})
-onDeactivated(()=>{moduleActive.value=false;view.value='calendar';showCompleted.value=false;editor.value=null;projectsOpen.value=false;editingProject.value=null;dragOver.value=''})
+onDeactivated(()=>{draftTitle.value='';moduleActive.value=false;view.value='calendar';showCompleted.value=false;editor.value=null;projectsOpen.value=false;editingProject.value=null;dragOver.value=''})
 const navigation=inject(workspaceNavigationKey,ref(null))
 watch(navigation,intent=>{if(intent?.module==='tasks'&&['list','board','calendar'].includes(intent.view))view.value=intent.view},{immediate:true})
 const reportView=inject(workspaceActiveViewKey,undefined)

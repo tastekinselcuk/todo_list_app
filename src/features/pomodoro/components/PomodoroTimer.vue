@@ -29,19 +29,22 @@
       </div>
       <button type="button" @click="setExpanded(true)" class="timer-view-button timer-dock-button" :title="$t('pomodoro.expandToNavbar')" :aria-label="$t('pomodoro.expandToNavbar')"><ArrowUp :size="16" :stroke-width="1.6" /></button>
       <button type="button" @click="openFocus" class="timer-view-button timer-fullscreen-button" :title="$t('pomodoro.fullscreen')" :aria-label="$t('pomodoro.fullscreen')"><PomodoroViewIcon /></button>
+      <button v-if="musicStarted" type="button" class="timer-music-button timer-card-music" :aria-pressed="musicPlaying" :aria-label="musicLabel" :title="musicLabel" @click="toggleMusic"><Pause v-if="musicPlaying" :size="15" :stroke-width="1.6" /><Music2 v-else :size="15" :stroke-width="1.6" /></button>
 
-      <div class="flex flex-col items-center justify-center py-2 w-full mb-4">
+      <div class="pomodoro-card-body flex flex-col items-center justify-center py-2 w-full mb-4">
         <div v-if="currentTarget" class="mb-2 flex max-w-full items-center gap-1"><button type="button" class="min-w-0 truncate px-2 text-xs text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task', currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button><button type="button" :disabled="timer.clearing" class="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-label="t('pomoNotes.freeFocus')" :title="t('pomoNotes.freeFocus')" @click="clearFocus()"><X class="h-3 w-3" /></button></div>
-        <div
-          class="pomodoro-card-time text-primary cursor-pointer select-none"
+        <button
+          type="button"
+          class="pomodoro-card-time text-foreground cursor-pointer select-none"
           @click="clickTimerCustomize"
+          :aria-label="$t('pomodoro.clickSetup')"
           :title="$t('pomodoro.clickSetup')"
         >
-          {{ formattedTime }}
-        </div>
+          <span>{{ clockParts[0] }}</span><span class="pomodoro-card-colon">:</span><span>{{ clockParts[1] }}</span>
+        </button>
       </div>
 
-      <div class="flex justify-center gap-2 w-full">
+      <div class="pomodoro-card-actions flex justify-center gap-2 w-full">
         <button
           @click="toggleTimer"
           :disabled="starting || timer.clearing"
@@ -110,8 +113,8 @@
         <button data-pomodoro-mode-trigger type="button" popovertarget="pomodoro-dock-controls" :aria-label="$t('pomodoro.modeSelect')" :title="$t('pomodoro.modeSelect')" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground transition-colors hover:bg-background sm:inline-flex lg:hidden"><MoreHorizontal class="h-3.5 w-3.5" /></button>
         </div>
 
-        <div class="dock-navigation"><slot name="navigation" /></div>
         <div class="dock-right">
+        <button v-if="musicStarted" type="button" class="timer-music-button" :aria-pressed="musicPlaying" :aria-label="musicLabel" :title="musicLabel" @click="toggleMusic"><Pause v-if="musicPlaying" :size="15" :stroke-width="1.6" /><Music2 v-else :size="15" :stroke-width="1.6" /></button>
         <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
           <div class="flex items-center gap-1.5 bg-muted/40 rounded-full p-0.5 border border-border/50">
             <button
@@ -302,7 +305,7 @@
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ArrowDown, ArrowUp, Check, MoreHorizontal, Pause, Play, Timer, X, RotateCcw } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, Check, MoreHorizontal, Music2, Pause, Play, Timer, X, RotateCcw } from 'lucide-vue-next'
 import PomodoroFocus from './PomodoroFocus.vue'
 import PomodoroViewIcon from './PomodoroViewIcon.vue'
 import { focusDurationPresets } from '../lib/focusEnvironment'
@@ -331,6 +334,11 @@ const isExpanded = ref(props.docked)
 const dockControls = ref<HTMLElement>()
 const customizeDialog = ref<HTMLDialogElement|null>(null)
 const focusView=ref<InstanceType<typeof PomodoroFocus>>()
+const clockParts=computed(()=>formattedTime.value.split(':'))
+const musicStarted=computed(()=>Boolean(focusView.value?.musicStarted))
+const musicPlaying=computed(()=>focusView.value?.soundStatus==='playing'||focusView.value?.soundStatus==='loading')
+const musicLabel=computed(()=>t(musicPlaying.value?'pomodoro.pauseMusic':'pomodoro.playMusic'))
+function toggleMusic(){focusView.value?.toggleMusic()}
 const closeDockControls = () => dockControls.value?.hidePopover?.()
 function openFocus(){closeDockControls();void focusView.value?.open()}
 watch(()=>props.navbarVisible,visible=>{if(!visible)closeDockControls()})
@@ -367,13 +375,18 @@ onUnmounted(()=>timer.shutdown())
 </script>
 
 <style scoped>
-.pomodoro-card-header{padding-inline:24px}.compact-mode-tabs{max-width:100%}.pomodoro-card-time{font-family:'Segoe UI Variable Display','SF Pro Display','Helvetica Neue',sans-serif;font-size:64px;font-weight:300;line-height:1.05;letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.pomodoro-card-header{padding-inline:24px}
+.compact-mode-tabs{max-width:100%}
+.pomodoro-card-time{display:inline-flex;align-items:baseline;max-width:100%;border-radius:12px;font-family:'Segoe UI Variable Display','SF Pro Display','Helvetica Neue',sans-serif;font-size:64px;font-weight:300;line-height:1.05;letter-spacing:-.055em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pomodoro-card-colon{color:inherit;letter-spacing:0;transform:translateY(-.08em)}
+.timer-music-button{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:hsl(var(--muted-foreground));transition:background 180ms,color 180ms}.timer-music-button[aria-pressed='true']{background:hsl(var(--primary)/.06);color:hsl(var(--foreground)/.8)}.timer-music-button:hover{background:hsl(var(--muted)/.65);color:hsl(var(--foreground))}.timer-card-music{position:absolute;right:12px;top:50%;transform:translateY(-50%)}
 .timer-view-button{position:absolute;top:16px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:hsl(var(--muted-foreground));opacity:0;pointer-events:none;transform:translateY(-2px);transition:opacity 180ms,transform 220ms cubic-bezier(.22,1,.36,1),background 180ms,color 180ms}.timer-dock-button{left:10px}.timer-fullscreen-button{right:10px}.pomodoro-card:hover .timer-view-button,.timer-view-button:focus-visible{opacity:1;pointer-events:auto;transform:none}.timer-view-button:hover{background:hsl(var(--muted)/.65);color:hsl(var(--foreground))}
-@media(hover:none){.timer-view-button{opacity:1;pointer-events:auto;transform:none}}@media(max-width:400px){.compact-mode-tabs button{padding-inline:5px;font-size:10px}}@media(prefers-reduced-motion:reduce){.timer-view-button{transition:none;transform:none}}
-.pomodoro-dock{left:12px;right:12px;border-radius:18px;transition:transform 240ms cubic-bezier(.22,1,.36,1),opacity 180ms ease}.dock-layout{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:0 10px}.dock-left{overflow:hidden}.dock-navigation{min-width:0}.dock-right{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0}.pomodoro-dock [data-pomodoro-modes]{display:none}.pomodoro-dock [data-pomodoro-mode-trigger]{display:none}.pomodoro-dock.is-workspace-attached{transform:none;border-radius:14px;box-shadow:none;backdrop-filter:none;transition:opacity 180ms ease}.dock-progress{opacity:.65}
-@media(min-width:640px){.pomodoro-dock{right:24px;left:24px}.dock-layout{padding-inline:12px}.dock-right{gap:10px}.pomodoro-dock [data-pomodoro-mode-trigger]{display:inline-flex}}
+@media(max-width:400px){.compact-mode-tabs button{padding-inline:5px;font-size:10px}}
+@media(hover:none){.timer-view-button{opacity:1;pointer-events:auto;transform:none}}@media(prefers-reduced-motion:reduce){.timer-view-button{transition:none;transform:none}.timer-music-button{transition:none}}
+.pomodoro-dock{left:76px;right:12px;border-radius:18px;transition:transform 240ms cubic-bezier(.22,1,.36,1),opacity 180ms ease}.dock-layout{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 10px}.dock-left{overflow:hidden}.dock-right{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0}.pomodoro-dock [data-pomodoro-modes]{display:none}.pomodoro-dock [data-pomodoro-mode-trigger]{display:none}.pomodoro-dock.is-workspace-attached{transform:none;border-radius:14px;box-shadow:none;backdrop-filter:none;transition:opacity 180ms ease}.dock-progress{opacity:.65}
+@media(min-width:640px){.pomodoro-dock{right:24px;left:76px}.dock-layout{padding-inline:12px}.dock-right{gap:10px}.pomodoro-dock [data-pomodoro-mode-trigger]{display:inline-flex}}
 @media(min-width:1024px){.pomodoro-dock{left:var(--workspace-sidebar-inset,24px)}}
-@media(min-width:1536px){.pomodoro-dock [data-pomodoro-modes]{display:flex}.pomodoro-dock [data-pomodoro-mode-trigger]{display:none}}
+@media(min-width:1024px){.pomodoro-dock [data-pomodoro-modes]{display:flex}.pomodoro-dock [data-pomodoro-mode-trigger]{display:none}}
 .dock-controls { inset: 3rem 4.5rem auto auto; margin: 0; width: 11rem; opacity: 0; transform: translateY(-4px); transition: opacity 140ms ease, transform 160ms cubic-bezier(.22,1,.36,1), display 160ms allow-discrete, overlay 160ms allow-discrete; }
 .dock-controls:popover-open { opacity: 1; transform: translateY(0); }
 @media (min-width:640px) { .dock-controls { inset:3rem auto auto 1.25rem; } }

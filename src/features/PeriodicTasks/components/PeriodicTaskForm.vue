@@ -30,18 +30,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, onDeactivated, reactive, watch } from 'vue'
 import { Bell, BellOff, Loader2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import type { PeriodicTask, PeriodicTaskInput, TaskCategory, TaskFrequency } from '../stores/periodicTasks'
 const props=defineProps<{editTask?:PeriodicTask|null;loading?:boolean}>()
 const emit=defineEmits<{submit:[input:PeriodicTaskInput];cancel:[]}>()
 const {t,locale}=useI18n()
 const defaults=()=>({title:'',notes:'',category:'other' as TaskCategory,frequency:'daily' as TaskFrequency,daysOfWeek:[] as number[],
  dayOfMonth:new Date().getDate(),monthOfYear:new Date().getMonth()+1,intervalDays:3,reminderTime:'09:00',notifyBrowser:true,notifyEmail:false})
-const form=reactive(useWorkspaceDraft(`routine-form:${props.editTask?.id || 'new'}`,defaults()).value)
+const form=reactive(defaults())
 const editId=computed(()=>props.editTask?.id || null)
 const frequencies:TaskFrequency[]=['daily','weekly','monthly','yearly','custom']
 const frequencyOptions=computed(()=>frequencies.map(value=>({value,label:t(`periodicTasks.${value}`)})))
@@ -70,6 +69,7 @@ function toggleDay(day:number){const index=form.daysOfWeek.indexOf(day);if(index
 watch(()=>form.frequency,value=>{if(value==='weekly' && !form.daysOfWeek.length)form.daysOfWeek=[new Date().getDay()]})
 watch(maxDay,value=>{if(form.dayOfMonth>value)form.dayOfMonth=value})
 function resetForm(){Object.assign(form,defaults())}
+onDeactivated(resetForm)
 function hydrate(task:PeriodicTask){
  Object.assign(form,{title:task.title,notes:task.notes || '',category:task.category || 'other',frequency:task.frequency,
  daysOfWeek:[...(task.days_of_week || [])],dayOfMonth:task.day_of_month || new Date().getDate(),monthOfYear:task.month_of_year || new Date().getMonth()+1,

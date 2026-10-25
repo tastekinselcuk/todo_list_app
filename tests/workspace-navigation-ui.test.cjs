@@ -12,7 +12,7 @@ function fixture({mobile=false}={}){
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')}
  dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')}
  const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),createText:text=>doc.createTextNode(text),createComment:text=>doc.createComment(text),querySelector:selector=>doc.querySelector(selector),insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]}})
- const events=[],drafts=new Map(),props=vue.reactive({module:'quick',view:''})
+ const events=[],drafts=new Map(),props=vue.reactive({module:'quick',view:'',page:'workspace'})
  const workspaces=vue.reactive({activeId:'personal',available:[{id:'personal',name:'Kişisel'},{id:'team',name:'Ürün ekibi'}],get active(){return this.available.find(item=>item.id===this.activeId)},switchTo(id){if(this.available.some(item=>item.id===id)){this.activeId=id;events.push(['workspace',id])}}})
  const deps={vue:{...vue,Transition:(props,{slots})=>vue.h(vue.BaseTransition,{...props,onLeave(_element,done){queueMicrotask(done)}},slots)},'vue-i18n':{useI18n:()=>({t:key=>key})},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'@/lib/workspaceScope':{useWorkspaceDraft:(key,value)=>{if(!drafts.has(key))drafts.set(key,vue.ref(value));return drafts.get(key)}}}
  const evaluate=source=>{const exports={};vm.compileFunction(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,['exports','require','document','window','HTMLElement','Node','navigator'])(exports,name=>deps[name]||require(name),doc,dom.window,dom.window.HTMLElement,dom.window.Node,dom.window.navigator);return exports}
@@ -20,9 +20,9 @@ function fixture({mobile=false}={}){
  const compile=name=>evaluate(compileScript(parse(fs.readFileSync(`src/components/ui/${name}.vue`,'utf8')).descriptor,{id:name,inlineTemplate:true}).content).default
  deps['./CustomSelect.vue']={default:compile('CustomSelect')};deps['./WorkspacePicker.vue']={default:compile('WorkspacePicker')}
  const Rail=compile('WorkspaceRail'),Picker=compile('WorkspaceModulePicker'),enabled=vue.ref(deps['./moduleCatalog'].moduleCatalog.map(item=>item.id))
- const choose=module=>{events.push(['module',module]);props.module=module;props.view=''}
+ const choose=module=>{props.page='workspace';events.push(['module',module]);props.module=module;props.view=''}
  const app=renderer.createApp({setup:()=>()=>vue.h('header',[
-  vue.h(Rail,{modelValue:props.module,enabled:enabled.value,workspaceName:workspaces.active?.name,'onUpdate:modelValue':choose,onSearch:()=>events.push(['search']),onTrash:()=>events.push(['trash']),onManage:()=>events.push(['manage'])}),
+  vue.h(Rail,{modelValue:props.module,activePage:props.page,enabled:enabled.value,workspaceName:workspaces.active?.name,'onUpdate:modelValue':choose,onSearch:()=>events.push(['search']),onTrash:()=>events.push(['trash']),onManage:()=>events.push(['manage']),onAnalytics:()=>{props.page='analytics';events.push(['analytics'])},onSettings:()=>{props.page='settings';events.push(['settings'])}}),
   vue.h(Picker,{modelValue:props.module,enabled:enabled.value,activeView:props.view,'onUpdate:modelValue':choose,onNavigate:(module,view)=>{props.module=module;props.view=view;events.push(['view',module,view])}}),
  ])})
  app.mount(doc.querySelector('main'))
@@ -71,5 +71,39 @@ test('mobile navigation stays simple and its workspace menu is rendered inside t
   const drawer=f.doc.querySelector('.rail-drawer');assert.equal(drawer.open,true);assert.equal(drawer.querySelectorAll('.drawer-sections [data-section]').length,5);assert.equal(drawer.querySelector('.drawer-section'),null)
   drawer.querySelector('[aria-label="workspaces.switch"]').click();await f.flush();const menu=drawer.querySelector('.workspace-picker-menu');assert.ok(menu,'workspace choices remain in the modal top layer')
   Array.from(menu.querySelectorAll('[data-workspace]')).find(button=>button.textContent.includes('Ürün ekibi')).click();await f.flush();assert.equal(f.workspaces.activeId,'team');assert.equal(drawer.open,false);assert.equal(f.doc.body.style.overflow,'');assert.equal(f.doc.activeElement,trigger)
+ }finally{f.close()}
+})
+
+
+test('the same desktop rail keeps its pin and entries while only the active page changes',async()=>{
+ const f=fixture();try{
+  const rail=f.doc.querySelector('.workspace-rail'),buttons=()=>Array.from(rail.querySelectorAll('nav button,.rail-footer button'))
+  const labels=buttons().map(button=>button.getAttribute('aria-label'))
+  assert.deepEqual(labels.slice(-2),['app.analytics','app.settings'])
+  rail.querySelector('.rail-mark').click();await f.flush();assert.equal(rail.hasAttribute('data-pinned-open'),true)
+  for(const page of ['analytics','settings']){
+   rail.querySelector(`[aria-label="app.${page}"]`).click();await f.flush()
+   assert.equal(f.doc.querySelector('.workspace-rail'),rail)
+   assert.deepEqual(buttons().map(button=>button.getAttribute('aria-label')),labels)
+   assert.equal(rail.querySelectorAll('[aria-current="page"]').length,1)
+   assert.equal(rail.querySelector('[aria-current="page"]').getAttribute('aria-label'),`app.${page}`)
+   assert.equal(rail.hasAttribute('data-pinned-open'),true)
+  }
+  rail.querySelector('[data-section="notes"]').click();await f.flush()
+  assert.equal(rail.querySelector('[aria-current="page"]').getAttribute('data-section'),'notes')
+ }finally{f.close()}
+})
+
+test('mobile analytics and settings actions close the drawer and highlight the chosen page',async()=>{
+ const f=fixture({mobile:true});try{
+  const trigger=f.doc.querySelector('.rail-mobile-trigger'),drawer=f.doc.querySelector('.rail-drawer')
+  for(const page of ['analytics','settings']){
+   trigger.focus();trigger.click();await f.flush()
+   const button=Array.from(drawer.querySelectorAll('.drawer-footer button')).find(button=>button.textContent.includes(`app.${page}`))
+   button.click();await f.flush()
+   assert.equal(drawer.open,false);assert.equal(f.doc.body.style.overflow,'');assert.equal(f.doc.activeElement,trigger)
+   assert.equal(drawer.querySelectorAll('[aria-current="page"]').length,1)
+   assert.equal(button.getAttribute('aria-current'),'page')
+  }
  }finally{f.close()}
 })

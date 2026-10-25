@@ -41,7 +41,6 @@
 <script setup lang="ts">
 import { useModuleAccess } from '@/lib/workspaceScope'
 import { ref, computed, watch, nextTick, onDeactivated } from 'vue'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { Code2, Pencil, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { CodeSnippet } from '@/features/todos/stores/todo'
@@ -70,10 +69,10 @@ const { t, locale } = useI18n()
 // Local State
 const isOpen = ref(false), openButtonRef=ref<HTMLButtonElement|null>(null)
 const isEditing = ref(false)
-onDeactivated(() => { isOpen.value = false; isEditing.value = false })
+onDeactivated(() => { isOpen.value=false;isEditing.value=false;editConflict.value=false;baseVersion.value=props.snippet.version;editForm.value={title:props.snippet.title,language:props.snippet.language || 'plaintext',code:props.snippet.code} })
 const editConflict = ref(false), saving = ref(false), refreshing = ref(false)
-const baseVersion=useWorkspaceDraft(`code-edit-version:${props.snippet.id}`,props.snippet.version)
-const editForm = useWorkspaceDraft(`code-edit:${props.snippet.id}`, { title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code })
+const baseVersion=ref(props.snippet.version)
+const editForm = ref({ title: props.snippet.title, language: props.snippet.language || 'plaintext', code: props.snippet.code })
 
 const canSave = computed(() => !!editForm.value.title.trim() && !!editForm.value.code.trim())
 

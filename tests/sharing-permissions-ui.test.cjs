@@ -106,6 +106,76 @@ test('focused code reader switches to editing in the same dialog, ignores backdr
   }
 })
 
+test('detailed-note cards open a focused reader, edit in the same dialog and keep controls, read-only access and explicit dismissal intact',async()=>{
+  installNoteEditorDOM()
+  const doc=dom.window.document,runtime=require('@vue/runtime-dom'),prototype=dom.window.HTMLDialogElement.prototype
+  const oldShow=prototype.showModal,oldClose=prototype.close
+  prototype.showModal=function(){this.open=true}
+  prototype.close=function(){if(this.open){this.open=false;this.dispatchEvent(new dom.window.Event('close'))}}
+  const overflow=doc.body.style.overflow,rootOverflow=doc.documentElement.style.overflow,gutter=doc.documentElement.style.scrollbarGutter
+  const canWrite=vue.ref(true),actions=[],copies=[],props=vue.reactive({todo:{id:'note',title:'Research note',description:'<p>Full note detail</p>',categoryId:'work',completed:false,version:1,createdAt:'2026-10-25'},color:'#287755',categoryName:'Work'})
+  let success=false,writes=0,editorEmit
+  const store=vue.reactive({categories:[{id:'work',name:'Work'}],todos:[props.todo],async addCategory(category){this.categories.push({...category,id:'research'});return {success:true}},async updateTodo(note){writes++;if(!success)return false;props.todo={...note,version:note.version+1};this.todos=[props.todo];return true}})
+  const RichTextEditor={props:['modelValue','disabled','fitHeight'],emits:['update:modelValue','busy-change'],setup(props,{emit}){editorEmit=emit;return()=>props.disabled?vue.h('div',{class:'rich-note-reader'},props.modelValue):vue.h('textarea',{class:'rich-note-writer',value:props.modelValue,onInput:event=>emit('update:modelValue',event.target.value)})}}
+  const descriptor=parse(fs.readFileSync('src/features/todos/components/TodoCard.vue','utf8')).descriptor
+  const CategoryPanel=load(compileScript(parse(fs.readFileSync('src/features/todos/components/CategoryModal.vue','utf8')).descriptor,{id:'edit-note-category-dom',inlineTemplate:true}).content,{
+    vue:{...vue,Transition:(_props,{slots})=>slots.default?.()},'vue-i18n':{useI18n:()=>({t:key=>key})},
+    '@/features/todos/stores/todo':{useTodoStore:()=>store},'@/stores/ui':{useUIStore:()=>({addToast(){}})},'@/components/ui/ColorPalette.vue':{default:{setup:()=>()=>vue.h('span','Colors')}},
+  },{document:doc,window:dom.window}).default
+  const Select=load(compileScript(parse(fs.readFileSync('src/components/ui/CustomSelect.vue','utf8')).descriptor,{id:'edit-category-select',inlineTemplate:true}).content,{vue:{...vue,Transition:(_props,{slots})=>slots.default?.()}},{document:doc,window:dom.window}).default
+  const Card=load(compileScript(descriptor,{id:'focused-note-dom',inlineTemplate:true}).content,{
+    'vue-i18n':{useI18n:()=>({t:key=>key,locale:vue.ref('tr')})},
+    '@/lib/workspaceScope':{useModuleAccess:()=>({canWrite}),useWorkspaceDraft:(_key,value)=>vue.ref(value)},
+    '@/stores/ui':{useUIStore:()=>({addToast(){}})},'@/features/todos/stores/todo':{useTodoStore:()=>store,TODO_TITLE_MAX_LENGTH:120},
+    '@/components/ui/CustomSelect.vue':{default:Select},'./RichTextEditor.vue':{__esModule:true,default:RichTextEditor},
+    './CategoryModal.vue':{default:CategoryPanel},
+  },{document:doc,navigator:{clipboard:{async writeText(value){copies.push(value)}}}}).default
+  const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,
+    createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),
+    createText:value=>doc.createTextNode(value),createComment:value=>doc.createComment(value),querySelector:selector=>doc.querySelector(selector),
+    insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]},
+  })
+  const target=doc.createElement('div');doc.body.append(target)
+  const app=renderer.createApp({setup:()=>()=>vue.h(Card,{...props,onToggle:()=>actions.push('toggle'),onDelete:()=>actions.push('delete')})})
+  const flush=async()=>{await vue.nextTick();await new Promise(setImmediate);await vue.nextTick()}
+  try{
+    app.mount(target);await flush()
+    const article=target.querySelector('article'),dialog=doc.querySelector('dialog.note-edit-dialog'),heading=article.querySelector('.note-heading')
+    dialog.getBoundingClientRect=()=>({left:100,top:100,right:800,bottom:700})
+    assert.equal(article.querySelector('.note-reveal'),null);assert.equal(dialog.open,false)
+    article.querySelector('.note-check').click();article.querySelector('.delete-action').click();article.querySelector('[aria-label="common.copy"]').click();await flush()
+    assert.deepEqual(actions,['toggle','delete']);assert.equal(copies.length,1);assert.equal(dialog.open,false,'card actions do not open the reader')
+    article.querySelector('.note-preview').click();await flush()
+    assert.equal(dialog.open,true);assert.equal(doc.body.style.overflow,'hidden');assert.equal(doc.activeElement,dialog.querySelector('.note-focused-reader'))
+    assert.ok(dialog.querySelector('.rich-note-reader'));assert.equal(dialog.querySelector('input,textarea'),null)
+    dialog.click();await flush();assert.equal(dialog.open,true,'one accidental backdrop click never closes the note')
+    dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.equal(writes,0,'reading cannot write')
+    Array.from(dialog.querySelectorAll('button')).find(button=>button.textContent.includes('common.edit')).click();await flush()
+    assert.equal(doc.querySelector('dialog.note-edit-dialog'),dialog);assert.equal(dialog.open,true);assert.equal(doc.activeElement,dialog.querySelector('input'))
+    const categoryTrigger=dialog.querySelector('[aria-label="todo.category"]');categoryTrigger.click();await flush();dialog.querySelector('[data-select-action]').click();await flush()
+    const categoryDialog=doc.querySelector('dialog.category-dialog'),categoryName=categoryDialog.querySelector('input[aria-label="todo.categoryName"]');categoryName.value='Research';categoryName.dispatchEvent(new dom.window.Event('input',{bubbles:true}))
+    categoryDialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await flush()
+    assert.equal(categoryDialog.open,false);assert.equal(doc.activeElement,categoryTrigger);assert.equal(dialog.querySelectorAll('form').length,1);assert.equal(dialog.open,true)
+    assert.match(categoryTrigger.textContent,/Research/)
+    assert.equal(writes,0,'category creation inside an existing note cannot submit that note')
+    const writer=dialog.querySelector('.rich-note-writer');writer.value='<p>Updated rich note</p>';writer.dispatchEvent(new dom.window.Event('input',{bubbles:true}))
+    dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await flush()
+    assert.equal(writes,1);assert.equal(dialog.querySelector('.rich-note-writer').value,'<p>Updated rich note</p>','failed saves retain the draft')
+    editorEmit('busy-change',true);await flush();dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(dialog.open,true)
+    editorEmit('busy-change',false);success=true;dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await flush()
+    assert.equal(writes,2);assert.equal(dialog.open,true);assert.equal(dialog.querySelector('.rich-note-reader').textContent,'<p>Updated rich note</p>')
+    assert.equal(props.todo.categoryId,'research','saving the edited note uses the category created in its own editor')
+    dialog.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:20,clientY:20}));await flush();assert.equal(dialog.open,false);assert.equal(doc.activeElement,heading)
+    canWrite.value=false;await flush();heading.click();await flush()
+    assert.equal(dialog.open,true);assert.equal(dialog.querySelector('input,textarea,button[type="submit"]'),null)
+    assert.equal(Array.from(dialog.querySelectorAll('button')).some(button=>button.textContent.includes('common.edit')),false)
+    dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await flush();assert.equal(dialog.open,false)
+  }finally{
+    app.unmount();target.remove();prototype.showModal=oldShow;prototype.close=oldClose
+    assert.equal(doc.body.style.overflow,overflow);assert.equal(doc.documentElement.style.overflow,rootOverflow);assert.equal(doc.documentElement.style.scrollbarGutter,gutter)
+  }
+})
+
 function reminderFormFixture(editTask=null) {
   const descriptor=parse(fs.readFileSync('src/features/PeriodicTasks/components/PeriodicTaskForm.vue','utf8')).descriptor
   const result=load(compileScript(descriptor,{id:'reminder-form'}).content,{

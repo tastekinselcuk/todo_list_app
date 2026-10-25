@@ -38,7 +38,7 @@ watch(mistakeFilter,next=>{if(active&&view.value==='mistakes')void store.fetchMi
 watch(()=>timer.taskStatsSequence,()=>{if(active&&!disabled.value)void store.fetchSubjects()})
 function refreshVisible(){if(active&&document.visibilityState==='visible'&&!disabled.value){today.value=studyToday();void store.fetchSubjects();if(view.value==='mistakes')void store.fetchMistakes(mistakeFilter.value)}}
 onMounted(()=>document.addEventListener('visibilitychange',refreshVisible));onActivated(()=>{active=true});onDeactivated(()=>{
- active=false;entryGeneration++;closePanel(true);view.value='topics';query.value='';status.value='all';showArchive.value=false;expanded.value=null;mistakeFilter.value='open';newStudy.value=false
+ active=false;entryGeneration++;closePanel(true);view.value='topics';query.value='';status.value='all';showArchive.value=false;expanded.value=null;mistakeFilter.value='open';newStudy.value=false;newTitle.value='';newId.value='';prompt.value='';solution.value='';source.value='';reason.value=''
 })
 onBeforeUnmount(()=>{document.removeEventListener('visibilitychange',refreshVisible);closePanel(true)})
 useSearchReveal('learning',async(hit,isCurrent)=>{await store.fetchSubjects(hit.record_id);if(!isCurrent())return;view.value='topics';query.value='';status.value='all';expanded.value=hit.record_id;showArchive.value=Boolean(store.subjects.find(s=>s.id===hit.record_id)?.topics.find(topic=>topic.id===hit.child_id)?.archived)})
