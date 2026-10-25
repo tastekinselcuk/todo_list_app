@@ -95,6 +95,8 @@ begin
   end loop;
   for r in select * from (values
       ('ensure_default_workspace()','auth'),
+      ('delete_workspace(uuid,text)','auth'),
+      ('delete_note_category(uuid,uuid,integer)','auth'),
       ('ensure_module_bindings(uuid)','auth'),
       ('sharing_context(uuid)','auth'),
       ('create_collection_invite(uuid,text,text)','auth'),
@@ -225,6 +227,8 @@ begin
   end loop;
   for r in select * from (values
       ('ensure_default_workspace()',array[]::text[],'uuid'),
+      ('delete_workspace(uuid,text)',array['wid','expected_name']::text[],'jsonb'),
+      ('delete_note_category(uuid,uuid,integer)',array['wid','category_id','expected_version']::text[],'jsonb'),
       ('ensure_module_bindings(uuid)',array['wid']::text[],'void'),
       ('sharing_context(uuid)',array['wid']::text[],'jsonb'),
       ('create_collection_invite(uuid,text,text)',array['wid','module_id','invite_role']::text[],'jsonb'),

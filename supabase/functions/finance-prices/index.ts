@@ -25,10 +25,15 @@ Deno.serve(financePricesHandler({
       headers: { apikey: anon, Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(8_000),
     })
-    if (response.status === 401 || response.status === 403) return false
+    if (response.status === 401 || response.status === 403) return null
     if (!response.ok) throw new Error('AUTH_SERVICE_UNAVAILABLE')
     const user = await response.json()
-    return typeof user?.id === 'string' && user.id.length > 0
+    return typeof user?.id === 'string' && user.id.length > 0 ? user.id : null
+  },
+  async consumeBudget(uid) {
+    return await adminJSON('/rest/v1/rpc/consume_edge_budget', {
+      method: 'POST', body: JSON.stringify({ uid, operation: 'finance-prices' }),
+    }) === true
   },
   async cached(currency,requests) {
     if (!requests.length) return []

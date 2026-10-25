@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <dialog ref="dialogRef" class="note-edit-dialog" :aria-label="label" :closedby="busy ? 'none' : 'closerequest'" @keydown.esc.stop.prevent="requestClose" @cancel.prevent="requestClose" @close="onClosed">
+    <dialog ref="dialogRef" class="note-edit-dialog" :aria-label="label" :closedby="busy ? 'none' : 'closerequest'" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))requestClose()}" @keydown.esc.stop.prevent="requestClose" @cancel.prevent="requestClose" @close="onClosed">
       <form class="note-edit-form" @submit.prevent="submit">
         <header class="flex shrink-0 items-center justify-between gap-3">
           <span class="min-w-0 truncate text-xs font-medium" :class="viewing?'text-foreground':'text-muted-foreground'">{{ label }}</span>
@@ -43,6 +43,7 @@ import { Codemirror } from 'vue-codemirror'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { javascript } from '@codemirror/lang-javascript'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 
 interface SnippetDraft { title: string; language: string; code: string }
 const props = defineProps<{

@@ -8,7 +8,7 @@ const copy = value => JSON.parse(JSON.stringify(value))
 function load(source, dependencies = {}, globals = {}) {
   const exports = {}
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, {
-    exports, require: name => dependencies[name] || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), console: { error() {} }, setTimeout, clearTimeout, ...globals,
+    exports, require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), console: { error() {} }, setTimeout, clearTimeout, ...globals,
   })
   return exports
 }
@@ -27,6 +27,17 @@ function fixture({ cache = new Map(), workspace = 'personal', viewer = false } =
   let held, release
   const client = {
     canWrite: () => !viewer, listen() {},
+    async removeCategory(id) {
+      if(viewer)throw Error('READ_ONLY')
+      calls.push({table:'categories',operation:'delete',id})
+      if(held)await held
+      if(failures.has('delete'))throw Error('OFFLINE')
+      const category=rows.categories.find(row=>row.id===id)
+      const notes=rows.todos.filter(row=>row.category_id===id)
+      notes.forEach(row=>{row.category_id=null;row.version++})
+      rows.categories.splice(rows.categories.indexOf(category),1)
+      return {id,notes:notes.map(row=>({id:row.id,version:row.version}))}
+    },
     from(table) {
       let operation = 'select', payload, single = false, sorted = false
       const filters = []
@@ -308,7 +319,20 @@ test('category deletion in the dropdown closes it and removes only the deleted c
   assert.deepEqual(copy(filters.events.at(-1)), ['update:selectedCategories', ['personal']])
   assert.deepEqual(copy(h.store.categories.map(category => category.id)), ['personal'])
   assert.equal(h.store.todos.some(todo => todo.id === 'b'), true)
+  assert.equal(h.store.todos.length,4,'deleting a category preserves its notes')
+  assert.equal(h.store.todos.find(todo=>todo.id==='a').categoryId,null)
+  assert.equal(h.store.todos.find(todo=>todo.id==='a').version,4)
+  await h.store.toggleTodo('a')
+  assert.equal(h.store.todos.find(todo=>todo.id==='a').version,5,'subsequent edits use the new version')
   filters.app.unmount()
+})
+
+test('a failed category deletion preserves categories and notes and reports failure',async()=>{
+ const h=fixture();await h.store.fetchTodos();await h.store.fetchCategories()
+ h.failures.add('delete')
+ const result=await h.store.deleteCategory('work')
+ assert.equal(result.success,false);assert.equal(h.store.categories.length,2);assert.equal(h.store.todos.length,4)
+ assert.equal(h.store.todos.find(todo=>todo.id==='a').categoryId,'work')
 })
 
 test('composer prevents duplicate submits, retains failed drafts and saves categorized rich notes without a deadline', async () => {
@@ -377,6 +401,14 @@ test('creating a note moves the same editor into the fitted dialog and back, pre
     dialog.click();await settle()
     assert.equal(dialog.open,true,'backdrop clicks must not dismiss an unsaved focused draft')
     assert.equal(doc.body.style.overflow,'hidden');assert.equal(editorMounts,1)
+    dialog.getBoundingClientRect=()=>({left:100,top:100,right:800,bottom:700})
+    dialog.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true,detail:2,clientX:20,clientY:20}));await settle()
+    editor.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:200,clientY:200}));await settle()
+    assert.equal(dialog.open,true,'separate clicks and double-clicking text preserve the focused editor')
+    dialog.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:20,clientY:20}));await settle();await settle()
+    assert.equal(dialog.open,false,'a deliberate double-click on the backdrop returns the same draft to the page')
+    assert.equal(title.value,'Focused draft');assert.equal(editorMounts,1)
+    editor.focus();await settle();await settle()
     dialog.querySelector('button[aria-label="common.close"]').click();await settle();await settle()
     assert.equal(dialog.open,false);assert.ok(origin.contains(editor));assert.equal(title.value,'Focused draft')
     assert.match(editor.innerHTML,/Keep this rich draft/);assert.equal(editorMounts,1);assert.equal(doc.body.style.overflow,'')

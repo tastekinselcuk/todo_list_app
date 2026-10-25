@@ -29,7 +29,7 @@
       </div>
     </Transition>
     <Teleport to="body">
-      <dialog ref="editDialogRef" class="note-edit-dialog" closedby="closerequest" :aria-label="t('todo.editTask')" @cancel.prevent="leaveEditing" @close="onEditDialogClosed">
+      <dialog ref="editDialogRef" class="note-edit-dialog" closedby="closerequest" :aria-label="t('todo.editTask')" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))leaveEditing()}" @cancel.prevent="leaveEditing" @close="onEditDialogClosed">
             <form v-if="isEditing" class="note-edit-form" @submit.prevent="saveEdit">
               <div class="flex shrink-0 items-center justify-between gap-3">
                 <span class="text-xs font-medium text-muted-foreground">{{ t('todo.editTask') }}</span>
@@ -64,6 +64,7 @@ import type { Todo } from '@/features/todos/stores/todo'
 import { useTodoStore, TODO_TITLE_MAX_LENGTH } from '@/features/todos/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 const RichTextEditor = defineAsyncComponent(() => import('./RichTextEditor.vue'))
 
 const { canWrite } = useModuleAccess('detailed')

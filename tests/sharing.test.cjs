@@ -15,6 +15,60 @@ function load(path, dependencies, globals = {}) {
 }
 const helpers = load('src/lib/sharing.ts',{})
 
+test('workout sequence RPC uses scoped credentials, refreshes the parent version and fences late workspace responses', async () => {
+ const requests=[],binding={module:'workout',collection_id:'collection',origin_workspace_id:'workspace',role:'owner'}
+ let hold=false,release
+ const client=createClient('https://database.example.test','public-test-key',{
+  auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:async(url,options={})=>{
+   const parsed=new URL(url),body=options.body?JSON.parse(options.body):null;requests.push({url:parsed,body})
+   if(hold)await new Promise(resolve=>release=resolve)
+   const rpc=parsed.pathname.endsWith('/rpc/reorder_workout_exercises')
+   if(!rpc)assert.equal(parsed.searchParams.get('version'),'eq.6')
+   return new Response(JSON.stringify({id:'program',version:rpc?6:7,exercises:[]}),{headers:{'content-type':'application/json'}})
+  }}})
+ const workspaces={userId:'owner',activeId:'workspace',sessionKey:'owner:workspace',sharingAvailable:true,binding:module=>module==='workout'?binding:undefined}
+ const api=load('src/lib/workspaceScope.ts',{'./supabase':{supabase:client},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'./sharing':helpers}).useWorkspaceClient()
+ await api.mutateItem('workout','program','reorder',{ids:['second','first']},4)
+ assert.deepEqual(requests[0].body,{cid:'collection',pid:'program',ordered_ids:['second','first'],expected_version:4})
+ await api.from('workout_routines').update({title:'New title'}).eq('id','program').select().single()
+ binding.role='viewer'
+ await assert.rejects(api.mutateItem('workout','program','reorder',{ids:[]},7),/READ_ONLY/)
+ assert.equal(requests.length,2)
+ binding.role='owner';hold=true
+ const pending=api.mutateItem('workout','program','reorder',{ids:[]},7)
+ await new Promise(resolve=>setImmediate(resolve));workspaces.sessionKey='owner:other-workspace';release()
+ await assert.rejects(pending,/Workspace changed/)
+})
+
+test('category RPC captures the workspace and version and refreshes note versions for following edits',async()=>{
+ const requests=[],category={id:'category',version:3},note={id:'note',version:4,category_id:'category'}
+ let release,hold=false
+ const client=createClient('https://database.example.test','public-test-key',{
+  auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:async(url,options={})=>{
+   const parsed=new URL(url),body=options.body?JSON.parse(options.body):null
+   requests.push({url:parsed,body})
+   if(parsed.pathname.endsWith('/rpc/delete_note_category')){
+    if(hold)await new Promise(resolve=>release=resolve)
+    note.version++;note.category_id=null
+    return new Response(JSON.stringify({id:category.id,notes:[{id:note.id,version:note.version}]}),{headers:{'content-type':'application/json'}})
+   }
+   if(options.method==='PATCH'){assert.equal(parsed.searchParams.get('version'),'eq.5');note.version++}
+   return new Response(JSON.stringify([parsed.pathname.endsWith('/categories')?category:note]),{headers:{'content-type':'application/json'}})
+  }}})
+ const binding={collection_id:'collection',origin_workspace_id:'workspace',role:'owner'}
+ const workspaces={userId:'owner',activeId:'workspace',sessionKey:'session',sharingAvailable:true,binding(module){return module==='detailed'?binding:undefined}}
+ const api=load('src/lib/workspaceScope.ts',{'./supabase':{supabase:client},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'./sharing':helpers}).useWorkspaceClient()
+ await assert.rejects(api.removeCategory('category'),/SHARING_CONFLICT/)
+ await api.from('categories').select();await api.from('todos').select()
+ await api.removeCategory('category')
+ assert.deepEqual(requests.at(-1).body,{wid:'workspace',category_id:'category',expected_version:3})
+ await api.from('todos').update({completed:true}).eq('id','note')
+ binding.role='viewer';const count=requests.length;await assert.rejects(api.removeCategory('category'),/READ_ONLY/);assert.equal(requests.length,count)
+ binding.role='owner';await api.from('categories').select()
+ hold=true;const pending=api.removeCategory('category');while(!release)await new Promise(resolve=>setImmediate(resolve))
+ workspaces.sessionKey='new-session';release();await assert.rejects(pending,/Workspace changed/)
+})
+
 test('workspace deletion broadcasts refresh other sessions after pending local writes finish',async()=>{
  pinia.setActivePinia(pinia.createPinia())
  const auth=vue.reactive({user:{id:'owner'}}),workspaces=vue.reactive({busy:false,sharingAvailable:true,async refreshBindings(){},async load(){reloads++}})

@@ -76,7 +76,7 @@ async function deadline<T>(operation:PromiseLike<T>,milliseconds:number,code:str
  try{return await Promise.race([Promise.resolve(operation),new Promise<T>((_resolve,reject)=>{timer=setTimeout(()=>reject(Error(code)),milliseconds)})])}
  finally{if(timer)clearTimeout(timer)}
 }
-async function compressImage(file:File):Promise<Blob>{
+export async function compressImage(file:File):Promise<Blob>{
  const url=URL.createObjectURL(file),image=new Image()
  try{
   await deadline(new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(Error('imageType'));image.src=url}),10_000,'imageUploadFailed')

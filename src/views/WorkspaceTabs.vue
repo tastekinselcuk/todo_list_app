@@ -10,7 +10,7 @@
 
       <div ref="workspaceNavigation" class="workspace-navigation relative !mt-0">
         <div class="relative z-20 flex min-w-0 items-center gap-1 pr-16 !mt-0">
-          <WorkspaceRail :model-value="activeTab" :enabled="activeModules.map(tab=>tab.id)" :workspace-name="workspaces.active?.name" @update:model-value="selectModule" @navigate="selectModuleView" @search="openTabSearch" @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
+          <WorkspaceRail :model-value="activeTab" :active-view="reportedView?.module===activeTab?reportedView.view:'topics'" :enabled="activeModules.map(tab=>tab.id)" :workspace-name="workspaces.active?.name" @update:model-value="selectModule" @navigate="selectModuleView" @search="openTabSearch" @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
           <WorkspacePicker @trash="trashOpen = true" @manage="$emit('manage-workspaces')" />
         </div>
 
@@ -57,7 +57,7 @@ import { useI18n } from 'vue-i18n'
 import { Expand, Search, Shrink } from 'lucide-vue-next'
 import WorkspacePicker from '@/components/ui/WorkspacePicker.vue'
 import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
-import { workspaceNavigationKey, type WorkspaceNavigationIntent } from '@/lib/workspaceNavigation'
+import { workspaceNavigationKey, workspaceActiveViewKey, workspaceOpenItemKey, type WorkspaceNavigationIntent } from '@/lib/workspaceNavigation'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import WorkspaceSearch from '@/components/ui/WorkspaceSearch.vue'
 import { searchDestinationKey, searchRevealErrorKey, searchScrollKey, type SearchDestination } from '@/lib/searchNavigation'
@@ -103,17 +103,25 @@ const widthToggleLabel = computed(() => t(settingsStore.isFullScreen ? 'workspac
 
 const props = defineProps<{
   initialTab?: string
+  initialView?: string
   navigationRequest?: number
   headerInset?: number
 }>()
 
-const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': []; 'active-module': [module:string]; pinned: [pinned:boolean]; 'header-offset': [offset:number] }>()
+const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': []; 'active-module': [module:string]; 'active-view':[module:string,view:string]; pinned: [pinned:boolean]; 'header-offset': [offset:number] }>()
 provide(openFinanceAnalysisKey,()=>emit('open-finance-analysis'))
 const activeTab = useWorkspaceDraft('last-tab', props.initialTab || 'plans')
-if (props.initialTab) activeTab.value = props.initialTab
+if (props.initialTab && settingsStore.isModuleActive(props.initialTab)) activeTab.value = props.initialTab
 const navigationIntent = ref<WorkspaceNavigationIntent|null>(null)
 let navigationSequence = 0
 provide(workspaceNavigationKey,navigationIntent)
+const reportedView=ref<{module:string;view:string}|null>(null)
+provide(workspaceActiveViewKey,(module,view)=>{reportedView.value={module,view};emit('active-view',module,view)})
+function applyInitialView(){
+  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','today','mistakes']}
+  if(allowed[activeTab.value]?.includes(props.initialView||''))navigationIntent.value={module:activeTab.value,view:props.initialView!,sequence:++navigationSequence}
+}
+applyInitialView()
 function selectModule(module:string) {
   if(!activeModules.value.some(tab=>tab.id===module))return
   activeTab.value=module
@@ -121,7 +129,8 @@ function selectModule(module:string) {
 }
 function selectModuleView(module:string,view:string) {
   if(!activeModules.value.some(tab=>tab.id===module))return
-  if(module!=='finance'||!['transaction','position'].includes(view))return
+  const allowed:Record<string,string[]>={finance:['transaction','position'],learning:['topics','today','mistakes']}
+  if(!allowed[module]?.includes(view))return
   activeTab.value=module
   navigationIntent.value={module,view,sequence:++navigationSequence}
 }
@@ -184,6 +193,7 @@ function selectSearchHit(hit: SearchHit) {
   destination.value = { ...hit, sequence: ++searchSequence }
   activeTab.value = hit.module
 }
+provide(workspaceOpenItemKey,selectSearchHit)
 function handleShortcut(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
     if (document.querySelector('dialog[open]') && !document.querySelector('.workspace-search[open]')) return
@@ -194,9 +204,10 @@ function handleShortcut(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', handleShortcut))
 onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
 
-watch([() => props.initialTab, () => props.navigationRequest], ([newVal]) => {
+watch([() => props.initialTab, () => props.navigationRequest, () => props.initialView], ([newVal]) => {
   if (newVal && activeModules.value.find(t => t.id === newVal)) {
     activeTab.value = newVal
+    applyInitialView()
   }
 })
 

@@ -21,7 +21,8 @@ function getTmdbKey(): string | null {
 
 async function searchTmdb(
   type: 'movie' | 'series',
-  query: string
+  query: string,
+  signal?: AbortSignal
 ): Promise<SearchResult[]> {
   const apiKey = getTmdbKey()
   if (!apiKey) {
@@ -31,7 +32,7 @@ async function searchTmdb(
   const path = type === 'movie' ? 'search/movie' : 'search/tv'
   const url = `${TMDB_BASE}/${path}?api_key=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(query)}&language=tr-TR&include_adult=false&page=1`
 
-  const res = await fetch(url)
+  const res = await fetch(url,{signal})
   if (!res.ok) throw new Error('TMDB_SEARCH_FAILED')
   const data = await res.json()
   const results = Array.isArray(data.results) ? data.results : []
@@ -65,10 +66,10 @@ async function searchTmdb(
   })
 }
 
-async function searchBooks(query: string): Promise<SearchResult[]> {
+async function searchBooks(query: string,signal?:AbortSignal): Promise<SearchResult[]> {
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=12&fields=key,title,author_name,first_publish_year,cover_i,edition_count`
 
-  const res = await fetch(url)
+  const res = await fetch(url,{signal})
   if (!res.ok) throw new Error('OPENLIBRARY_SEARCH_FAILED')
   const data = await res.json()
   const docs = Array.isArray(data.docs) ? data.docs : []
@@ -100,10 +101,10 @@ async function searchBooks(query: string): Promise<SearchResult[]> {
   })
 }
 
-async function fetchWikipediaThumb(title: string): Promise<string | null> {
+async function fetchWikipediaThumb(title: string,signal?:AbortSignal): Promise<string | null> {
   try {
     const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
-    const res = await fetch(url)
+    const res = await fetch(url,{signal})
     if (!res.ok) return null
     const data = await res.json()
     return data?.thumbnail?.source || data?.originalimage?.source || null
@@ -112,11 +113,11 @@ async function fetchWikipediaThumb(title: string): Promise<string | null> {
   }
 }
 
-async function searchPlaces(query: string): Promise<SearchResult[]> {
+async function searchPlaces(query: string,signal?:AbortSignal): Promise<SearchResult[]> {
   // Photon (Komoot) — browser-friendly geocoder, no API key
   const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10`
 
-  const res = await fetch(url)
+  const res = await fetch(url,{signal})
   if (!res.ok) throw new Error('PHOTON_SEARCH_FAILED')
   const data = await res.json()
   const features = Array.isArray(data.features) ? data.features : []
@@ -131,7 +132,7 @@ async function searchPlaces(query: string): Promise<SearchResult[]> {
       const coords = Array.isArray((feature as { geometry?: { coordinates?: number[] } }).geometry?.coordinates)
         ? (feature as { geometry: { coordinates: number[] } }).geometry.coordinates
         : null
-      const imageUrl = await fetchWikipediaThumb(name)
+      const imageUrl = await fetchWikipediaThumb(name,signal)
 
       return {
         externalId: osmId,
@@ -156,20 +157,21 @@ async function searchPlaces(query: string): Promise<SearchResult[]> {
 
 export async function searchActivities(
   type: ActivityType,
-  query: string
+  query: string,
+  signal?: AbortSignal
 ): Promise<SearchResult[]> {
   const q = query.trim()
   if (!q) return []
 
   switch (type) {
     case 'movie':
-      return searchTmdb('movie', q)
+      return searchTmdb('movie', q,signal)
     case 'series':
-      return searchTmdb('series', q)
+      return searchTmdb('series', q,signal)
     case 'book':
-      return searchBooks(q)
+      return searchBooks(q,signal)
     case 'place':
-      return searchPlaces(q)
+      return searchPlaces(q,signal)
     default:
       return []
   }

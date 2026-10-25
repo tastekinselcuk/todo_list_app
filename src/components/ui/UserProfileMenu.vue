@@ -1,5 +1,5 @@
 <template>
-  <div ref="root" data-user-profile :inert="!visible && !open" class="profile-host fixed right-[14px] z-[60]" :class="{ 'profile-hidden': !visible && !open, 'profile-docked': docked, 'profile-attached': attached }" :style="{ top: attached ? `${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight + (workspaceHeaderHeight - 40) / 2}px` : '14px' }" @focusin="emit('reveal')" @keydown.esc.stop.prevent="close(true)">
+  <div ref="root" data-user-profile :inert="!visible && !open" class="profile-host fixed right-[14px] z-[60]" :class="{ 'profile-hidden': !visible && !open, 'profile-docked': docked, 'profile-attached': attached, 'profile-embedded':embedded }" :style="embedded ? undefined : { top: attached ? `${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight + (workspaceHeaderHeight - 40) / 2}px` : '14px' }" @focusin="emit('reveal')" @keydown.esc.stop.prevent="close(true)">
     <button ref="trigger" type="button" class="profile-trigger inline-flex h-10 items-center gap-1.5 rounded-full border border-border/60 bg-card/80 p-1 pr-2 shadow-sm backdrop-blur-xl transition-colors hover:bg-muted/80 disabled:opacity-50" :aria-label="t('account.menuLabel')" aria-haspopup="menu" :aria-expanded="open" aria-controls="profile-menu" :disabled="auth.accountBusy" @click="open ? close(true) : show()" @keydown.down.prevent="show()" @keydown.up.prevent="show(true)">
       <span class="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold" :class="avatarClasses[validAvatarTone(auth.user?.avatarTone)]">{{ initials }}</span>
       <ChevronDown class="h-3 w-3 text-muted-foreground transition-transform" :class="{ 'rotate-180': open }" />
@@ -24,7 +24,7 @@ import { useI18n } from 'vue-i18n'
 import { workspaceHeaderHeight } from '@/lib/navigationScroll'
 import { useAuthStore } from '@/stores/auth'
 import { accountInitials, accountName, avatarClasses, validAvatarTone } from '@/lib/accountProfile'
-const props = defineProps<{ visible: boolean; docked: boolean; activeView: string; attached?: boolean; headerOffset?: number }>()
+const props = defineProps<{ visible: boolean; docked: boolean; activeView: string; attached?: boolean; headerOffset?: number; embedded?:boolean }>()
 const emit = defineEmits<{ edit: []; logout: []; reveal: [] }>()
 const auth = useAuthStore(), { t } = useI18n()
 const root = ref<HTMLElement>(), trigger = ref<HTMLButtonElement>()
@@ -71,4 +71,6 @@ button:focus-visible { outline: 2px solid hsl(var(--primary) / .5); outline-offs
 .profile-menu-enter-active, .profile-menu-leave-active { transition: opacity 140ms ease, transform 160ms cubic-bezier(.22,1,.36,1); transform-origin: top right; }
 .profile-menu-enter-from, .profile-menu-leave-to { opacity: 0; transform: translateY(-4px) scale(.97); }
 @media (prefers-reduced-motion: reduce) { .profile-host, .profile-menu-enter-active, .profile-menu-leave-active, button, svg { transition: none; } }
+
+.profile-host.profile-embedded{position:relative;inset:auto;flex-shrink:0;transform:none}.profile-embedded .profile-trigger{height:34px;border-color:transparent;background:transparent;box-shadow:none;backdrop-filter:none}.profile-embedded .profile-trigger>span{width:28px;height:28px}
 </style>

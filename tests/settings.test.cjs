@@ -16,8 +16,9 @@ function load(source, dependencies, globals = {}) {
   return exports
 }
 const themeLib = load(fs.readFileSync('src/lib/themePalettes.ts', 'utf8'), {})
+const pageNavigation=load(fs.readFileSync('src/lib/workspaceSections.ts','utf8'),{'./moduleCatalog':load(fs.readFileSync('src/lib/moduleCatalog.ts','utf8'),{})})
 
-function fixture(view = 'src/views/WorkspaceCustomizer.vue', count = 2) {
+function fixture(view = 'src/views/WorkspaceCustomizer.vue', count = 2, viewProps = {}) {
   pinia.setActivePinia(pinia.createPinia())
   const calls = []
   const toasts = []
@@ -92,14 +93,30 @@ function fixture(view = 'src/views/WorkspaceCustomizer.vue', count = 2) {
       '@/components/ui/CustomSelect.vue': { default: {} },
       '@/components/WorkspaceManager.vue': { default: {} },
       '@/components/AccountSettings.vue': { default: {} },
+      '@/components/ui/WorkspaceRail.vue':{default:{}}, '@/components/ui/WorkspacePicker.vue':{default:{}},
+      '@/lib/workspaceSections':pageNavigation,
+      '@/lib/workspaceScope':{useWorkspaceDraft:(_key,initial)=>vue.ref(initial)},
     }).default
-    state = component.setup({}, { expose() {} })
+    state = component.setup(viewProps, { expose() {} })
   })
   return {
     state, settings, store, calls, toasts, locale, memory, close: () => scope.stop(), fail: () => { succeeds = false },
     pause() { let release; gate = new Promise(resolve => { release = resolve }); return release },
   }
 }
+
+test('settings navigation honors workspace and profile entry points without trapping later visits in the account section',async()=>{
+  const props=vue.reactive({initialSection:'workspaces',focusAccount:0})
+  const f=fixture('src/views/WorkspaceCustomizer.vue',2,props)
+  try{
+    assert.equal(f.state.settingsSection.value,'workspaces')
+    props.focusAccount=1;await vue.nextTick();assert.equal(f.state.settingsSection.value,'general')
+    props.initialSection='general';await vue.nextTick();assert.equal(f.state.settingsSection.value,'general')
+    props.initialSection='modules';await vue.nextTick();assert.equal(f.state.settingsSection.value,'workspaces')
+    props.initialSection='invalid';await vue.nextTick();assert.equal(f.state.settingsSection.value,'workspaces')
+    assert.equal(f.calls.length,0,'page navigation must not write module or account preferences')
+  }finally{f.close()}
+})
 
 test('module selections show pending and success feedback and cannot submit twice', async () => {
   const f = fixture()
@@ -359,17 +376,17 @@ test('editing while a preference save is in flight keeps the newer value pending
  }finally{f.close()}
 })
 
-test('palette selector preserves existing choices and lists eight translated theme families', () => {
+test('palette selector preserves remaining choices and lists seven translated theme families', () => {
  const f = fixture()
  try {
-  assert.equal(f.state.paletteOptions.value.length, 8)
+  assert.equal(f.state.paletteOptions.value.length, 7)
   f.state.handlePaletteChange('forest')
   assert.equal(f.settings.themePalette, 'forest')
   f.state.handlePaletteChange('unknown')
   assert.equal(f.settings.themePalette, 'forest')
   assert.equal(f.state.paletteOptions.value.find(option => option.value === 'forest').label, 'Orman Yeşili')
   f.state.handleLanguageChange('en')
-  assert.deepEqual(Array.from(f.state.paletteOptions.value, option => option.label), ['Classic','Forest Night','Amethyst','Terracotta','Ocean Depth','Ruby Noir','Cobalt Blue','Graphite'])
+  assert.deepEqual(Array.from(f.state.paletteOptions.value, option => option.label), ['Classic','Forest Night','Amethyst','Ocean Depth','Ruby Noir','Cobalt Blue','Graphite'])
  } finally { f.close() }
 })
 
@@ -452,7 +469,6 @@ test('premium palettes retain every supplied base color in both modes and reuse 
  const expected = {
   forest: {light:['#EDF5EF','#FBFDFB','#287755','#D4E8DB'],dark:['#101C19','#172721','#8BC4A3','#293D34']},
   lavender: {light:['#F1EEFB','#FCFAFF','#7046B8','#E1D9F3'],dark:['#181625','#242036','#BAA2F4','#332D49']},
-  sand: {light:['#FAF3E9','#FFFCF7','#B96545','#EFE3D4'],dark:['#231A17','#33251F','#E5A17F','#4C3830']},
   ocean: {light:['#EDF7F7','#FAFEFE','#258A88','#D3EBE9'],dark:['#071D25','#102B35','#67D6C5','#20424B']},
   ruby: {light:['#FBF2F3','#FFFCFC','#A93349','#F1DCE1','#382027','#916F78','#EBD4D9'],dark:['#1D1015','#2A171F','#F08CA0','#462431','#FBE9ED','#CCA6AF','#58313D']},
   cobalt: {light:['#F0F4FF','#FFFFFF','#315BD5','#DBE5FF','#182B54','#7181A6','#D7E1F7'],dark:['#0C1530','#152242','#86A8FF','#253963','#EDF2FF','#A2B5DD','#354976']},
@@ -488,17 +504,19 @@ test('classic tokens stay identical to the original palette after switching thro
  }
 })
 
-test('retired amber preference resolves to Terracotta on cloud hydration and reload without changing light/dark mode', async () => {
+test('retired warm preferences resolve to Classic on cloud hydration and reload without changing light/dark mode', async () => {
  const f = preferenceFixture({cloud:new Map([['owner',{theme:'dark',themePalette:'amber'}]])})
  let reloaded
  try {
   await settlePreferences()
-  assert.equal(f.store.themePalette,'sand');assert.equal(f.store.theme,'dark')
+  assert.equal(f.store.themePalette,'classic');assert.equal(f.store.theme,'dark')
   reloaded = preferenceFixture({memory:f.memory,cloud:f.cloud})
-  assert.equal(reloaded.store.themePalette,'sand')
+  assert.equal(reloaded.store.themePalette,'classic')
   await settlePreferences()
-  assert.equal(reloaded.store.themePalette,'sand');assert.equal(reloaded.store.theme,'dark')
-  assert.equal(themeLib.getThemePalette('amber').id,'sand')
+  assert.equal(reloaded.store.themePalette,'classic');assert.equal(reloaded.store.theme,'dark')
+  assert.equal(themeLib.getThemePalette('amber').id,'classic')
+  assert.equal(themeLib.getThemePalette('sand').id,'classic')
+  assert.equal(themeLib.isThemePaletteId('sand'),false)
   assert.equal(themeLib.isThemePaletteId('amber'),false)
  } finally { reloaded?.close();f.close() }
 })

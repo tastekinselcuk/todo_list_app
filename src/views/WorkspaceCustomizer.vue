@@ -1,26 +1,25 @@
 <template>
-  <div class="settings-page mx-auto w-full max-w-5xl space-y-5 pb-8">
+  <div class="settings-page page-width-transition mx-auto w-full min-w-0 max-w-5xl space-y-4 pb-8">
     <header class="flex flex-wrap items-center justify-between gap-2">
-      <h1 class="text-lg font-semibold tracking-tight">{{ t('app.settings') }}</h1>
+      <div class="flex items-center gap-2"><WorkspaceRail v-model="settingsSection" :context="settingsNavigation" :workspace-name="workspaces.active?.name" /><h1 class="text-lg font-semibold tracking-tight">{{ t(`pageNav.settings.${settingsSection}`) }}</h1></div>
       <span class="text-xs text-muted-foreground">{{ t('settingsPage.autoSave') }}</span>
     </header>
 
-    <div class="grid min-w-0 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-      <WorkspaceManager />
-
-      <section class="min-w-0 rounded-2xl border border-border/60 bg-card/60 shadow-sm" aria-labelledby="general-preferences">
-        <header class="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
+    <AccountSettings v-if="settingsSection==='general'" class="context-panel" :focus-request="focusAccount" @logout="emit('logout', $event)">
+      <template #preferences>
+      <section class="flex h-full min-w-0 flex-col rounded-2xl border border-border/60 bg-card/60 shadow-sm" aria-labelledby="general-preferences">
+        <header class="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
           <h2 id="general-preferences" class="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal class="h-4 w-4 text-muted-foreground" />{{ t('workspace.general') }}</h2>
         </header>
-        <div class="divide-y divide-border/40 px-4">
-          <div class="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+        <div class="grid flex-1 grid-rows-3 divide-y divide-border/40 px-4">
+          <div class="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
             <div class="flex min-w-0 items-center gap-2.5">
               <Globe class="h-4 w-4 shrink-0 text-muted-foreground" />
               <span class="text-sm">{{ t('workspace.language') }}</span>
             </div>
             <CustomSelect :model-value="locale" :options="languageOptions" :aria-label="t('workspace.language')" size="sm" class="w-28 shrink-0" @update:model-value="handleLanguageChange" />
           </div>
-          <div class="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+          <div class="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
             <div class="flex min-w-0 items-center gap-2.5">
               <Palette class="h-4 w-4 shrink-0 text-muted-foreground" />
               <span class="text-sm">{{ t('settingsPage.appearance') }}</span>
@@ -31,7 +30,7 @@
               </button>
             </div>
           </div>
-          <div class="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+          <div class="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
             <div class="flex min-w-0 items-center gap-2.5">
               <span aria-hidden="true" class="h-4 w-4 shrink-0 rounded-full border border-primary/30 bg-primary/15" />
               <span class="text-sm">{{ t('settingsPage.colorPalette') }}</span>
@@ -51,13 +50,15 @@
           </div>
         </div>
       </section>
-    </div>
+      </template>
+    </AccountSettings>
 
-    <section aria-labelledby="workspace-tools">
+    <div v-if="settingsSection==='workspaces'" class="context-panel"><WorkspaceManager /></div>
+
+    <section v-if="settingsSection==='workspaces'" class="context-panel" aria-labelledby="workspace-tools">
       <header class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <h2 id="workspace-tools" class="text-sm font-semibold">{{ t('settingsPage.tools') }}</h2>
-          <span class="max-w-60 truncate rounded-lg bg-muted/60 px-2 py-1 text-xs text-muted-foreground" :title="workspaces.active?.name">{{ workspaces.active?.name }}</span>
         </div>
         <div class="flex items-center gap-3 text-xs text-muted-foreground">
           <button type="button" class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground" @click="sharing.showJoin()"><Link2 class="h-3.5 w-3.5" />{{ t('sharing.addShared') }}</button>
@@ -108,7 +109,6 @@
       <p class="mt-3 text-xs leading-5 text-muted-foreground">{{ t('settingsPage.toolsHint') }}</p>
     </section>
 
-    <AccountSettings :focus-request="focusAccount" @logout="emit('logout', $event)" />
   </div>
 </template>
 
@@ -119,6 +119,9 @@ import { CalendarDays, Check, CheckSquare, Clapperboard, Code2, Dumbbell, Globe,
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
 import AccountSettings from '@/components/AccountSettings.vue'
+import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
+import { getPageNavigation, resolvePageSection } from '@/lib/workspaceSections'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import { useSettingsStore } from '@/stores/settings'
 import { useThemeStore } from '@/stores/theme'
 import { useUIStore } from '@/stores/ui'
@@ -129,7 +132,7 @@ import { moduleCatalog } from '@/lib/moduleCatalog'
 import { getThemePalette, isThemePaletteId, themePalettes } from '@/lib/themePalettes'
 
 const settingsStore = useSettingsStore()
-withDefaults(defineProps<{ focusAccount?: number }>(), { focusAccount: 0 })
+const props=withDefaults(defineProps<{ focusAccount?: number;initialSection?:string }>(), { focusAccount: 0 })
 const emit = defineEmits<{ logout: [scope: 'local' | 'global'] }>()
 const themeStore = useThemeStore()
 const workspaces = useWorkspacesStore()
@@ -137,6 +140,11 @@ const sharing = useSharingStore()
 const canShare = (id: string) => shareableModules.some(module => module === id) && (!workspaces.sharingAvailable || Boolean(workspaces.binding(id)))
 const ui = useUIStore()
 const { t, locale } = useI18n()
+const settingsNavigation=getPageNavigation('settings')
+const settingsSection=useWorkspaceDraft('settings-section','general')
+settingsSection.value=resolvePageSection('settings',settingsSection.value)||'general'
+watch(()=>props.focusAccount,value=>{if(value)settingsSection.value='general'})
+watch(()=>props.initialSection,value=>{const section=value&&resolvePageSection('settings',value);if(section)settingsSection.value=section},{immediate:true})
 const pendingModuleId = ref('')
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const languageOptions = [{ value: 'tr', label: 'Türkçe' }, { value: 'en', label: 'English' }]

@@ -13,6 +13,11 @@ Deno.serve(reminderHandler({
     if (error) throw error
     return data
   },
+  async consumeBudget(uid) {
+    const {data,error}=await admin().rpc('consume_edge_budget',{uid,operation:'send-periodic-reminder'})
+    if(error)throw error
+    return data===true
+  },
   async finish(id, lease, success) {
     const { error } = await admin().rpc('finish_periodic_email', { did: id, token: lease, success })
     if (error) throw error

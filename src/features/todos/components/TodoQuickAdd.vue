@@ -25,7 +25,7 @@
       </Transition>
     </form>
     </Teleport>
-    <Teleport to="body"><dialog ref="draftDialogRef" class="note-edit-dialog" closedby="closerequest" :aria-label="t('todo.addTodo')" @cancel.prevent="closeFocusedEditor" @close="onDialogClosed" /></Teleport>
+    <Teleport to="body"><dialog ref="draftDialogRef" class="note-edit-dialog" closedby="closerequest" :aria-label="t('todo.addTodo')" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))closeFocusedEditor()}" @cancel.prevent="closeFocusedEditor" @close="onDialogClosed" /></Teleport>
   </div>
 </template>
 
@@ -37,6 +37,7 @@ import { useTodoStore, TODO_TITLE_MAX_LENGTH } from '@/features/todos/stores/tod
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 const RichTextEditor=defineAsyncComponent(()=>import('./RichTextEditor.vue'))
 defineProps<{categoryOpen?:boolean}>()
 defineEmits<{'open-category-dialog':[]}>()

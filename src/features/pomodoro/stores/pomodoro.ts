@@ -44,6 +44,7 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
   const auth=useAuthStore(),workspaces=useWorkspacesStore(),settings=useSettingsStore()
   const durations=ref<TimerDurations>({...settings.pomodoroDurations})
   const modeKey=ref<ModeKey>('focus'),sessionSeconds=ref(1500),timeLeft=ref(1500),isRunning=ref(false)
+  const nextMode=computed<ModeKey>(()=>modeKey.value==='focus'?'shortBreak':modeKey.value==='shortBreak'?'longBreak':'focus')
   const currentTarget=ref<FocusTarget|null>(null),queuedTarget=ref<FocusTarget|null>(null)
   const remote=ref(false),starting=ref(false),error=ref(''),capability=ref<'unknown'|'ready'|'legacy'>('unknown')
   const clearing=ref(false),errorCode=ref('')
@@ -274,17 +275,22 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
   const resetTimer=()=>finishFocus(false)
   async function setMode(key:ModeKey) {
     if(remote.value)return
+    const capturedEpoch=epoch
     const reset=resetTimer()
     if(clearing.value)await reset
-    if(error.value)return
+    if(error.value||capturedEpoch!==epoch)return
     modeKey.value=key
     if(key==='focus'&&queuedTarget.value){currentTarget.value=queuedTarget.value;queuedTarget.value=null}
     else if(key==='focus'&&currentTarget.value?.completed)currentTarget.value=null
     sessionSeconds.value=planned();timeLeft.value=sessionSeconds.value;publish()
   }
+  async function advanceMode() {
+    if(starting.value||clearing.value||remote.value)return
+    await setMode(nextMode.value)
+  }
   function configure(value:TimerDurations) {
     durations.value=normalizeDurations(value);settings.pomodoroDurations={...durations.value}
-    if(!isRunning.value&&journal?.session?.status!=='paused'){sessionSeconds.value=planned();timeLeft.value=sessionSeconds.value}
+    if(!isRunning.value&&!remote.value&&journal?.session?.status!=='paused'){sessionSeconds.value=planned();timeLeft.value=sessionSeconds.value}
   }
   async function focusOn(target:FocusTarget,immediate=false) {
     if(clearing.value||starting.value)return
@@ -398,7 +404,7 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
     if(!isRunning.value&&!remote.value&&journal?.session?.status!=='paused'){sessionSeconds.value=planned();timeLeft.value=sessionSeconds.value}
   })
   return {durations,modeKey,sessionSeconds,timeLeft,isRunning,currentTarget,queuedTarget,remote,starting,clearing,error,errorCode,errorMessageKey,capability,provisional,
-    completionSequence,lastCompletedMode,syncSequence,taskStatsSequence,activeSession,formattedTime,progressPercentage,canReset,
-    init,shutdown,sync,startTimer,pauseTimer,resetTimer,setMode,configure,focusOn,forgetTask,completedTask,updateTarget,cancelQueued,clearFocus,
+    completionSequence,lastCompletedMode,syncSequence,taskStatsSequence,activeSession,formattedTime,progressPercentage,canReset,nextMode,
+    init,shutdown,sync,startTimer,pauseTimer,resetTimer,setMode,advanceMode,configure,focusOn,forgetTask,completedTask,updateTarget,cancelQueued,clearFocus,
     toggleTimer:()=>remote.value?startTimer(true):isRunning.value?pauseTimer():startTimer()}
 })

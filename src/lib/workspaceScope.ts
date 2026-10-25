@@ -107,7 +107,9 @@ export function useWorkspaceClient() {
       assertWritable(module)
       const cid = workspaces.binding(module, workspaceId)?.collection_id
       if (!cid) throw new Error('Collection unavailable')
-      const result = await supabase.rpc('mutate_collection_item', { cid, pid: parentId, module_id: module, operation, item, expected_version: version ?? null })
+      const result = module === 'workout' && operation === 'reorder'
+        ? await supabase.rpc('reorder_workout_exercises', { cid, pid: parentId, ordered_ids: item.ids, expected_version: version ?? null })
+        : await supabase.rpc('mutate_collection_item', { cid, pid: parentId, module_id: module, operation, item, expected_version: version ?? null })
       assertCurrent()
       if (result.error) {
         if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(result.error.message?.includes('SHARING_CONFLICT') ? 'sharing-conflict' : 'sharing-save-error'))
@@ -121,6 +123,17 @@ export function useWorkspaceClient() {
       assertCurrent()
       const result = await supabase.rpc('mark_member_reminder', { task_id: taskId })
       if (result.error) throw result.error
+    },
+    async removeCategory(id:string) {
+      assertWritable('detailed')
+      const version=versions.get(`categories:${id}`)
+      if(version===undefined)throw new Error('SHARING_CONFLICT')
+      const result=await supabase.rpc('delete_note_category',{wid:workspaceId,category_id:id,expected_version:version})
+      assertCurrent()
+      if(result.error)throw result.error
+      for(const row of result.data?.notes || [])versions.set(`todos:${row.id}`,Math.max(versions.get(`todos:${row.id}`)??0,row.version))
+      versions.delete(`categories:${id}`)
+      return result.data as {id:string;notes:{id:string;version:number}[]}
     },
     from(table: string) {
       assertCurrent()

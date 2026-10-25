@@ -52,7 +52,7 @@ import { Archive, ArchiveRestore, CalendarDays, Check, Columns3, FolderCog, List
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { useModuleLoad, useWorkspaceDraft } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
-import { workspaceNavigationKey } from '@/lib/workspaceNavigation'
+import { workspaceNavigationKey, workspaceActiveViewKey } from '@/lib/workspaceNavigation'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { moveToTrash, type TrashModule } from '@/lib/workspaceTrash'
 import { browserTimezone, taskStatuses, workError, type TaskStatus, type WorkBlock, type WorkProject, type WorkTask } from '../lib/tasks'
@@ -69,6 +69,8 @@ onActivated(()=>{moduleActive.value=true;if(view.value==='calendar'&&store.calen
 onDeactivated(()=>{moduleActive.value=false})
 const navigation=inject(workspaceNavigationKey,ref(null))
 watch(navigation,intent=>{if(intent?.module==='tasks'&&['list','board','calendar'].includes(intent.view))view.value=intent.view},{immediate:true})
+const reportView=inject(workspaceActiveViewKey,undefined)
+watch(view,value=>reportView?.('tasks',value),{immediate:true})
 const views=computed(()=>[{id:'list',label:t('tasks.list'),icon:List},{id:'board',label:t('tasks.board'),icon:Columns3},{id:'calendar',label:t('tasks.calendar'),icon:CalendarDays}])
 const moving=ref(false),busy=computed(()=>moving.value||store.saving),dragOver=ref(''),projectsOpen=ref(false),projectName=ref(''),editingProject=ref<WorkProject|null>(null)
 const editor=ref<{id:string;mode:'task'|'block';task?:WorkTask;block?:Partial<WorkBlock> }|null>(null)

@@ -3,7 +3,8 @@ export interface QuoteRequest { provider: QuoteProvider; instrument: string }
 export interface QuoteMetadata { source: string; quality: 'live' | 'reference'; unit: 'g' | 'piece' | 'unit'; basis: 'buy' | 'spot' | 'mid'; fx_at?: string; market_status?:'closed' }
 export interface MarketQuote extends QuoteRequest { currency: string; price: number; price_at: string; fetched_at: string; metadata?: QuoteMetadata }
 interface Dependencies {
-  authenticate(token: string): Promise<boolean>
+  authenticate(token: string): Promise<string | null>
+  consumeBudget?(user: string): Promise<boolean>
   cached(currency: string, requests: QuoteRequest[]): Promise<MarketQuote[]>
   save(quotes: MarketQuote[]): Promise<void>
   fetch: typeof fetch
@@ -24,15 +25,29 @@ const gramsPerTroyOunce = 31.1034768
 export function financePricesHandler(deps: Dependencies) {
   const pending = new Map<string, Promise<{quotes: MarketQuote[]; issues: string[]}>>()
   const now = deps.now || Date.now
-  const response = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
+  const response = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(status===429?{'Retry-After':'60'}:{}) } })
   return async (request: Request) => {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
     if (request.method !== 'POST') return response(405, { error: 'METHOD_NOT_ALLOWED' })
     try {
       const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || ''
-      if (!token || !await deps.authenticate(token)) return response(401, { error: 'AUTH_REQUIRED' })
-      const text = await request.text()
-      if (text.length > 4096) return response(400, { error: 'INVALID_PRICE_REQUEST' })
+      if (!token) return response(401, { error: 'AUTH_REQUIRED' })
+      const user = await deps.authenticate(token)
+      if (!user) return response(401, { error: 'AUTH_REQUIRED' })
+      if (deps.consumeBudget && (typeof user !== 'string' || !await deps.consumeBudget(user))) return response(429, { error: 'RATE_LIMITED' })
+      if (Number(request.headers.get('content-length')) > 4096) return response(413, { error: 'INVALID_PRICE_REQUEST' })
+      const reader=request.body?.getReader(),chunks:Uint8Array[]=[]
+      let length=0
+      if(reader)try{
+        while(true){const {done,value}=await reader.read();if(done)break
+          length+=value.byteLength
+          if(length>4096){await reader.cancel();return response(413,{error:'INVALID_PRICE_REQUEST'})}
+          chunks.push(value)
+        }
+      }finally{reader.releaseLock()}
+      const bytes=new Uint8Array(length);let offset=0
+      for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}
+      const text=new TextDecoder().decode(bytes)
       let body
       try { body = JSON.parse(text) } catch { return response(400, { error: 'INVALID_PRICE_REQUEST' }) }
       if (!body || Object.keys(body).some(k => !['currency','instruments'].includes(k)) || !currencies.has(body.currency)

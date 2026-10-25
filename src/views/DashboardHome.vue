@@ -1,8 +1,8 @@
 <template>
-  <div :class="['dashboard mx-auto w-full space-y-5 pb-8', settingsStore.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
+  <div :class="['dashboard page-width-transition mx-auto w-full min-w-0 space-y-5 pb-8', settingsStore.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
     <header class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold tracking-tight">{{ t('dashboard.home.title') }}</h1>
+        <div class="flex items-center gap-2"><WorkspaceRail v-model="homeSection" :context="homeNavigation" /><h1 class="text-lg font-semibold tracking-tight">{{ t('dashboard.home.title') }}</h1></div>
         <p class="mt-0.5 text-xs text-muted-foreground">{{ currentDate }}</p>
       </div>
       <div class="flex items-center gap-1.5">
@@ -25,7 +25,7 @@
 
     <WeeklyAnalytics @open="emit('open-analytics')" />
 
-    <div v-if="hasPlans || hasAgenda" class="grid grid-cols-1 gap-4" :class="hasPlans && hasAgenda ? 'lg:grid-cols-2' : ''">
+    <div v-if="hasPlans || hasAgenda" class="context-panel grid grid-cols-1 gap-4" :class="hasPlans && hasAgenda ? 'lg:grid-cols-2' : ''">
       <section v-if="hasPlans" class="overview-panel" :aria-busy="statuses.plans === 'loading'">
         <header class="panel-header">
           <h2 class="flex items-center gap-2 text-sm font-semibold"><ListTodo class="h-4 w-4 text-muted-foreground" />{{ t('workspace.modules.plansName') }}</h2>
@@ -59,7 +59,7 @@
         <template v-else>
           <div v-if="agendaError" class="mx-4 mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground" role="status">{{ t('dashboard.home.loadError') }}<button type="button" class="text-link" @click="refresh">{{ t('dashboard.home.retry') }}</button></div>
           <ul v-if="agenda.length" class="px-2 py-2">
-            <li v-for="item in agenda.slice(0, 4)" :key="`${item.module}:${item.id}`" class="task-row">
+            <li v-for="item in agenda.slice(0, agendaLimit)" :key="`${item.module}:${item.id}`" class="task-row">
               <button type="button" class="check-button" :disabled="!canWriteModule(item.module) || pendingActions.has(`${item.module}:${item.id}`)" :aria-label="t('dashboard.home.complete', { title: item.title })" @click="completeAgenda(item)"><Loader2 v-if="pendingActions.has(`${item.module}:${item.id}`)" class="h-4 w-4 animate-spin" /><span v-else class="h-4 w-4 rounded border border-border" /></button>
               <button type="button" class="min-w-0 flex-1 py-2 text-left" @click="emit('enter-workspace', item.module)"><span class="line-clamp-2 break-words text-sm leading-5">{{ item.title }}</span><span class="mt-0.5 block text-[11px] text-muted-foreground">{{ t(`workspace.modules.${item.module}Name`) }}</span></button>
               <span v-if="item.overdue" class="mr-2 shrink-0 rounded-md bg-amber-500/10 px-1.5 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">{{ t('dashboard.home.overdue') }}</span>
@@ -67,12 +67,12 @@
             </li>
           </ul>
           <p v-else-if="!agendaError" class="panel-placeholder">{{ t('dashboard.home.emptyToday') }}</p>
-          <p v-if="agenda.length > 4" class="px-4 pb-3 text-xs text-muted-foreground">{{ t('dashboard.home.remaining', { count: agenda.length - 4 }) }}</p>
+          <button v-if="agenda.length > agendaLimit" type="button" class="panel-footer" @click="agendaLimit+=12">{{ t('dashboard.home.remaining', { count: agenda.length - agendaLimit }) }}<ArrowRight class="h-3.5 w-3.5" /></button>
         </template>
       </section>
     </div>
 
-    <section :aria-label="t('dashboard.home.modules')">
+    <section class="context-panel" :aria-label="t('dashboard.home.modules')">
       <div class="mb-3 flex items-center justify-between gap-3"><h2 class="text-xs font-medium text-muted-foreground">{{ t('dashboard.home.modules') }}</h2><button type="button" class="text-link" @click="emit('manage-workspaces')"><Settings2 class="h-3.5 w-3.5" />{{ t('dashboard.home.manage') }}</button></div>
       <div v-if="modules.length" class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         <button v-for="module in modules" :key="module.id" type="button" class="module-card group" @click="openModule(module.id)">
@@ -87,11 +87,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight, ArrowUpRight, CalendarDays, CheckSquare, Clapperboard, Clock3, Code2, Dumbbell, Layers, LayoutGrid, ListTodo, Loader2, Plus, RefreshCw, Repeat, Settings2, Shield, Target, Timer, Wallet, Zap } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import WorkspacePicker from '@/components/ui/WorkspacePicker.vue'
+import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
+import { getPageNavigation, resolvePageSection } from '@/lib/workspaceSections'
 import WeeklyAnalytics from '@/features/analytics/components/WeeklyAnalytics.vue'
 import { useWorkspaceDraft, workspaceStorageKey, useModuleAccess } from '@/lib/workspaceScope'
 import { readStorage, writeStorage } from '@/lib/storage'
@@ -136,6 +138,9 @@ const captureInput = ref<HTMLInputElement>()
 const draft = useWorkspaceDraft('dashboard-capture', '')
 const destination = useWorkspaceDraft('dashboard-destination', 'quick')
 const selectedPeriod = useWorkspaceDraft<Period>('dashboard-plan-period', 'daily')
+const homeSection=useWorkspaceDraft('dashboard-section','overview'),agendaLimit=ref(4)
+const homeNavigation=computed(()=>getPageNavigation('dashboard'))
+watch(homeSection,value=>{const section=resolvePageSection('dashboard',value)||'overview';if(section!==value)homeSection.value=section},{immediate:true})
 let periodChosen = false
 try {
   periodChosen = periods.includes(selectedPeriod.value) && readStorage(workspaceStorageKey('dashboard-plan-period')) !== null

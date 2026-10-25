@@ -10,11 +10,23 @@ const purifier=require('dompurify')(dom.window)
 function load(source,dependencies={},globals={}) {
   const exports={}
   // Tiptap's configuration merge requires plain objects from the same JS realm.
-  const environment={exports,require:name=>dependencies[name]||require(name),console,URL,...globals}
+  const environment={exports,require:name=>dependencies[name]|| (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) ||require(name),console,URL,...globals}
   vm.compileFunction(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,Object.keys(environment))(...Object.values(environment))
   return exports
 }
 const notes=load(fs.readFileSync('src/lib/noteContent.ts','utf8'),{'dompurify':{default:purifier}})
+test('editor dismissal requires a native primary-button double-click outside the dialog rectangle',()=>{
+  const {isDialogBackdropDoubleClick}=load(fs.readFileSync('src/lib/utils.ts','utf8'))
+  const dialog=dom.window.document.createElement('dialog'),input=dom.window.document.createElement('input')
+  dialog.append(input);dialog.open=true;dialog.getBoundingClientRect=()=>({left:100,top:100,right:500,bottom:500})
+  let closed=0;for(const type of ['click','dblclick'])dialog.addEventListener(type,event=>{if(isDialogBackdropDoubleClick(event))closed++})
+  const dispatch=(target,type,detail,x=20,y=20,button=0)=>target.dispatchEvent(new dom.window.MouseEvent(type,{bubbles:true,detail,clientX:x,clientY:y,button}))
+  dispatch(dialog,'click',1);dispatch(dialog,'click',2);assert.equal(closed,0,'two click events are not treated as an intentional double-click')
+  dispatch(dialog,'dblclick',1);dispatch(dialog,'dblclick',2,20,20,2);assert.equal(closed,0)
+  dispatch(dialog,'dblclick',2,200,200);dispatch(input,'dblclick',2);assert.equal(closed,0,'editor padding and text selection never dismiss the dialog')
+  dispatch(dialog,'dblclick',2);assert.equal(closed,1)
+  dialog.open=false;dispatch(dialog,'dblclick',2);assert.equal(closed,1)
+})
 test('shared rich text removes executable markup while preserving formatting and images',()=>{
   const cleaned=notes.sanitizeNoteHtml('<script>alert(1)</script><img src="https://example.test/photo.png" onerror="alert(1)"><a href="javascript:alert(1)">Link</a><svg onload="alert(1)"></svg><iframe srcdoc="evil"></iframe><form><input autofocus onfocus="alert(1)"></form><strong>Keep</strong><span style="color:var(--tt-color-text-red)">Color</span>')
   const document=new JSDOM(cleaned).window.document
@@ -70,6 +82,7 @@ test('focused code reader switches to editing in the same dialog, ignores backdr
   try{
     app.mount(target);await vue.nextTick();await vue.nextTick()
     const dialog=doc.querySelector('dialog.note-edit-dialog'),reader=dialog.querySelector('.code-preview')
+    dialog.getBoundingClientRect=()=>({left:100,top:100,right:800,bottom:700})
     assert.equal(dialog.open,true);assert.equal(doc.body.style.overflow,'hidden');assert.equal(doc.activeElement,reader)
     dialog.click();assert.deepEqual(events,[],'clicking the backdrop must not close the reader')
     dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.deepEqual(events,[],'reading mode cannot submit a write')
@@ -78,8 +91,11 @@ test('focused code reader switches to editing in the same dialog, ignores backdr
     assert.equal(doc.querySelector('dialog.note-edit-dialog'),dialog,'editing keeps the same modal and page scroll lock')
     assert.equal(dialog.querySelector('.code-preview'),null);assert.equal(doc.activeElement,dialog.querySelector('.cm-content'))
     props.saving=true;await vue.nextTick()
+    dialog.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:20,clientY:20}));assert.deepEqual(events,[],'saving blocks backdrop dismissal too')
     dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.deepEqual(events,[])
     props.saving=false;await vue.nextTick()
+    dialog.dispatchEvent(new dom.window.MouseEvent('dblclick',{bubbles:true,detail:2,clientX:20,clientY:20}));assert.deepEqual(events,['close'])
+    events.length=0
     dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.deepEqual(events,['close'])
     dialog.querySelector('button[aria-label="common.close"]').click();assert.deepEqual(events,['close','close'])
     props.viewing=true;props.canEdit=false;await vue.nextTick()

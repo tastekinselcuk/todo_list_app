@@ -2,6 +2,39 @@ import { moduleCatalog, type ModuleId } from './moduleCatalog'
 
 export type WorkspaceSectionId = 'notes' | 'planning' | 'learning' | 'life' | 'finance'
 
+export interface PageNavigationContext {
+  title: string
+  items: { id:string; label:string; icon:string }[]
+}
+export const pageSections = {
+  dashboard: { title:'app.home', items:[
+    {id:'overview',label:'pageNav.dashboard.overview',icon:'LayoutGrid'},
+  ]},
+  analytics: { title:'app.analytics', items:[
+    {id:'overview',label:'pageNav.analytics.overview',icon:'LayoutGrid'},
+    {id:'finance',label:'pageNav.analytics.finance',icon:'Wallet'},
+  ]},
+  settings: { title:'app.settings', items:[
+    {id:'general',label:'pageNav.settings.general',icon:'Settings2'},
+    {id:'workspaces',label:'pageNav.settings.workspaces',icon:'Layers'},
+  ]},
+} satisfies Record<string,PageNavigationContext>
+export function getPageNavigation(view:keyof typeof pageSections):PageNavigationContext {
+  const context=pageSections[view]
+  return {title:context.title,items:context.items.map(item=>({...item}))}
+}
+
+/** Keep saved selections and older entry points within their consolidated page. */
+export function resolvePageSection(view:keyof typeof pageSections, section:string):string|undefined {
+  const aliases:Record<keyof typeof pageSections,Record<string,string>>={
+    dashboard:{agenda:'overview',modules:'overview'},
+    analytics:{focus:'overview',tasks:'overview',plans:'overview',daily:'overview'},
+    settings:{account:'general',modules:'workspaces'},
+  }
+  const id=aliases[view][section] || section
+  return pageSections[view].items.find(item=>item.id===id)?.id
+}
+
 export const workspaceSections = [
   { id: 'notes', icon: 'NotebookPen', modules: ['plans', 'detailed', 'quick', 'secure', 'code', 'pomodoro'] },
   { id: 'planning', icon: 'CalendarDays', modules: ['tasks', 'periodic'] },

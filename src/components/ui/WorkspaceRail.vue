@@ -2,10 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeftRight, BookOpen, CalendarDays, CheckSquare, ChevronRight, ChevronsLeft, ChevronsRight, Clapperboard, Code2, Dumbbell, Heart, Layers, LayoutGrid, ListTodo, NotebookPen, PanelLeft, Repeat, Search, Settings2, ShieldCheck, Target, Timer, Trash2, TrendingUp, Wallet, X, Zap } from 'lucide-vue-next'
-import { chooseWorkspaceSectionModule, getWorkspaceSections, workspaceSectionFor, type WorkspaceSection, type WorkspaceSectionId } from '@/lib/workspaceSections'
+import { chooseWorkspaceSectionModule, getWorkspaceSections, workspaceSectionFor, type PageNavigationContext, type WorkspaceSection, type WorkspaceSectionId } from '@/lib/workspaceSections'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
 
-const props = defineProps<{ modelValue: string; enabled: string[]; workspaceName?: string }>()
+const props = withDefaults(defineProps<{ modelValue: string; enabled?: string[]; workspaceName?: string; context?:PageNavigationContext; activeView?:string }>(),{enabled:()=>[],activeView:'topics'})
 const emit = defineEmits<{ 'update:modelValue': [id: string]; navigate: [module: string, view: string]; search: []; manage: []; trash: [] }>()
 const { t } = useI18n()
 const sections = computed(() => getWorkspaceSections(props.enabled))
@@ -19,7 +19,7 @@ const pinned = computed(() => railMode.value === 'open')
 const expanded = computed(() => pinned.value || hovered.value || focused.value)
 const desktop = ref<HTMLElement>(), drawer = ref<HTMLDialogElement>(), mobileTrigger = ref<HTMLButtonElement>()
 const shownSection = computed(() => sections.value.find(section => section.id === activeSection.value) || sections.value[0])
-const icons: Record<string, Component> = { BookOpen, CalendarDays, CheckSquare, Clapperboard, Code2, Dumbbell, Heart, Layers, LayoutGrid, ListTodo, NotebookPen, Repeat, ShieldCheck, Target, Timer, Wallet, Zap }
+const icons: Record<string, Component> = { BookOpen, CalendarDays, CheckSquare, Clapperboard, Code2, Dumbbell, Heart, Layers, LayoutGrid, ListTodo, NotebookPen, Repeat, Settings2, ShieldCheck, Target, Timer, Wallet, Zap }
 const moduleIcons: Record<string, string> = { plans: 'ListTodo', tasks: 'CalendarDays', detailed: 'CheckSquare', quick: 'Zap', secure: 'ShieldCheck', code: 'Code2', pomodoro: 'Timer', learning: 'Target', flashcards: 'Layers', workout: 'Dumbbell', periodic: 'Repeat', activities: 'Clapperboard', finance: 'Wallet' }
 const moduleName = (id: string) => t(id === 'pomodoro' ? 'pomoNotes.tab' : `workspace.modules.${id}Name`)
 const searchShortcut = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'
@@ -43,6 +43,11 @@ function selectModule(id: string) {
   emit('update:modelValue', id)
   closeMobile()
 }
+function selectPage(id:string){
+  if(!props.context?.items.some(item=>item.id===id))return
+  emit('update:modelValue',id);closeMobile()
+  void nextTick(()=>{if(!disposed)window.scrollTo?.({top:0,behavior:'auto'})})
+}
 function selectSection(section: WorkspaceSection) {
   const id = chooseWorkspaceSectionModule(section, memory.get(section.id))
   if (id) selectModule(id)
@@ -51,6 +56,10 @@ function selectFinanceView(view: 'transaction' | 'position') {
   if (!props.enabled.includes('finance')) return
   selectModule('finance')
   emit('navigate', 'finance', view)
+}
+function selectLearningView(view:string){
+  if(!props.enabled.includes('learning'))return
+  selectModule('learning');emit('navigate','learning',view)
 }
 function pointerEnter(event: PointerEvent) {
   if (event.pointerType !== 'mouse' || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
@@ -151,26 +160,32 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-  <aside ref="desktop" data-workspace-rail :data-pinned-open="pinned ? '' : undefined" class="workspace-rail" :class="{ 'is-expanded': expanded }" :aria-label="t('workspaceNav.navigation')" @pointerenter="pointerEnter" @pointerleave="pointerLeave" @pointerdown="focused = false" @focusin="focusEnter" @focusout="focusLeave" @keydown.esc.stop.prevent="closeDesktop()">
+  <aside ref="desktop" data-workspace-rail :data-context="context?.title" :data-pinned-open="pinned ? '' : undefined" class="workspace-rail" :class="{ 'is-expanded': expanded }" :aria-label="t(context?.title || 'workspaceNav.navigation')" @pointerenter="pointerEnter" @pointerleave="pointerLeave" @pointerdown="focused = false" @focusin="focusEnter" @focusout="focusLeave" @keydown.esc.stop.prevent="closeDesktop()">
     <div class="rail-heading">
       <button type="button" class="rail-mark" :aria-label="t(pinned ? 'workspaceNav.pinClosed' : 'workspaceNav.pinOpen')" :title="t(pinned ? 'workspaceNav.pinClosed' : 'workspaceNav.pinOpen')" :aria-expanded="expanded" :aria-pressed="pinned" @click="togglePin"><ChevronsLeft v-if="pinned" :size="20" :stroke-width="1.7" /><ChevronsRight v-else :size="20" :stroke-width="1.7" /></button>
-      <div class="rail-heading-copy"><span>{{ t('workspaceNav.workspace') }}</span><strong :title="workspaceName">{{ workspaceName || t('workspaceNav.workspace') }}</strong></div>
+      <div class="rail-heading-copy"><span v-if="!context || workspaceName">{{ t(context?.title || 'workspaceNav.workspace') }}</span><strong :title="workspaceName">{{ workspaceName || t(context?.title || 'workspaceNav.workspace') }}</strong></div>
     </div>
     <div class="rail-content">
-      <nav class="rail-categories" :aria-label="t('workspaceNav.sectionsLabel')">
+      <nav v-if="context" class="rail-categories" :aria-label="t(context.title)">
+        <button v-for="item in context.items" :key="item.id" type="button" class="rail-category" :class="{'is-active':modelValue===item.id}" :title="t(item.label)" :aria-label="t(item.label)" :aria-current="modelValue===item.id?'page':undefined" @click="selectPage(item.id)"><span class="rail-category-icon"><component :is="icons[item.icon]" :size="20" :stroke-width="1.65" /></span><span class="rail-category-label">{{ t(item.label) }}</span></button>
+      </nav>
+      <nav v-else class="rail-categories" :aria-label="t('workspaceNav.sectionsLabel')">
         <button v-for="section in sections" :key="section.id" type="button" class="rail-category" :data-section="section.id" :class="{ 'is-active': activeSection === section.id }" :title="t(`workspaceNav.sections.${section.id}`)" :aria-label="t(`workspaceNav.sections.${section.id}`)" :aria-current="activeSection === section.id ? 'page' : undefined" :aria-expanded="expanded && shownSection?.id === section.id" @keydown.right.prevent="focusSectionModules(section)" @click="selectSection(section)">
           <span class="rail-category-icon"><component :is="icons[section.icon]" :size="20" :stroke-width="1.65" /></span><span class="rail-category-label">{{ t(`workspaceNav.sections.${section.id}`) }}</span><ChevronRight class="rail-category-chevron" :size="14" />
         </button>
       </nav>
       <Transition name="rail-details">
-        <nav v-if="expanded && shownSection" class="rail-modules" :aria-label="t(`workspaceNav.sections.${shownSection.id}`)" @keydown.left.stop.prevent="focusCategory">
+        <nav v-if="!context && expanded && shownSection" class="rail-modules" :aria-label="t(`workspaceNav.sections.${shownSection.id}`)" @keydown.left.stop.prevent="focusCategory">
           <div class="rail-section-heading"><span>{{ t(`workspaceNav.sections.${shownSection.id}`) }}</span><span>{{ shownSection.modules.length }}</span></div>
-          <button v-for="id in shownSection.modules" :key="id" type="button" class="rail-module" :class="{ 'is-active': modelValue === id }" :aria-current="modelValue === id ? 'page' : undefined" @click="selectModule(id)"><component :is="icons[moduleIcons[id]!]" :size="16" :stroke-width="1.7" /><span>{{ moduleName(id) }}</span><span v-if="modelValue === id" class="rail-current-dot" /></button>
+          <template v-for="id in shownSection.modules" :key="id">
+           <button type="button" class="rail-module" :class="{ 'is-active': modelValue === id && (id!=='learning'||activeView==='topics') }" :aria-current="modelValue===id&&(id!=='learning'||activeView==='topics')?'page':undefined" @click="id==='learning'?selectLearningView('topics'):selectModule(id)"><component :is="icons[moduleIcons[id]!]" :size="16" :stroke-width="1.7" /><span>{{ id==='learning'?t('study.views.topics'):moduleName(id) }}</span><span v-if="modelValue===id&&(id!=='learning'||activeView==='topics')" class="rail-current-dot" /></button>
+           <div v-if="id==='learning'" class="rail-finance-views"><button v-for="item in ['today','mistakes']" :key="item" type="button" class="rail-module" :class="{'is-active':modelValue==='learning'&&activeView===item}" :aria-current="modelValue==='learning'&&activeView===item?'page':undefined" @click="selectLearningView(item)"><CalendarDays v-if="item==='today'" :size="15" /><BookOpen v-else :size="15" /><span>{{ t('study.views.'+item) }}</span></button></div>
+          </template>
           <div v-if="shownSection.id === 'finance'" class="rail-finance-views"><button type="button" class="rail-module" @click="selectFinanceView('transaction')"><ArrowLeftRight :size="15" :stroke-width="1.7" /><span>{{ t('finance.cashflow') }}</span></button><button type="button" class="rail-module" @click="selectFinanceView('position')"><TrendingUp :size="15" :stroke-width="1.7" /><span>{{ t('finance.positions') }}</span></button></div>
         </nav>
       </Transition>
     </div>
-    <footer class="rail-footer">
+    <footer v-if="!context" class="rail-footer">
       <button type="button" class="rail-action" :title="t('workspaceNav.search')" :aria-label="t('workspaceNav.search')" @click="action('search')"><Search :size="19" :stroke-width="1.65" /><span>{{ t('workspaceNav.search') }}</span><kbd>{{ searchShortcut }}</kbd></button>
       <button type="button" class="rail-action" :title="t('workspaceNav.trash')" :aria-label="t('workspaceNav.trash')" @click="action('trash')"><Trash2 :size="18" :stroke-width="1.65" /><span>{{ t('workspaceNav.trash') }}</span></button>
       <button type="button" class="rail-action" :title="t('workspaceNav.manage')" :aria-label="t('workspaceNav.manage')" @click="action('manage')"><Settings2 :size="19" :stroke-width="1.65" /><span>{{ t('workspaceNav.manage') }}</span></button>
@@ -179,17 +194,21 @@ onBeforeUnmount(() => {
   </Teleport>
   <button ref="mobileTrigger" type="button" class="rail-mobile-trigger" :aria-expanded="mobileOpen" aria-haspopup="dialog" @click="openMobile"><PanelLeft :size="16" :stroke-width="1.7" /><span>{{ t('workspaceNav.sectionsLabel') }}</span></button>
   <Teleport to="body">
-    <dialog ref="drawer" class="rail-drawer" :aria-label="t('workspaceNav.navigation')" @cancel.prevent="closeMobile" @keydown="drawerKeys" @click="event => { if (event.target === drawer) closeMobile() }">
+    <dialog ref="drawer" class="rail-drawer" :aria-label="t(context?.title || 'workspaceNav.navigation')" @cancel.prevent="closeMobile" @keydown="drawerKeys" @click="event => { if (event.target === drawer) closeMobile() }">
       <div class="drawer-surface">
-        <header class="drawer-heading"><div><span>{{ t('workspaceNav.workspace') }}</span><h2>{{ workspaceName || t('workspaceNav.sectionsLabel') }}</h2></div><button type="button" class="drawer-close" :aria-label="t('workspaceNav.close')" @click="closeMobile"><X :size="19" /></button></header>
-        <nav class="drawer-sections" :aria-label="t('workspaceNav.sectionsLabel')">
+        <header class="drawer-heading"><div><span v-if="!context || workspaceName">{{ t(context?.title || 'workspaceNav.workspace') }}</span><h2>{{ workspaceName || t(context?.title || 'workspaceNav.sectionsLabel') }}</h2></div><button type="button" class="drawer-close" :aria-label="t('workspaceNav.close')" @click="closeMobile"><X :size="19" /></button></header>
+        <nav v-if="context" class="drawer-sections" :aria-label="t(context.title)"><button v-for="item in context.items" :key="item.id" type="button" class="rail-module" :class="{'is-active':modelValue===item.id}" :aria-current="modelValue===item.id?'page':undefined" @click="selectPage(item.id)"><component :is="icons[item.icon]" :size="17" :stroke-width="1.7" /><span>{{ t(item.label) }}</span><ChevronRight :size="14" /></button></nav>
+        <nav v-else class="drawer-sections" :aria-label="t('workspaceNav.sectionsLabel')">
           <section v-for="section in sections" :key="section.id" class="drawer-section">
             <h3><component :is="icons[section.icon]" :size="15" :stroke-width="1.7" />{{ t(`workspaceNav.sections.${section.id}`) }}</h3>
-            <button v-for="id in section.modules" :key="id" type="button" class="rail-module" :class="{ 'is-active': modelValue === id }" :aria-current="modelValue === id ? 'page' : undefined" @click="selectModule(id)"><component :is="icons[moduleIcons[id]!]" :size="17" :stroke-width="1.7" /><span>{{ moduleName(id) }}</span><ChevronRight :size="14" /></button>
+            <template v-for="id in section.modules" :key="id">
+             <button type="button" class="rail-module" :class="{ 'is-active': modelValue===id&&(id!=='learning'||activeView==='topics') }" :aria-current="modelValue===id&&(id!=='learning'||activeView==='topics')?'page':undefined" @click="id==='learning'?selectLearningView('topics'):selectModule(id)"><component :is="icons[moduleIcons[id]!]" :size="17" :stroke-width="1.7" /><span>{{ id==='learning'?t('study.views.topics'):moduleName(id) }}</span><ChevronRight :size="14" /></button>
+             <div v-if="id==='learning'" class="rail-finance-views"><button v-for="item in ['today','mistakes']" :key="item" type="button" class="rail-module" :class="{'is-active':modelValue==='learning'&&activeView===item}" :aria-current="modelValue==='learning'&&activeView===item?'page':undefined" @click="selectLearningView(item)"><CalendarDays v-if="item==='today'" :size="16" /><BookOpen v-else :size="16" /><span>{{ t('study.views.'+item) }}</span></button></div>
+            </template>
             <div v-if="section.id === 'finance'" class="rail-finance-views"><button type="button" class="rail-module" @click="selectFinanceView('transaction')"><ArrowLeftRight :size="16" :stroke-width="1.7" /><span>{{ t('finance.cashflow') }}</span></button><button type="button" class="rail-module" @click="selectFinanceView('position')"><TrendingUp :size="16" :stroke-width="1.7" /><span>{{ t('finance.positions') }}</span></button></div>
           </section>
         </nav>
-        <footer class="drawer-footer"><button type="button" @click="action('search')"><Search :size="18" />{{ t('workspaceNav.search') }}</button><button type="button" @click="action('trash')"><Trash2 :size="18" />{{ t('workspaceNav.trash') }}</button><button type="button" @click="action('manage')"><Settings2 :size="18" />{{ t('workspaceNav.manage') }}</button></footer>
+        <footer v-if="!context" class="drawer-footer"><button type="button" @click="action('search')"><Search :size="18" />{{ t('workspaceNav.search') }}</button><button type="button" @click="action('trash')"><Trash2 :size="18" />{{ t('workspaceNav.trash') }}</button><button type="button" @click="action('manage')"><Settings2 :size="18" />{{ t('workspaceNav.manage') }}</button></footer>
       </div>
     </dialog>
   </Teleport>

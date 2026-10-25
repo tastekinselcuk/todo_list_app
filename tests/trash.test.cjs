@@ -9,6 +9,51 @@ async function fixture(){
  await f.db.exec(migration)
  return f
 }
+
+test('category removal preserves active and trashed notes, checks access and versions, and can be reinstalled',async()=>{
+ const {db,owner,guest,wid,gwid,as,rpc}=await fixture()
+ try{
+  const repair=fs.readFileSync('supabase/migrations/202610220001_integrity_repairs.sql','utf8')
+  const health=fs.readFileSync('supabase/diagnostics/application_health.sql','utf8')
+  await db.exec(health)
+  for(const name of ['delete_workspace(uuid,text)','delete_note_category(uuid,uuid,integer)']){
+   assert.equal((await db.query('select status from pg_temp.todo_application_health where check_name=$1',[name])).rows[0].status,'FAIL','missing delete APIs must be visible in the existing health check')
+  }
+  await db.exec(repair);await db.exec(repair)
+  await db.exec(health)
+  const checks=(await db.query("select status from pg_temp.todo_application_health where check_name like 'delete_workspace(%' or check_name like 'delete_note_category(%'")).rows
+  assert.equal(checks.length,8);assert.ok(checks.every(check=>check.status==='PASS'),'both APIs have the right security, grants, search path and PostgREST argument names')
+  await as(owner)
+  const cid=(await db.query("select collection_id from workspace_module_bindings where workspace_id=$1 and module='detailed'",[wid])).rows[0].collection_id
+  const addCategory=async name=>(await db.query('insert into categories(created_by,workspace_id,collection_id,name) values($1,$2,$3,$4) returning *',[owner,wid,cid,name])).rows[0]
+  const category=await addCategory('Remove'),keep=await addCategory('Keep')
+  const addNote=async title=>(await db.query('insert into todos(created_by,workspace_id,collection_id,category_id,title,description) values($1,$2,$3,$4,$5,$6) returning *',[owner,wid,cid,category.id,title,'<p>Preserve content</p>'])).rows[0]
+  const active=await addNote('Active'),trashed=await addNote('Trashed')
+  await rpc("select trash_change($1,'detailed',$2,'move',1) as result",[wid,trashed.id])
+  await assert.rejects(db.query('delete from categories where id=$1',[category.id]),/USE_TRASH/,'the old FK path reproduces the reported failure')
+  const remove=(workspace=wid,version=1)=>rpc('select delete_note_category($1,$2,$3) as result',[workspace,category.id,version])
+  await assert.rejects(remove(wid,0),/SHARING_CONFLICT/)
+  await as(guest);await assert.rejects(remove(),/CATEGORY_ACCESS_DENIED/)
+  await assert.rejects(remove(gwid),/CATEGORY_ACCESS_DENIED/)
+  await as(owner,'postgres')
+  await db.query("insert into collection_members(collection_id,user_id,role) values($1,$2,'viewer')",[cid,guest])
+  await db.query("update workspace_module_bindings set collection_id=$1 where workspace_id=$2 and module='detailed'",[cid,gwid])
+  await as(guest);await assert.rejects(remove(gwid),/CATEGORY_ACCESS_DENIED/)
+  await as(owner,'postgres');await db.query("update collection_members set role='editor' where collection_id=$1 and user_id=$2",[cid,guest])
+  await as(guest)
+  const result=await remove(gwid)
+  assert.equal(result.id,category.id);assert.equal(result.notes.length,2)
+  assert.equal(result.notes.find(note=>note.id===active.id).version,2)
+  assert.equal(result.notes.find(note=>note.id===trashed.id).version,3)
+  const current=(await db.query('select * from todos where id=$1',[active.id])).rows[0]
+  assert.equal(current.category_id,null);assert.equal(current.description,'<p>Preserve content</p>')
+  const trash=await rpc('select trash_page($1) as result',[gwid]);assert.equal(trash.items[0].version,3)
+  await rpc("select trash_change($1,'detailed',$2,'restore',3) as result",[gwid,trashed.id])
+  assert.equal((await db.query('select * from todos where id=$1',[trashed.id])).rows[0].category_id,null)
+  await assert.rejects(rpc('select delete_note_category($1,$2,1) as result',[gwid,keep.id]),/LAST_CATEGORY/)
+  await as('', 'anon');await assert.rejects(remove(),/permission denied/)
+ }finally{await db.close()}
+})
 test('trash preserves note identity and attachments, hides reads/search, checks versions, and keeps analytics history',async()=>{
  const {db,owner,wid,as,rpc}=await fixture()
  try{

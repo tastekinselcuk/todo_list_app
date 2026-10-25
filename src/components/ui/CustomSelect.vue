@@ -34,15 +34,16 @@
       <div
         v-if="isOpen"
         ref="dropdownRef"
+        :popover="popover ? 'manual' : undefined"
         class="absolute z-[9999] min-w-full py-1 rounded-xl border border-border/60 bg-card backdrop-blur-xl shadow-xl shadow-black/10 overflow-hidden"
-        :class="openAbove ? 'bottom-full mb-1' : 'top-full mt-1'"
-        :style="{ minWidth: dropdownMinWidth }"
+        :class="popover ? '' : openAbove ? 'bottom-full mb-1' : 'top-full mt-1'"
+        :style="{ minWidth: dropdownMinWidth, ...floatingStyle }"
       >
         <div v-if="searchable" class="relative mx-1 mb-1 border-b border-border/40">
           <Search aria-hidden="true" class="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
           <input ref="searchRef" v-model="query" type="search" autocomplete="off" spellcheck="false" :aria-label="searchPlaceholder" :placeholder="searchPlaceholder" class="h-9 w-full min-w-0 bg-transparent pl-7 pr-2 text-xs font-normal text-foreground outline-none placeholder:text-muted-foreground/60" @keydown.enter.stop.prevent="selectFirstMatch" />
         </div>
-        <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
+        <div class="max-h-[200px] overflow-y-auto custom-scrollbar" :style="popover ? {maxHeight:'min(200px, var(--select-menu-height))'} : undefined">
           <button
             v-for="option in filteredOptions"
             :key="option.value"
@@ -93,6 +94,7 @@ const props = withDefaults(defineProps<{
   colorClass?: string
   preserveFocus?: boolean
   searchable?: boolean
+  popover?: boolean
   searchPlaceholder?: string
   emptyText?: string
   buttonStyle?: Record<string, string>
@@ -117,6 +119,7 @@ const containerRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLButtonElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownMinWidth = ref('160px')
+const floatingStyle=ref<Record<string,string>>({})
 const query=ref(''),searchRef=ref<HTMLInputElement|null>(null)
 const filteredOptions=computed(()=>{
   const search=query.value.trim().toLowerCase()
@@ -151,6 +154,12 @@ function updatePosition() {
   const height=props.searchable?260:220
   openAbove.value = spaceBelow < height && rect.top > height
   dropdownMinWidth.value = `${Math.max(rect.width, 160)}px`
+  if(props.popover){
+    const width=Math.max(rect.width,160),height=dropdownRef.value?.offsetHeight||Math.min(props.options.length*34+8,220)
+    const top=Math.max(8,openAbove.value?rect.top-height-4:rect.bottom+4)
+    const available=Math.max(64,window.innerHeight-top-8)
+    floatingStyle.value={position:'fixed',inset:'auto',left:`${Math.max(8,Math.min(rect.left,window.innerWidth-width-8))}px`,top:`${top}px`,margin:'0',maxWidth:'calc(100vw - 16px)',maxHeight:`${available}px`,'--select-menu-height':`${Math.max(32,available-10-(props.searchable?42:0))}px`}
+  }
 }
 
 function toggle() {
@@ -159,7 +168,7 @@ function toggle() {
   emit('open-change', isOpen.value)
   if (isOpen.value) {
     query.value=''
-    nextTick(()=>{updatePosition();if(isOpen.value)searchRef.value?.focus({preventScroll:true})})
+    nextTick(()=>{if(!isOpen.value)return;updatePosition();if(props.popover){dropdownRef.value?.showPopover?.();updatePosition()}searchRef.value?.focus({preventScroll:true})})
   }
 }
 
@@ -194,10 +203,13 @@ function selectFirstMatch(){
 
 function close(restoreFocus = true) {
   if (!isOpen.value) return
+  if(props.popover)dropdownRef.value?.hidePopover?.()
   isOpen.value = false
   emit('open-change', false)
   if (restoreFocus && !props.preserveFocus) triggerRef.value?.focus()
 }
+
+function popoverScroll(event:Event){if(props.popover&&isOpen.value&&!dropdownRef.value?.contains(event.target as Node))close(false)}
 defineExpose({ close })
 
 function handleClickOutside(e: Event) {
@@ -211,11 +223,13 @@ function handleClickOutside(e: Event) {
 onMounted(() => {
   document.addEventListener('pointerdown', handleClickOutside, true)
   document.addEventListener('focusin', handleClickOutside, true)
+  if(props.popover){document.addEventListener('scroll',popoverScroll,true);window.addEventListener('resize',updatePosition)}
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleClickOutside, true)
   document.removeEventListener('focusin', handleClickOutside, true)
+  if(props.popover){document.removeEventListener('scroll',popoverScroll,true);window.removeEventListener('resize',updatePosition)}
 })
 </script>
 

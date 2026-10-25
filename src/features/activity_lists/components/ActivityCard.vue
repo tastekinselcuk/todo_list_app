@@ -1,107 +1,31 @@
 <template>
-  <article
-    class="workspace-card group relative flex flex-col overflow-hidden bg-card/50"
-  >
-    <div class="relative aspect-[2/3] bg-muted overflow-hidden">
-      <img
-        v-if="item.image_url && !imgError"
-        :src="item.image_url"
-        :alt="item.title"
-        class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-        loading="lazy"
-        @error="imgError = true"
-      />
-      <div
-        v-else
-        class="h-full w-full flex flex-col items-center justify-center gap-2"
-        :class="placeholderClass"
-      >
-        <component :is="typeIcon" class="w-8 h-8 opacity-70" />
-        <span class="text-[10px] font-semibold uppercase tracking-wider opacity-80">
-          {{ $t(`activities.types.${item.type}`) }}
-        </span>
-      </div>
-
-      <div
-        v-if="item.status === 'done'"
-        class="absolute inset-0 bg-background/40 flex items-center justify-center"
-      >
-        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-500 text-white shadow">
-          {{ $t('activities.done') }}
-        </span>
-      </div>
-    </div>
-
-    <div class="flex flex-col gap-1.5 p-3 flex-1">
-      <h4 class="text-sm font-semibold leading-snug text-foreground line-clamp-2" :class="{ 'line-through text-muted-foreground': item.status === 'done' }">
-        {{ item.title }}
-      </h4>
-      <p v-if="item.subtitle" class="text-[11px] text-muted-foreground line-clamp-2">
-        {{ item.subtitle }}
-      </p>
-
-      <div class="mt-auto flex items-center gap-1 pt-2">
-        <button :disabled="!canWrite"
-          type="button"
-          class="flex-1 h-8 rounded-lg text-[11px] font-semibold border transition-all"
-          :class="item.status === 'done'
-            ? 'bg-muted border-border text-muted-foreground hover:text-foreground'
-            : 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/20'"
-          @click="$emit('toggle', item.id)"
-        >
-          {{ item.status === 'done' ? $t('activities.markWant') : $t('activities.markDone') }}
-        </button>
-        <button v-if="canWrite"
-          type="button"
-          class="h-8 w-8 rounded-lg border border-border/50 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex items-center justify-center"
-          :title="$t('common.delete')"
-          @click="$emit('delete', item.id)"
-        >
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  </article>
+ <article class="activity-entry workspace-card" :data-search-record="item.id">
+  <div class="activity-entry-cover"><img v-if="image&&!imgError" :src="image" :alt="item.title" loading="lazy" referrerpolicy="no-referrer" @error="imgError=true" /><component v-else :is="typeIcon" :size="25" :stroke-width="1.3" /></div>
+  <div class="activity-entry-body">
+   <p class="activity-entry-type">{{ t('activities.types.'+item.type) }}</p>
+   <h4 :title="item.title">{{ item.title }}</h4><p v-if="item.subtitle" class="activity-entry-subtitle" :title="item.subtitle">{{ item.subtitle }}</p>
+   <div class="activity-entry-actions">
+    <button type="button" role="checkbox" class="activity-status" :class="{'is-done':item.status==='done'}" :aria-checked="item.status==='done'" :aria-label="t('activityLibrary.toggleStatus',{title:item.title,status:statusLabel})" :disabled="!canWrite||busy" @click="$emit('toggle',item.id)"><span class="activity-check"><Check v-if="item.status==='done'" :size="11" :stroke-width="2.5" /></span><span>{{ statusLabel }}</span></button>
+    <button v-if="canWrite" type="button" class="activity-icon ml-auto" :disabled="busy||!canOrganize" :title="t('activityLibrary.organize')" :aria-label="t('activityLibrary.organizeItem',{title:item.title})" @click="$emit('organize',item)"><FolderInput :size="15" :stroke-width="1.7" /></button>
+    <button v-if="canWrite" type="button" class="activity-icon" :disabled="busy" :title="t('common.delete')" :aria-label="t('activityLibrary.deleteItem',{title:item.title})" @click="$emit('delete',item.id)"><Trash2 :size="15" :stroke-width="1.7" /></button>
+   </div>
+  </div>
+ </article>
 </template>
-
 <script setup lang="ts">
+import { computed,ref,watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Check,Trash2,Film,Tv,MapPin,BookOpen,FolderInput } from 'lucide-vue-next'
 import { useModuleAccess } from '@/lib/workspaceScope'
-import { computed, ref, watch } from 'vue'
-import { Trash2, Film, Tv, MapPin, BookOpen } from 'lucide-vue-next'
+import { activityImage } from '../lib/collections'
 import type { ActivityItem } from '../stores/activityLists'
-
-const { canWrite } = useModuleAccess('activities')
-
-const props = defineProps<{
-  item: ActivityItem
-}>()
-
-defineEmits<{
-  toggle: [id: string]
-  delete: [id: string]
-}>()
-
-const imgError = ref(false)
-
-watch(
-  () => props.item.image_url,
-  () => {
-    imgError.value = false
-  }
-)
-
-const typeIcon = computed(() => {
-  const map = { movie: Film, series: Tv, place: MapPin, book: BookOpen }
-  return map[props.item.type] || Film
-})
-
-const placeholderClass = computed(() => {
-  const map: Record<string, string> = {
-    movie: 'bg-gradient-to-br from-sky-500/20 to-indigo-500/10 text-sky-700 dark:text-sky-300',
-    series: 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 text-violet-700 dark:text-violet-300',
-    place: 'bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-700 dark:text-emerald-300',
-    book: 'bg-gradient-to-br from-amber-500/20 to-orange-500/10 text-amber-700 dark:text-amber-300',
-  }
-  return map[props.item.type] || map.movie
-})
+const props=withDefaults(defineProps<{item:ActivityItem;busy?:boolean;canOrganize?:boolean;readOnly?:boolean}>(),{canOrganize:true})
+defineEmits<{toggle:[id:string];delete:[id:string];organize:[item:ActivityItem]}>()
+const {canWrite:moduleWrite}=useModuleAccess('activities'),canWrite=computed(()=>moduleWrite.value&&!props.readOnly),{t}=useI18n(),imgError=ref(false)
+const typeIcon=computed(()=>({movie:Film,series:Tv,book:BookOpen,place:MapPin}[props.item.type]||BookOpen)),image=computed(()=>activityImage(props.item.image_url))
+const statusLabel=computed(()=>t(`activityLibrary.states.${props.item.type}.${props.item.status}`))
+watch(()=>props.item.image_url,()=>{imgError.value=false})
 </script>
+<style scoped>
+.activity-entry{display:flex;align-items:stretch;min-width:0;min-height:136px;overflow:hidden;border-radius:15px;background:hsl(var(--card));padding:10px;gap:12px}.activity-entry-cover{display:flex;align-items:center;justify-content:center;width:76px;min-width:76px;align-self:stretch;min-height:108px;overflow:hidden;border-radius:9px;background:linear-gradient(145deg,hsl(var(--primary)/.08),hsl(var(--muted)/.6));color:hsl(var(--primary)/.6)}.activity-entry-cover img{width:100%;height:100%;max-height:130px;object-fit:cover}.activity-entry-body{display:flex;flex-direction:column;flex:1;min-width:0;padding:1px 0}.activity-entry-type{font-size:10px;line-height:15px;color:hsl(var(--muted-foreground))}.activity-entry h4{font-size:13px;font-weight:500;line-height:1.5;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.activity-entry-subtitle{font-size:11px;color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}.activity-entry-actions{display:flex;align-items:center;gap:2px;margin-top:auto;padding-top:8px}.activity-status{display:flex;align-items:center;gap:7px;font-size:11px;color:hsl(var(--muted-foreground));text-align:left;min-height:30px;min-width:0}.activity-check{display:flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;border:1px solid hsl(var(--border));border-radius:5px;background:hsl(var(--background))}.activity-status:hover:not(:disabled){color:hsl(var(--primary))}.activity-status.is-done{color:hsl(var(--foreground))}.activity-status.is-done .activity-check{background:hsl(var(--primary));border-color:hsl(var(--primary));color:hsl(var(--primary-foreground))}.activity-status:focus-visible{outline:2px solid hsl(var(--primary)/.4);outline-offset:3px;border-radius:4px}.activity-status:disabled{cursor:default}.activity-entry .activity-icon{width:27px;height:28px}
+</style>

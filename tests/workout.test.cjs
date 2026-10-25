@@ -9,7 +9,7 @@ const copy = value => JSON.parse(JSON.stringify(value))
 function load(source, dependencies = {}, globals = {}) {
   const exports = {}
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText,
-    { exports, require: name => dependencies[name] || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || require(name), console: { error() {} }, URL, crypto, ...globals })
+    { exports, require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || require(name), console: { error() {} }, URL, crypto, ...globals })
   return exports
 }
 const exercises = load(fs.readFileSync('src/features/workout/lib/exercises.ts', 'utf8'), { '../data/catalog.json': { default: catalog } })
@@ -95,6 +95,11 @@ function fixture({ shared = false, viewer = false } = {}) {
         else routine.exercises = routine.exercises.filter(row => row.id !== item.id)
       }
       if (operation === 'reset') routine.exercises.forEach(exercise => { exercise.isCompleted = false; exercise._version++ })
+      if (operation === 'reorder') {
+        if (routine.version !== version) throw new Error('SHARING_CONFLICT')
+        const byId = new Map(routine.exercises.map(exercise => [exercise.id, exercise]))
+        routine.exercises = item.ids.map(id => byId.get(id))
+      }
       routine.version++
       return copy(routine)
     },
@@ -202,13 +207,13 @@ test('viewer stores reject creation, edits, copies, deletion and completion with
   for (const operation of [() => h.store.addRoutine('New', 'Any'), () => h.store.updateRoutine('program', 'Changed', 'Any'),
     () => h.store.duplicateRoutine('program', 'Copy'), () => h.store.deleteRoutine('program'),
     () => h.store.addExerciseToRoutine('program', input()), () => h.store.updateExercise('program', 'exercise', input()),
-    () => h.store.toggleExerciseCompletion('program', 'exercise'), () => h.store.deleteExercise('program', 'exercise'), () => h.store.resetRoutine('program')]) assert.equal(await operation(), false)
+    () => h.store.toggleExerciseCompletion('program', 'exercise'), () => h.store.deleteExercise('program', 'exercise'), () => h.store.resetRoutine('program'), () => h.store.reorderExercises('program', ['exercise'])]) assert.equal(await operation(), false)
   assert.equal(h.calls.length, count)
 })
 
-function compileComponent(path, dependencies, inlineTemplate = true) {
+function compileComponent(path, dependencies, inlineTemplate = true, globals = {}) {
   const descriptor = parse(fs.readFileSync(path, 'utf8')).descriptor
-  return load(compileScript(descriptor, { id: path, inlineTemplate }).content, dependencies).default
+  return load(compileScript(descriptor, { id: path, inlineTemplate }).content, dependencies, globals).default
 }
 test('viewer program cards and exercise rows show content without write controls', async () => {
   const dependencies = { '@/lib/workspaceScope': { useModuleAccess: () => ({ canWrite: vue.computed(() => false) }) }, './ExerciseImage.vue': { default: { setup: () => () => vue.h('div') } } }
@@ -220,18 +225,23 @@ test('viewer program cards and exercise rows show content without write controls
   const row = vue.createSSRApp(compileComponent('src/features/workout/components/WorkoutExerciseRow.vue', dependencies), { exercise: routine.exercises[0] })
   row.config.globalProperties.$t = key => key
   const html = await renderToString(row)
-  assert.equal((html.match(/<button/g) || []).length, 2)
+  assert.equal((html.match(/<button/g) || []).length, 1)
   assert.match(html, /Barbell bench press/)
+  assert.match(html, /Personal note/)
+  assert.match(html, /Dumbbell press/)
+  assert.match(html, /3–1–1/)
+  assert.match(html, /aria-haspopup="dialog"/)
+  assert.doesNotMatch(html, /aria-expanded|noExerciseNotes/)
   assert.doesNotMatch(html, /workout.editExercise|common.delete|workout.toggleExercise/)
 })
 
 const stateRenderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}), insert() {}, remove() {}, setText() {}, setElementText() {}, patchProp() {}, parentNode() {}, nextSibling() {} })
 async function settle() { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick() }
-function setupState(path, props, dependencies) {
-  const component = compileComponent(path, { 'vue-i18n': { useI18n: () => ({ t: key => key }) }, './ExerciseImage.vue': { default: {} }, '@/components/ui/CustomSelect.vue': { default: {} }, '../lib/exercises': exercises, ...dependencies }, false)
+function setupState(path, props, dependencies, globals = {}, initialize = () => {}) {
+  const component = compileComponent(path, { 'vue-i18n': { useI18n: () => ({ t: key => key }) }, './ExerciseImage.vue': { default: {} }, '@/components/ui/CustomSelect.vue': { default: {} }, '../lib/exercises': exercises, ...dependencies }, false, globals)
   const events = []
   let state
-  const app = stateRenderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit: (...event) => events.push(event) }); return () => vue.h('div') } })
+  const app = stateRenderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit: (...event) => events.push(event) }); initialize(state); return () => vue.h('div') } })
   app.mount({})
   return { app, state, events }
 }
@@ -271,7 +281,7 @@ test('program creation keeps failed drafts and opens exercise selection after su
     '../stores/workout': { useWorkoutStore: () => h.store },
     '@/stores/ui': { useUIStore: () => ({ addToast: (...message) => toasts.push(message) }) },
     '@/lib/workspaceScope': { useModuleLoad: callback => vue.onMounted(callback), useModuleAccess: () => ({ canWrite: vue.computed(() => true) }), useWorkspaceDraft: (key, value) => { const draft = vue.ref(value); drafts.set(key, draft); return draft } },
-    './WorkoutRoutineCard.vue': { default: {} }, './WorkoutExerciseRow.vue': { default: {} }, './ExerciseLibraryModal.vue': { default: {} },
+    './WorkoutRoutineCard.vue': { default: {} }, './WorkoutSequence.vue': { default: {} }, './ExerciseLibraryModal.vue': { default: {} }, './ExercisePreview.vue': { default: {} },
   })
   await settle()
   state.newRoutineTitle.value = 'My custom program'
@@ -291,4 +301,146 @@ test('program creation keeps failed drafts and opens exercise selection after su
   assert.equal(state.showLibrary.value, false)
   assert.equal(state.activeRoutine.value.exercises[0].reps, '30 sec')
   app.unmount()
+})
+
+test('workout order survives reload, preserves exercise data and rejects invalid permutations and stale drags', async () => {
+  for (const shared of [false, true]) {
+    const h = fixture({ shared })
+    h.rows[0].exercises.push({ ...input({ name: 'Squat', notes: 'Keep this note' }), id: 'squat', _version: 2, isCompleted: false })
+    await h.store.fetchRoutines()
+    const before = copy(h.store.routines[0].exercises), count = h.calls.length
+    for (const ids of [[], ['exercise', 'exercise'], ['exercise', 'unknown']]) assert.equal(await h.store.reorderExercises('program', ids, 1), false)
+    assert.equal(await h.store.reorderExercises('program', ['squat', 'exercise'], 0), false)
+    assert.equal(h.calls.length, count)
+    assert.equal(await h.store.reorderExercises('program', ['squat', 'exercise'], 1), true)
+    assert.equal(h.store.routines[0].version, h.rows[0].version)
+    await h.store.fetchRoutines()
+    assert.deepEqual(copy(h.store.routines[0].exercises), [before[1], before[0]])
+    if (shared) assert.deepEqual(h.calls.find(call => call.operation === 'rpc:reorder').item, { ids: ['squat', 'exercise'] })
+    h.failures.add(shared ? 'rpc:reorder' : 'update')
+    const version = h.store.routines[0].version
+    assert.equal(await h.store.reorderExercises('program', ['exercise', 'squat'], version), false)
+    assert.deepEqual(copy(h.store.routines[0].exercises), [before[1], before[0]])
+  }
+})
+
+test('a legacy reorder cannot overwrite a change saved after the sequence was opened', async () => {
+  const h = fixture()
+  h.rows[0].exercises.push({ ...input({ name: 'Squat' }), id: 'squat', isCompleted: false })
+  await h.store.fetchRoutines()
+  h.rows[0].version++
+  h.rows[0].exercises[0].notes = 'Changed in another tab'
+  assert.equal(await h.store.reorderExercises('program', ['squat', 'exercise'], 1), false)
+  assert.equal(h.rows[0].exercises[0].notes, 'Changed in another tab')
+  assert.deepEqual(h.rows[0].exercises.map(e => e.id), ['exercise', 'squat'])
+})
+
+test('sequence supports drag and keyboard moves, restores a failed preview and fences changes arriving mid-drag', async () => {
+  const routine = vue.reactive({ id: 'program', version: 1, exercises: ['a', 'b', 'c'].map(id => ({ ...input(), id, isCompleted: false })) })
+  const calls = [], writable = vue.ref(true)
+  let allow = true
+  const props = vue.reactive({ routine, disabled: false, async saveOrder(id, ids, version) {
+    calls.push({ id, ids: [...ids], version })
+    if (!allow || version !== routine.version) return false
+    routine.exercises = ids.map(id => routine.exercises.find(e => e.id === id)); routine.version++
+    return true
+  } })
+  const { app, state } = setupState('src/features/workout/components/WorkoutSequence.vue', props, {
+    '@/lib/workspaceScope': { useModuleAccess: () => ({ canWrite: writable }) }, './WorkoutExerciseRow.vue': { default: {} },
+    vuedraggable: { default: {} },
+  }, { window: { matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) } })
+  await state.move('a', 1)
+  assert.deepEqual(copy(routine.exercises.map(e => e.id)), ['b', 'a', 'c'])
+  state.startDrag(); state.ordered.value = [routine.exercises[2], ...routine.exercises.slice(0, 2)]
+  await state.finishDrag()
+  assert.deepEqual(copy(routine.exercises.map(e => e.id)), ['c', 'b', 'a'])
+  allow = false
+  state.startDrag(); state.ordered.value.reverse(); await state.finishDrag()
+  assert.deepEqual(Array.from(state.ordered.value, e => e.id), ['c', 'b', 'a'])
+  allow = true
+  state.startDrag(); state.ordered.value.reverse()
+  routine.version++; await vue.nextTick(); await state.finishDrag()
+  assert.deepEqual(Array.from(state.ordered.value, e => e.id), ['c', 'b', 'a'])
+  const count = calls.length
+  await state.move('c', -1); props.disabled = true; await state.move('c', 1)
+  props.disabled = false; writable.value = false; await state.move('c', 1)
+  assert.equal(calls.length, count)
+  app.unmount()
+})
+
+test('two-pose preview waits for both images, keeps a usable fallback and pauses when hidden or motion is reduced', async () => {
+  const doc = new EventTarget(); doc.visibilityState = 'visible'
+  const media = new EventTarget(); media.matches = false
+  let observe, disconnected = false
+  const props = vue.reactive({ exercise: input({ catalogId: 'Pushups' }), animated: true, controls: true })
+  const { app, state } = setupState('src/features/workout/components/ExerciseImage.vue', props, {}, {
+    document: doc, window: { matchMedia: () => media },
+    IntersectionObserver: class { constructor(callback) { observe = callback } observe() {} disconnect() { disconnected = true } },
+  }, state => { state.host.value = {} })
+  await settle()
+  observe([{ isIntersecting: true }])
+  const first = state.sources.value[0], second = state.sources.value[1]
+  state.loaded(0, first)
+  assert.equal(state.hasMotion.value, false)
+  state.failed(1, second)
+  assert.match(state.sources.value[1], /cdn.jsdelivr.net/)
+  state.loaded(1, second) // An obsolete response cannot enable animation.
+  assert.equal(state.hasMotion.value, false)
+  state.loaded(1, state.sources.value[1])
+  assert.equal(state.playing.value, true)
+  assert.equal(state.stillFrame.value, 0)
+  state.paused.value = true; assert.equal(state.playing.value, false)
+  state.paused.value = false
+  doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
+  assert.equal(state.playing.value, false)
+  doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'))
+  media.matches = true; media.dispatchEvent(new Event('change'))
+  assert.equal(state.hasMotion.value, false)
+  media.matches = false; media.dispatchEvent(new Event('change'))
+  observe([{ isIntersecting: false }]); assert.equal(state.playing.value, false)
+  props.animated = false; await vue.nextTick()
+  assert.equal(state.sources.value.length, 1)
+  assert.equal(state.ready.value[0], true)
+  props.exercise = input({ imageUrl: 'https://example.test/one-photo.jpg' }); props.animated = true
+  await vue.nextTick()
+  assert.equal(state.sources.value.length, 1)
+  state.loaded(0, state.sources.value[0]); assert.equal(state.hasMotion.value, false)
+  app.unmount()
+  doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
+  assert.equal(state.pageVisible.value, true) // Listener was removed.
+  assert.equal(disconnected, true)
+})
+
+test('large exercise preview opens with focus and scroll locked, ignores image clicks and releases everything on close or unmount', () => {
+  const { JSDOM } = require('jsdom'), dom = new JSDOM('<button id="trigger">Preview</button>')
+  const document = dom.window.document, trigger = document.getElementById('trigger')
+  document.body.style.overflow = 'auto'; document.documentElement.style.overflow = 'scroll'; document.documentElement.style.scrollbarGutter = 'auto'
+  function mount() {
+    trigger.focus()
+    const dialog = document.createElement('dialog'), button = document.createElement('button')
+    document.body.append(dialog); dialog.append(button)
+    dialog.showModal = function () { this.open = true }
+    dialog.close = function () { this.open = false }
+    dialog.getBoundingClientRect = () => ({ left: 100, top: 50, right: 900, bottom: 650 })
+    const f = setupState('src/features/workout/components/ExercisePreview.vue', { exercise: input() }, {}, { document }, state => {
+      state.dialog.value = dialog; state.closeButton.value = button
+    })
+    return { ...f, dialog, button }
+  }
+  const f = mount()
+  assert.equal(f.dialog.open, true); assert.equal(document.activeElement, f.button)
+  assert.equal(document.body.style.overflow, 'hidden'); assert.equal(document.documentElement.style.overflow, 'hidden')
+  f.state.backdrop({ target: f.dialog, button: 0, clientX: 200, clientY: 100 })
+  f.state.backdrop({ target: f.button, button: 0, clientX: 20, clientY: 20 })
+  assert.equal(f.dialog.open, true)
+  f.state.backdrop({ target: f.dialog, button: 0, clientX: 20, clientY: 20 })
+  assert.equal(f.dialog.open, false); assert.equal(document.activeElement, trigger)
+  assert.equal(document.body.style.overflow, 'auto'); assert.equal(document.documentElement.style.overflow, 'scroll')
+  assert.equal(document.documentElement.style.scrollbarGutter, 'auto')
+  f.state.dismiss(); assert.equal(f.events.length, 1)
+  f.app.unmount(); f.dialog.remove()
+  const reopened = mount(); reopened.app.unmount()
+  assert.equal(reopened.dialog.open, false); assert.equal(document.activeElement, trigger)
+  assert.equal(document.body.style.overflow, 'auto'); assert.equal(document.documentElement.style.overflow, 'scroll')
+  dom.window.close()
 })

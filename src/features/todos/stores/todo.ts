@@ -198,12 +198,11 @@ export const useTodoStore = defineStore('todo', () => {
         return { success: false, message: error.value }
       }
 
-      const { error: err } = await supabase.from('categories').delete().eq('id', id)
-      
-      if (err) throw err
+      const receipt=await supabase.removeCategory(id)
       
       categories.value = categories.value.filter(c => c.id !== id)
-      todos.value = todos.value.filter(t => t.categoryId !== id)
+      const versions=new Map(receipt.notes.map(note=>[note.id,note.version]))
+      todos.value = todos.value.map(todo=>todo.categoryId===id?{...todo,categoryId:null,version:versions.get(todo.id)??todo.version}:todo)
       
       return { success: true }
     } catch (err) {

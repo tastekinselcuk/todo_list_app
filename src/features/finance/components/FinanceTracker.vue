@@ -49,7 +49,7 @@
       </template>
       <template v-else>
         <p v-if="store.priceIssue || store.summary.portfolio.missing || store.summary.portfolio.stale" role="status" class="text-[11px] leading-5 text-muted-foreground">{{ store.priceIssue?t(`finance.${store.priceIssue}`):'' }} {{ store.summary.portfolio.missing?t('finance.missingPrices',{count:store.summary.portfolio.missing}):'' }} {{ store.summary.portfolio.stale?t('finance.stalePrices',{count:store.summary.portfolio.stale}):'' }}</p>
-        <div class="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
+        <div class="workspace-card-grid" style="--workspace-card-min:22rem">
           <article v-for="row in store.positions" :key="row.id" class="workspace-card min-w-0 space-y-3 bg-card/30 p-3.5 transition-colors hover:bg-background/40">
             <div class="flex items-start gap-3"><div class="min-w-0 flex-1"><h3 class="truncate text-sm font-medium">{{ positionName(row) }}</h3><p class="mt-0.5 text-[10px] text-muted-foreground">{{ Number(row.quantity).toLocaleString(locale,{maximumFractionDigits:8}) }} {{ unitName(row) }} · {{ shortDate(row.purchased_on) }}</p></div><div class="flex shrink-0 gap-0.5"><button type="button" class="finance-icon !h-7 !w-7" :disabled="store.saving" :aria-label="`${t('common.edit')}: ${positionName(row)}`" @click="edit(row)"><Pencil class="h-3.5 w-3.5" /></button><button type="button" class="finance-icon !h-7 !w-7 hover:!text-destructive" :disabled="store.saving" :aria-label="`${t('common.delete')}: ${positionName(row)}`" @click="remove(row)"><Trash2 class="h-3.5 w-3.5" /></button></div></div>
             <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs"><div><dt class="text-[10px] text-muted-foreground">{{ t('finance.buyPrice') }}</dt><dd class="mt-0.5 tabular-nums">{{ formatMoney(row.buy_price) }}</dd></div><div><dt class="text-[10px] text-muted-foreground">{{ t('finance.currentPrice') }}</dt><dd class="mt-0.5 tabular-nums">{{ formatMoney(row.price) }}</dd></div><div><dt class="text-[10px] text-muted-foreground">{{ t('finance.currentValue') }}</dt><dd class="mt-0.5 font-medium tabular-nums">{{ formatMoney(row.current_value) }}</dd></div><div><dt class="text-[10px] text-muted-foreground">{{ t('finance.unrealizedGain') }}</dt><dd class="mt-0.5 font-medium tabular-nums" :class="gainColor(row.gain)">{{ formatMoney(row.gain) }} <span v-if="row.gain_percent!=null" class="ml-1 text-[10px]">({{ Number(row.gain_percent)>0?'+':'' }}{{ Number(row.gain_percent).toLocaleString(locale,{maximumFractionDigits:2}) }}%)</span></dd></div></dl>
@@ -76,7 +76,7 @@ import FinanceEntryForm from './FinanceEntryForm.vue'
 import { useFinanceStore } from '../stores/finance'
 import { financeCurrencies, money, validFinanceDate, openFinanceAnalysisKey, investmentInstrument, quoteSources, type FinanceEntity, type FinanceTransaction, type FinancePosition, type FinanceSchedule } from '../lib/finance'
 import { useWorkspacesStore } from '@/stores/workspaces'
-import { workspaceNavigationKey } from '@/lib/workspaceNavigation'
+import { workspaceNavigationKey, workspaceActiveViewKey } from '@/lib/workspaceNavigation'
 const store=useFinanceStore(),workspaces=useWorkspacesStore(),{t,locale}=useI18n()
 const openAnalysis=inject(openFinanceAnalysisKey)
 const tab=ref<FinanceEntity>('transaction'),editing=ref<FinanceTransaction|FinancePosition|null>(null),editingSchedule=ref<FinanceSchedule|null>(null),draftId=ref(crypto.randomUUID())
@@ -103,12 +103,14 @@ function edit(row:FinanceTransaction|FinancePosition){resetForm();editing.value=
 function editSchedule(row:FinanceSchedule){resetForm();editingSchedule.value=row;store.error=''}
 function changeTab(view:FinanceEntity){if(store.saving)return;tab.value=view;resetForm();store.error=''}
 const navigationIntent=inject(workspaceNavigationKey,null)
+const reportView=inject(workspaceActiveViewKey,undefined)
 let handledNavigation=-1
 if(navigationIntent)watch([navigationIntent,()=>store.saving],([intent,saving])=>{
  if(saving||!intent||intent.module!=='finance'||intent.sequence===handledNavigation||!['transaction','position'].includes(intent.view))return
  handledNavigation=intent.sequence
  if(tab.value!==intent.view)changeTab(intent.view as FinanceEntity)
 },{immediate:true})
+watch(tab,value=>reportView?.('finance',value),{immediate:true})
 async function changeCurrency(value:string){if(financeCurrencies.some(code=>code===value))await store.mutate('settings','update',null,{currency:value})}
 async function remove(row:FinanceTransaction|FinancePosition) {
  const scope=workspaces.sessionKey,entity=tab.value

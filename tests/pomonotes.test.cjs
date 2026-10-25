@@ -5,7 +5,7 @@ const vue=require('vue'),pinia=require('pinia'),{parse,compileScript}=require('@
 function load(source,dependencies,globals={}) {
  const exports={}
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,
-  {exports,Date,console,require: name => dependencies[name] || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) ||require(name),...globals})
+  {exports,Date,console,require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) ||require(name),...globals})
  return exports
 }
 const task=id=>({id,title:id,collection_id:'collection',workspace_id:'workspace',estimated_sessions:5,focus_seconds:1500,sessions:2,seconds:3000,completed:false,version:1})

@@ -381,3 +381,60 @@ test('a full completion drains a newer revision after a slow older upload withou
   assert.equal(f.sent.filter(row=>row.id===id&&row.status==='completed').length,1)
  }finally{f.cleanup()}
 })
+
+test('next session preserves partial focus time, does not award a cycle and carries queued work into the next focus',async()=>{
+ const f=fixture();try{
+  f.store.init();await settle();await f.store.focusOn(target('A'));await f.store.focusOn(target('B'));await f.advance(31_000)
+  const id=f.store.activeSession.id;assert.equal(f.store.nextMode,'shortBreak')
+  await f.store.advanceMode();await settle()
+  assert.equal(f.store.modeKey,'shortBreak');assert.equal(f.store.timeLeft,300);assert.equal(f.store.isRunning,false);assert.equal(f.store.completionSequence,0)
+  const ended=f.sent.find(row=>row.id===id&&row.status==='ended');assert.ok(ended);assert.equal(ended.segments.reduce((sum,[a,b])=>sum+Date.parse(b)-Date.parse(a),0),31_000)
+  assert.equal(f.store.nextMode,'longBreak');await f.store.advanceMode();assert.equal(f.store.modeKey,'longBreak');assert.equal(f.store.timeLeft,900);assert.equal(f.store.queuedTarget.id,'B')
+  assert.equal(f.store.nextMode,'focus');await f.store.advanceMode();assert.equal(f.store.modeKey,'focus');assert.equal(f.store.currentTarget.id,'B');assert.equal(f.store.queuedTarget,null);assert.equal(f.store.timeLeft,600)
+ }finally{f.cleanup()}
+})
+
+test('manual navigation follows all three modes after reload while natural completion keeps the original flow',async()=>{
+ const f=fixture();let reloaded
+ try{
+  f.store.init();await settle();f.store.configure({focus:10,shortBreak:3,longBreak:7})
+  for(let cycle=1;cycle<=4;cycle++){
+   await f.store.startTimer();assert.equal(f.store.nextMode,'shortBreak');await f.advance(600_000)
+   assert.equal(f.store.modeKey,'shortBreak');await f.store.setMode('focus')
+  }
+  await f.store.advanceMode();assert.equal(f.store.modeKey,'shortBreak');assert.equal(f.store.nextMode,'longBreak')
+  f.listeners.get('pagehide')();await settle();f.cleanup()
+  reloaded=fixture({storage:f.storage,clock:f.clock});reloaded.store.init();await settle();reloaded.store.configure({focus:10,shortBreak:3,longBreak:7})
+  assert.equal(reloaded.store.modeKey,'shortBreak');assert.equal(reloaded.store.nextMode,'longBreak');await reloaded.store.advanceMode()
+  assert.equal(reloaded.store.modeKey,'longBreak');assert.equal(reloaded.store.timeLeft,420);assert.equal(reloaded.store.nextMode,'focus');assert.equal(reloaded.store.completionSequence,0)
+  await reloaded.store.startTimer();await reloaded.advance(420_000);assert.equal(reloaded.store.modeKey,'focus');assert.equal(reloaded.store.nextMode,'shortBreak')
+ }finally{reloaded?.cleanup();f.cleanup()}
+})
+
+test('next session is blocked during ownership changes and a failed save stays retryable',async()=>{
+ const f=fixture();try{
+  f.store.init();await settle();const release=f.hold(),pending=f.store.startTimer();await settle();assert.equal(f.store.starting,true)
+  await f.store.advanceMode();assert.equal(f.store.modeKey,'focus');release();await pending;await f.advance(20_000)
+  const id=f.store.activeSession.id;f.setOffline(true);await f.store.advanceMode();assert.equal(f.store.modeKey,'focus');assert.equal(f.store.error,'FOCUS_STOP_FAILED')
+  f.setOffline(false);await f.store.advanceMode();assert.equal(f.store.modeKey,'shortBreak');assert.equal(f.store.error,'');assert.equal(f.store.isRunning,false)
+  assert.ok(f.sent.some(row=>row.id===id&&row.status==='ended'));assert.equal(f.store.completionSequence,0)
+  f.store.remote=true;await f.store.advanceMode();assert.equal(f.store.modeKey,'shortBreak')
+ }finally{f.cleanup()}
+})
+
+test('a server finished response never awards a completed cycle for an early-ended session',async()=>{
+ const f=fixture({rpc:async name=>name==='claim_focus_session'?{data:{status:'finished'}}:{data:{version:1,active:null,closed:[]}}})
+ try{
+  f.store.init();await settle();await f.store.startTimer()
+  assert.equal(f.store.modeKey,'shortBreak');assert.equal(f.store.completionSequence,0);assert.equal(f.store.isRunning,false);assert.equal(f.sent.length,0)
+ }finally{f.cleanup()}
+})
+
+test('duration configuration leaves a mirrored paused session intact',async()=>{
+ const f=fixture();try{
+  f.setServer({id:'remote-durations',workspace_id:'work',started_at:new Date(f.clock-60_000).toISOString(),planned_seconds:600,revision:3,status:'paused',segments:[[new Date(f.clock-60_000).toISOString(),new Date(f.clock).toISOString()]],association:'task',task_id:'A',collection_id:'collection',estimated_sessions:5,goal_seconds:600,client_id:'other',task_title:'A'})
+  f.store.init();await settle();assert.equal(f.store.remote,true);assert.equal(f.store.timeLeft,540)
+  f.store.configure({focus:40,shortBreak:8,longBreak:20});await settle()
+  assert.equal(f.store.durations.focus,40);assert.equal(f.store.sessionSeconds,600);assert.equal(f.store.timeLeft,540);assert.equal(f.store.modeKey,'focus');assert.equal(f.store.isRunning,false)
+ }finally{f.cleanup()}
+})

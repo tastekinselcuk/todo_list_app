@@ -128,12 +128,14 @@ export const useWorkoutStore = defineStore('workout', () => {
     })
   }
 
-  const syncExercises = async (routineId: string, exercises: Exercise[]) => {
-    const { data, error } = await supabase.from('workout_routines').update({ exercises }).eq('id', routineId).select().single()
+  const syncExercises = async (routineId: string, exercises: Exercise[], expectedVersion?: number) => {
+    let query = supabase.from('workout_routines').update({ exercises }).eq('id', routineId)
+    if (expectedVersion !== undefined) query = query.eq('version', expectedVersion)
+    const { data, error } = await query.select().single()
     if (error) throw error
     if (!data) throw new Error('Workout no longer exists')
     const routine = routines.value.find(r => r.id === routineId)
-    if (routine) routine.exercises = data.exercises
+    if (routine) Object.assign(routine, data)
     return true
   }
 
@@ -187,6 +189,16 @@ export const useWorkoutStore = defineStore('workout', () => {
     return syncExercises(routineId, routine.exercises.map(exercise => ({ ...exercise, isCompleted: false })))
   })
 
+  const reorderExercises = async (routineId: string, ids: string[], version?: number) => write(routineId, async () => {
+    const routine = routines.value.find(r => r.id === routineId)
+    if (!routine || ids.length !== routine.exercises.length || new Set(ids).size !== ids.length) return false
+    const byId = new Map(routine.exercises.map(exercise => [exercise.id, exercise]))
+    if (ids.some(id => !byId.has(id)) || (version !== undefined && routine.version !== version)) return false
+    if (ids.every((id, index) => routine.exercises[index].id === id)) return true
+    if (supabase.collection('workout')) return changeItem(routineId, 'reorder', { ids }, version ?? routine.version)
+    return syncExercises(routineId, ids.map(id => byId.get(id)!), version ?? routine.version)
+  })
+
   supabase.listen?.({ workout_routines: fetchRoutines }, () => isLoading.value || Boolean(savingChildren.value))
-  return { routines, isLoading, isSaving, fetchRoutines, addRoutine, updateRoutine, duplicateRoutine, deleteRoutine, addExerciseToRoutine, updateExercise, deleteExercise, toggleExerciseCompletion, resetRoutine }
+  return { routines, isLoading, isSaving, fetchRoutines, addRoutine, updateRoutine, duplicateRoutine, deleteRoutine, addExerciseToRoutine, updateExercise, deleteExercise, toggleExerciseCompletion, resetRoutine, reorderExercises }
 })

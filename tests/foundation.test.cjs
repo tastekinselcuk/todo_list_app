@@ -6,7 +6,7 @@ const ts = require('typescript')
 function load(path, globals = {}) {
   const exports = {}
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText,
-    { exports, Request, Response, ...globals })
+    { exports, Request, Response, TextDecoder, ...globals })
   return exports
 }
 test('optional storage rejects corrupted and mismatched data and survives denied access and quota errors', () => {

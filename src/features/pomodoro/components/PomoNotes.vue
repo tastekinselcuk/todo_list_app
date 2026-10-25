@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { computed, ref, watch, nextTick, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -186,7 +187,7 @@ useSearchReveal('pomodoro', async (hit, isCurrent) => {
         <button v-if="canWrite" type="button" role="menuitem" class="pomo-menu-item text-destructive" :disabled="store.saving" @click="remove(menu)"><Trash2 class="h-3.5 w-3.5" />{{ t('pomoNotes.delete') }}</button>
       </div>
     </Teleport>
-    <dialog ref="modal" class="w-[calc(100%-2rem)] max-w-md rounded-2xl border border-border/70 bg-card p-5 text-foreground shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm" :aria-label="t(dialogMode==='edit'?'pomoNotes.edit':'pomoNotes.history')" :data-shared-editing="Boolean(editing)&&dialogMode==='edit'" @close="editing=null">
+    <dialog ref="modal" class="w-[calc(100%-2rem)] max-w-md rounded-2xl border border-border/70 bg-card p-5 text-foreground shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm" :aria-label="t(dialogMode==='edit'?'pomoNotes.edit':'pomoNotes.history')" :data-shared-editing="Boolean(editing)&&dialogMode==='edit'" @dblclick="event=>{if(dialogMode==='edit' && !store.saving && isDialogBackdropDoubleClick(event))modal?.close()}" @close="editing=null">
       <div class="mb-4 flex items-center justify-between gap-3"><p class="truncate text-sm font-medium">{{ dialogMode==='history'?editing?.title:t(canWrite?'pomoNotes.edit':'pomoNotes.editGoal') }}</p><button type="button" class="pomo-icon" :aria-label="t('pomoNotes.close')" @click="modal?.close()"><X class="h-4 w-4" /></button></div>
       <form v-if="dialogMode==='edit'" class="space-y-4" @submit.prevent="save">
         <label v-if="canWrite" class="block space-y-1.5 text-xs text-muted-foreground"><span>{{ t('pomoNotes.task') }}</span><input v-model="editTitle" autofocus type="text" maxlength="500" required class="pomo-input" /></label>

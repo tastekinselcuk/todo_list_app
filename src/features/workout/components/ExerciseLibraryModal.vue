@@ -1,5 +1,5 @@
 <template>
-  <dialog ref="dialog" class="exercise-dialog w-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-card p-0 text-card-foreground shadow-2xl" :class="mode === 'library' ? 'max-w-4xl' : 'max-w-md'" aria-labelledby="workout-picker-title" @cancel="cancel" @close="emit('close')">
+  <dialog ref="dialog" class="exercise-dialog w-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-card p-0 text-card-foreground shadow-2xl" :class="mode === 'library' ? 'max-w-4xl' : 'max-w-md'" aria-labelledby="workout-picker-title" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))cancel(event)}" @cancel="cancel" @close="emit('close')">
     <header class="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
       <h3 id="workout-picker-title" class="text-sm font-semibold">{{ t(exercise ? 'workout.editExercise' : 'workout.addExercise') }}</h3>
       <button type="button" class="icon-button" :disabled="busy" :aria-label="t('common.close')" @click="emit('close')"><X class="h-4 w-4" /></button>
@@ -23,8 +23,8 @@
           <div v-if="catalogError" class="rounded-xl border border-border/40 p-4 text-xs text-muted-foreground"><p>{{ t('workout.libraryError') }}</p><button type="button" class="mt-2 text-foreground underline" @click="loadCatalog">{{ t('workout.retry') }}</button></div>
           <div v-else class="max-h-[42dvh] overflow-y-auto pr-1">
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button v-for="item in matches.slice(0, limit)" :key="item.id" type="button" :disabled="busy" :aria-pressed="draft.catalogId === item.id" class="flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition-colors disabled:opacity-50" :class="draft.catalogId === item.id ? 'border-teal-500/40 bg-teal-500/[0.06]' : 'border-border/40 bg-background/30 hover:bg-muted/40'" @click="selectExercise(item)">
-                <ExerciseImage :exercise="catalogInput(item)" class="h-14 w-14" />
+              <button v-for="item in matches.slice(0, limit)" :key="item.id" type="button" :disabled="busy" :aria-pressed="draft.catalogId === item.id" class="flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition-colors disabled:opacity-50" :class="draft.catalogId === item.id ? 'border-primary/40 bg-primary/[0.06]' : 'border-border/40 bg-background/30 hover:bg-muted/40'" @click="selectExercise(item)">
+                <ExerciseImage :exercise="catalogInput(item)" :animated="false" class="h-14 w-14" />
                 <span class="min-w-0"><span class="line-clamp-2 block text-xs font-medium leading-4">{{ item.name }}</span><span class="mt-1 block truncate text-[10px] text-muted-foreground">{{ item.primaryMuscles.map(muscle => muscleLabel(muscle)).join(', ') }}</span></span>
               </button>
             </div>
@@ -34,8 +34,8 @@
         </section>
         <form v-if="mode !== 'library' || draft.name" ref="exerciseForm" class="min-w-0 space-y-3" @submit.prevent="save">
           <div v-if="draft.imageUrl || draft.catalogId" class="flex items-center gap-3 rounded-xl border border-border/40 bg-background/30 p-2">
-            <ExerciseImage :exercise="draft" :pose="pose" class="h-20 w-20" />
-            <div class="min-w-0"><p class="text-xs font-medium leading-5">{{ draft.name }}</p><div v-if="(draft.images?.length || 0) > 1" class="mt-2 flex gap-1" role="group" :aria-label="t('workout.imagePose')"><button v-for="index in [0, 1]" :key="index" type="button" class="rounded-md px-2 py-1 text-[10px]" :class="pose === index ? 'bg-muted' : 'text-muted-foreground hover:bg-muted/50'" :aria-pressed="pose === index" @click="pose = index">{{ t(index === 0 ? 'workout.poseStart' : 'workout.poseEnd') }}</button></div></div>
+            <ExerciseImage :exercise="draft" controls class="h-24 w-24" />
+            <div class="min-w-0"><p class="text-xs font-medium leading-5">{{ draft.name }}</p></div>
           </div>
           <label class="label" for="exercise-name">{{ t('workout.exerciseName') }}<input id="exercise-name" v-model="draft.name" type="text" maxlength="160" required :disabled="busy" class="field mt-1" :placeholder="t('workout.customPlaceholder')" /></label>
           <div class="grid grid-cols-2 gap-2.5">
@@ -63,6 +63,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Loader2, Plus, Search, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -76,7 +77,7 @@ const { t } = useI18n()
 const dialog = ref<HTMLDialogElement>(), searchInput = ref<HTMLInputElement>()
 const exerciseForm = ref<HTMLFormElement>()
 const mode = ref<'library' | 'custom' | 'edit'>('library'), catalog = ref<CatalogExercise[]>([]), query = ref(''), group = ref('all'), equipment = ref('all')
-const loading = ref(false), catalogError = ref(false), formError = ref(false), pose = ref(0), limit = ref(24)
+const loading = ref(false), catalogError = ref(false), formError = ref(false), limit = ref(24)
 const blank = (): ExerciseInput => ({ name: '', sets: 3, reps: '10–12', imageUrl: '', weightKg: null, restSeconds: 90, tempo: '', alternative: '', notes: '' })
 const draft = ref<ExerciseInput>(blank())
 const capturedVersion = ref<number>(), capturedId = ref('')
@@ -95,18 +96,18 @@ watch(() => props.show, async show => {
   mode.value = original ? 'edit' : 'library'
   draft.value = original ? { ...blank(), ...original } : blank()
   capturedVersion.value = original?._version; capturedId.value = original?.id || ''
-  formError.value = false; pose.value = 0
+  formError.value = false
   await nextTick()
   if (!props.show) return
   if (!dialog.value?.open) dialog.value?.showModal()
   if (!original) { void loadCatalog(); searchInput.value?.focus() }
 }, { immediate: true })
 watch([query, group, equipment], () => { limit.value = 24 })
-function switchMode(value: 'library' | 'custom') { mode.value = value; draft.value = blank(); formError.value = false; pose.value = 0 }
+function switchMode(value: 'library' | 'custom') { mode.value = value; draft.value = blank(); formError.value = false }
 async function selectExercise(exercise: CatalogExercise) {
   const previous = draft.value
   draft.value = { ...catalogInput(exercise), sets: previous.sets, reps: previous.reps, weightKg: previous.weightKg, restSeconds: previous.restSeconds, tempo: previous.tempo, alternative: previous.alternative, notes: previous.notes }
-  pose.value = 0; formError.value = false
+  formError.value = false
   await nextTick()
   if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) exerciseForm.value?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 }

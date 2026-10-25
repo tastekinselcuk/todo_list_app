@@ -1,0 +1,59 @@
+PromptVault focus environment assets — reviewed 25 October 2026
+
+PHOTOGRAPHS
+These images are used as backgrounds within the productivity application, not as a stock-photo service.
+License: Unsplash License — https://unsplash.com/license
+Changes: resized and encoded as WebP; display crops and dark overlays are applied by the application.
+
+forest.webp / forest-thumb.webp
+Annie Spratt — https://unsplash.com/photos/green-leafed-trees-during-mist-l2RieCaZ9CY
+Original: https://images.unsplash.com/photo-1538137522670-5877cc01c4a3
+
+ocean.webp / ocean-thumb.webp
+Stella Mariz Abayhon — https://unsplash.com/photos/St6-y5WjeZk
+Original: https://images.unsplash.com/photo-1556159248-8a8da87bc898
+
+mountains.webp / mountains-thumb.webp
+Patrick Robert Doyle — https://unsplash.com/photos/lake-near-snow-covered-mountain-during-daytime-tHbdWa5rR5E
+Original: https://images.unsplash.com/photo-1621967962337-1125dcaabba0
+
+rain.webp / rain-thumb.webp
+Syuhei Inoue — https://unsplash.com/photos/SsfPA_sZ4Wk
+Original: https://images.unsplash.com/photo-1629108406619-3b46f5877750
+
+MUSIC
+"Meditation Impromptu 02" Kevin MacLeod (incompetech.com)
+Licensed under Creative Commons: By Attribution 4.0 License
+https://creativecommons.org/licenses/by/4.0/
+Source: https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100162
+Asset: audio/piano.mp3
+
+"Dreams Become Real" Kevin MacLeod (incompetech.com)
+Licensed under Creative Commons: By Attribution 4.0 License
+https://creativecommons.org/licenses/by/4.0/
+Source: https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500027
+Asset: audio/ambient.mp3
+
+"Dream Culture" Kevin MacLeod (incompetech.com)
+Licensed under Creative Commons: By Attribution 4.0 License
+https://creativecommons.org/licenses/by/4.0/
+Source: https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300046
+Asset: audio/rhythm.mp3
+
+Audio changes: full-length recordings loudness-normalized to -20 LUFS / -3 dBTP and re-encoded as 96 kbit/s MP3 for background listening. No composition or lyrics were changed.
+No endorsement by the photographers or composer is implied.
+
+NATURE SOUNDS
+"Rain (loopable)" — Ylmir
+Source: https://opengameart.org/content/rain-loopable
+Original: https://opengameart.org/sites/default/files/Rain%20MP3.zip (3.mp3)
+Asset: audio/rain.mp3
+
+"Fireplace Sound loop" — PagDev
+Source: https://opengameart.org/content/fireplace-sound-loop
+Original: https://opengameart.org/sites/default/files/fire.wav
+Asset: audio/fireplace.mp3
+
+Both nature recordings are released under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+Changes: full-length loops loudness-normalized to -20 LUFS / -3 dBTP and re-encoded as 96 kbit/s MP3; no additional sounds were mixed in. No endorsement by the recordists is implied.

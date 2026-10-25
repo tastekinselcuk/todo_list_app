@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript')
-function load(path,globals={},dependencies={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:name=>dependencies[name]||require(name),Request,Response,AbortSignal,Date,console,...globals});return exports}
+function load(path,globals={},dependencies={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:name=>dependencies[name]||require(name),Request,Response,AbortSignal,Date,TextDecoder,console,...globals});return exports}
 const lib=load('src/features/finance/lib/finance.ts')
 test('finance parses decimal/grouped values without guessing malformed amounts and rejects invalid dates',()=>{
  for(const [input,expected] of [['1.234,56',1234.56],['1,234.56',1234.56],['1234,56',1234.56],['0',0],['10.20',10.2],['1.234',null],['12,34.56',null],['-10',null],['NaN',null],['1e10',null],['10₺',null],['',null]])assert.equal(lib.parseFinanceNumber(input),expected,input)
@@ -119,6 +119,10 @@ test('native price service verifies the caller before cache access and isolates 
   }
   assert.equal(options.headers.apikey,'private-service-key');assert.equal(options.headers.Authorization,'Bearer private-service-key')
   const parsed=new URL(url)
+  if(parsed.pathname==='/rest/v1/rpc/consume_edge_budget') {
+   assert.deepEqual(JSON.parse(options.body),{uid:'verified-user',operation:'finance-prices'})
+   return new Response('true')
+  }
   if(parsed.pathname==='/rest/v1/finance_market_quotes') {
    assert.equal(parsed.searchParams.get('currency'),'eq.TRY');assert.equal(parsed.searchParams.get('instrument'),'in.(USD)')
    return new Response('[]')
@@ -129,10 +133,10 @@ test('native price service verifies the caller before cache access and isolates 
  })
  const request=()=>new Request('https://app.invalid',{method:'POST',headers:{authorization:'Bearer user-token'},body:JSON.stringify({currency:'TRY',instruments:[{provider:'frankfurter',instrument:'USD'}]})})
  const response=await handler(request()),body=await response.json()
- assert.equal(response.status,200);assert.equal(body.quotes[0].price,40);assert.equal(calls.length,4)
+ assert.equal(response.status,200);assert.equal(body.quotes[0].price,40);assert.equal(calls.length,5)
  assert.ok(calls[0].url.endsWith('/auth/v1/user'));assert.ok(!JSON.stringify(body).includes('private-service-key'))
  const preflight=await handler(new Request('https://app.invalid',{method:'OPTIONS'}))
- assert.equal(preflight.status,204);assert.equal(calls.length,4,'CORS must not call auth or read cache')
+ assert.equal(preflight.status,204);assert.equal(calls.length,5,'CORS must not call auth or read cache')
 })
 
 test('native price service fails closed on rejected/unavailable authentication and rejects malformed JSON',async()=>{
@@ -141,7 +145,7 @@ test('native price service fails closed on rejected/unavailable authentication a
   const response=await handler(new Request('https://app.invalid',{method:'POST',headers:{authorization:'Bearer invalid'},body:'{}'}))
   assert.equal(response.status,status===500?503:401);assert.equal(calls.length,1);assert.ok(calls[0].endsWith('/auth/v1/user'))
  }
- const handler=nativePriceFixture(async()=>new Response(JSON.stringify({id:'verified-user'})))
+ const handler=nativePriceFixture(async url=>new Response(String(url).includes('consume_edge_budget')?'true':JSON.stringify({id:'verified-user'})))
  const response=await handler(new Request('https://app.invalid',{method:'POST',headers:{authorization:'Bearer valid'},body:'{broken'}))
  assert.equal(response.status,400)
 })

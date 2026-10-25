@@ -235,6 +235,9 @@ export class FocusJournal {
           break // Network/auth failures wait for reconnection rather than flooding requests.
         }
       }
+      // Successful uploads can free enough quota to recover a previous failure.
+      // Re-evaluate after cleanup instead of leaving a stale warning in reports.
+      if(this.storageFailed)this.checkStorage()
     })().finally(()=>{this.inFlight=null})
     return this.inFlight
   }

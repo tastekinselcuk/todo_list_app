@@ -4,8 +4,8 @@
     data-app-navigation
     :aria-label="t('app.navigation')"
     :inert="!visible"
-    :class="['app-navigation fixed left-1/2 z-50 flex max-w-[calc(100%-1.5rem)] items-center gap-1 rounded-full border border-border/60 bg-card/80 p-1 shadow-[0_6px_24px_rgb(0,0,0,0.04)] backdrop-blur-2xl', visible ? 'is-visible' : 'is-hidden', { 'is-docked': docked, 'is-attached': attached, 'is-workspace': workspace }]"
-    :style="{ top: attached ? `${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight}px` : '14px', height: attached ? `${workspaceHeaderHeight}px` : undefined }"
+    :class="['app-navigation fixed left-1/2 z-50 flex max-w-[calc(100%-1.5rem)] items-center gap-1 rounded-full border border-border/60 bg-card/80 p-1 shadow-[0_6px_24px_rgb(0,0,0,0.04)] backdrop-blur-2xl', visible ? 'is-visible' : 'is-hidden', { 'is-docked': docked, 'is-attached': attached, 'is-workspace': workspace, 'is-embedded':embedded }]"
+    :style="embedded ? undefined : { top: attached ? `${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight}px` : '14px', height: attached ? `${workspaceHeaderHeight}px` : undefined }"
     @focusin="emit('reveal')"
   >
     <div ref="viewStrip" class="view-strip relative flex items-center gap-0.5 rounded-full p-0.5">
@@ -24,7 +24,7 @@ import { useI18n } from 'vue-i18n'
 import { workspaceHeaderHeight } from '@/lib/navigationScroll'
 
 type View = 'dashboard' | 'workspace' | 'analytics' | 'settings'
-const props = defineProps<{ activeView: View; visible: boolean; docked: boolean; attached?: boolean; workspace?: boolean; headerOffset?: number }>()
+const props = defineProps<{ activeView: View; visible: boolean; docked: boolean; attached?: boolean; workspace?: boolean; headerOffset?: number; embedded?:boolean }>()
 const emit = defineEmits<{ navigate: [view: View]; reveal: [] }>()
 const { t, locale } = useI18n()
 const views: { id: View; label: string; icon: typeof Briefcase }[] = [
@@ -78,6 +78,7 @@ onBeforeUnmount(() => { disposed = true; observer?.disconnect() })
 }
 .app-navigation button:focus-visible { outline: 2px solid hsl(var(--primary) / .45); outline-offset: 2px; }
 .app-navigation.is-attached,.app-navigation.is-attached.is-hidden { transform:translate(-50%,0); transition:left 240ms cubic-bezier(.22,1,.36,1),opacity 180ms ease; }
+.app-navigation.is-embedded,.app-navigation.is-embedded.is-hidden{position:relative;inset:auto;max-width:none;transform:none;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}
 @media(max-width:639px) { .app-navigation.is-attached:not(.is-docked),.app-navigation.is-attached:not(.is-docked).is-hidden { transform:none; } }
 @media (prefers-reduced-motion: reduce) { .app-navigation, .app-navigation * { transition: none !important; } }
 </style>

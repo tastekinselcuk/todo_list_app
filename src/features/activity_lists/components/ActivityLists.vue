@@ -1,273 +1,124 @@
 <template>
-  <div class="workspace-content mx-auto space-y-6">
-    <div class="workspace-toolbar space-y-6">
-      <!-- Header -->
-      <header class="space-y-1">
-        <h2 class="text-xl font-bold tracking-tight text-foreground">
-          {{ $t('activities.title') }}
-        </h2>
-        <p class="text-sm text-muted-foreground">
-          {{ $t('activities.subtitle') }}
-        </p>
-      </header>
-
-      <!-- Search panel -->
-      <section v-if="canWrite" class="rounded-2xl border border-border/40 bg-card/40 p-4 space-y-3">
-        <div class="flex flex-col sm:flex-row gap-2.5">
-          <select
-            v-model="selectedType"
-            class="h-11 sm:w-44 rounded-xl border border-border/50 bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary/30"
-          >
-            <option value="movie">{{ $t('activities.types.movie') }}</option>
-            <option value="series">{{ $t('activities.types.series') }}</option>
-            <option value="place">{{ $t('activities.types.place') }}</option>
-            <option value="book">{{ $t('activities.types.book') }}</option>
-          </select>
-
-          <div class="relative flex-1">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
-            <input
-              v-model="searchQuery"
-              type="search"
-              :placeholder="searchPlaceholder"
-              class="w-full h-11 pl-10 pr-3 rounded-xl border border-border/50 bg-background/70 text-sm outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/60"
-              @keyup.enter="runSearch"
-            />
-          </div>
-
-          <button
-            type="button"
-            class="h-11 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-all shrink-0"
-            :disabled="!searchQuery.trim() || isSearching"
-            @click="runSearch"
-          >
-            <span v-if="isSearching" class="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            <span v-else>{{ $t('activities.search') }}</span>
-          </button>
-        </div>
-
-        <p v-if="needsTmdbKey" class="text-xs text-amber-600 dark:text-amber-400">
-          {{ $t('activities.tmdbKeyMissing') }}
-        </p>
-
-        <!-- Search results -->
-        <div v-if="searchResults.length > 0" class="pt-1">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            {{ $t('activities.searchResults') }}
-          </p>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-            <button
-              v-for="result in searchResults"
-              :key="`${result.externalSource}-${result.externalId}`"
-              type="button"
-              class="text-left rounded-xl border border-border/40 bg-background/60 overflow-hidden hover:border-primary/40 hover:shadow-sm transition-all group/result"
-              @click="addResult(result)"
-            >
-              <div class="aspect-[2/3] bg-muted relative overflow-hidden">
-                <img
-                  v-if="result.imageUrl"
-                  :src="result.imageUrl"
-                  :alt="result.title"
-                  class="h-full w-full object-cover group-hover/result:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                />
-                <div v-else class="h-full w-full flex items-center justify-center text-muted-foreground/50">
-                  <Plus class="w-6 h-6" />
-                </div>
-                <div class="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent">
-                  <p class="text-[11px] font-semibold text-white line-clamp-2 leading-tight">{{ result.title }}</p>
-                </div>
-              </div>
-              <div class="px-2 py-1.5 flex items-center justify-between gap-1">
-                <span class="text-[10px] text-muted-foreground truncate">{{ result.subtitle }}</span>
-                <Plus class="w-3 h-3 text-primary shrink-0" />
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <p v-else-if="searched && !isSearching" class="text-xs text-muted-foreground py-2">
-          {{ $t('activities.noSearchResults') }}
-        </p>
-      </section>
-
-      <!-- Status filter -->
-      <div class="flex items-center justify-between gap-3 flex-wrap">
-        <div class="flex rounded-xl border border-border/50 p-0.5 bg-muted/30">
-          <button
-            v-for="f in statusFilters"
-            :key="f.id"
-            type="button"
-            class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-            :class="statusFilter === f.id ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'"
-            @click="statusFilter = f.id"
-          >
-            {{ f.label }}
-          </button>
-        </div>
-        <p class="text-xs text-muted-foreground">
-          {{ store.wantCount }} {{ $t('activities.wantLabel') }} · {{ store.doneCount }} {{ $t('activities.done') }}
-        </p>
-      </div>
-    </div>
-
-    <!-- Loading -->
-    <div v-if="store.isLoading && store.items.length === 0" class="flex justify-center py-16">
-      <span class="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
-    </div>
-
-    <!-- Grouped lists -->
-    <div v-else class="space-y-8">
-      <section v-for="group in visibleGroups" :key="group.type" class="space-y-3">
-        <div class="flex items-center gap-2">
-          <component :is="group.icon" class="w-4 h-4 text-muted-foreground" />
-          <h3 class="text-sm font-bold text-foreground">{{ group.label }}</h3>
-          <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
-            {{ group.items.length }}
-          </span>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          <ActivityCard
-            v-for="item in group.items"
-            :key="item.id"
-            :item="item"
-            :data-search-record="item.id"
-            @toggle="toggleItem"
-            @delete="removeItem"
-          />
-        </div>
-      </section>
-
-      <div
-        v-if="visibleGroups.length === 0"
-        class="text-center py-14 px-4 rounded-3xl border border-dashed border-border/40 bg-muted/5"
-      >
-        <div class="w-12 h-12 rounded-full bg-muted mx-auto mb-3 flex items-center justify-center">
-          <Clapperboard class="w-5 h-5 text-muted-foreground/70" />
-        </div>
-        <p class="text-sm font-medium text-muted-foreground">{{ $t('activities.empty') }}</p>
-      </div>
-    </div>
+ <div ref="libraryRoot" class="activity-library workspace-content mx-auto space-y-3">
+  <div class="workspace-toolbar space-y-3">
+   <template v-if="!opened">
+    <form v-if="canWrite" class="flex items-center gap-2" @submit.prevent="createCollection"><input v-model="newName" class="activity-input flex-1" maxlength="80" :placeholder="t('activityLibrary.collectionPlaceholder')" :aria-label="t('activityLibrary.collectionName')" :disabled="working||store.setupRequired" /><button type="submit" class="activity-button is-primary !min-h-[40px]" :disabled="working||store.isLoading||store.setupRequired||!newName.trim()"><Plus :size="15" />{{ t('activityLibrary.create') }}</button></form>
+    <div class="activity-breadcrumb"><span>{{ t(showArchived?'activityLibrary.archivedCollections':'activityLibrary.collections') }}</span><button v-if="hasArchives||showArchived" type="button" class="activity-subtle" @click="showArchived=!showArchived"><Archive :size="13" />{{ t(showArchived?'activityLibrary.showActive':'activityLibrary.showArchived') }}</button></div>
+   </template>
+   <template v-else>
+    <div class="activity-breadcrumb"><button type="button" class="activity-back" :aria-label="t('activityLibrary.back')" @click="opened=''"><ArrowLeft :size="16" /></button><button class="activity-subtle" @click="opened=''">{{ t('activityLibrary.collections') }}</button><ChevronRight :size="12" class="opacity-40" /><span class="activity-collection-title"><span v-if="currentCollection" class="activity-color-dot" :style="{backgroundColor:currentCollection.color}" />{{ collectionName }}</span><button v-if="canWrite&&currentCollection" type="button" class="activity-icon ml-auto" :aria-label="t('activityLibrary.editCollection')" @click="editCollection(currentCollection)"><MoreHorizontal :size="17" /></button></div>
+    <div v-if="currentCollection?.archived_at" class="activity-notice"><span>{{ t('activityLibrary.collectionArchived') }}</span><button v-if="canWrite" class="activity-button" :disabled="working" @click="changeArchive(currentCollection,true)"><RotateCcw :size="14" />{{ t('activityLibrary.restore') }}</button></div>
+    <form v-else-if="canWrite" class="activity-add" @submit.prevent="runSearch">
+     <CustomSelect v-model="selectedType" :options="typeOptions" size="sm" popover :aria-label="t('activityLibrary.type')" :disabled="store.setupRequired" class="activity-add-type" />
+     <input v-model="searchQuery" class="activity-input" maxlength="240" :placeholder="t('activities.searchPlaceholders.'+selectedType)" :aria-label="t('activities.searchPlaceholders.'+selectedType)" :disabled="store.setupRequired" />
+     <button type="submit" class="activity-button !min-h-[40px]" :disabled="!searchQuery.trim()||isSearching||store.setupRequired" :title="t('activities.search')" :aria-label="t('activities.search')"><Loader2 v-if="isSearching" :size="15" class="animate-spin" /><Search v-else :size="15" /><span class="hidden sm:inline">{{ t('activities.search') }}</span></button>
+     <button type="button" class="activity-button is-primary !min-h-[40px]" :disabled="!searchQuery.trim()||working||store.setupRequired" :title="t('activityLibrary.addByName')" :aria-label="t('activityLibrary.addByName')" @click="addManual"><Plus :size="15" /><span class="hidden sm:inline">{{ t('activityLibrary.add') }}</span></button>
+    </form>
+    <div class="activity-list-filters"><CustomSelect v-model="typeFilter" :options="filterTypes" size="sm" variant="ghost" popover :aria-label="t('activityLibrary.filterType')" class="w-[120px]" /><CustomSelect v-model="statusFilter" :options="statusOptions" size="sm" variant="ghost" popover :aria-label="t('activityLibrary.filterStatus')" class="w-[130px]" /><span class="activity-hint ml-auto">{{ t('activityLibrary.itemCount',{count:currentItems.length}) }}</span></div>
+   </template>
   </div>
+
+  <div v-if="store.error&&!editorMode" class="activity-notice" role="alert"><span>{{ t('activityLibrary.errors.'+store.error) }}</span><button type="button" class="activity-subtle shrink-0" :disabled="store.isLoading||working" @click="reload">{{ t('activityLibrary.retry') }}</button></div>
+  <div v-if="store.isLoading&&!store.items.length&&!store.collections.length" class="activity-empty" role="status"><Loader2 :size="20" class="animate-spin mx-auto mb-2" />{{ t('activityLibrary.loading') }}</div>
+  <Transition v-else name="activity-view" mode="out-in">
+   <div v-if="!opened" key="collections">
+    <p v-if="!store.collections.length&&!store.items.length" class="activity-hint mb-3 px-1">{{ t('activityLibrary.startHint') }}</p>
+    <div class="workspace-card-grid activity-collection-grid">
+     <article v-for="group in shownCollections" :key="group.id" class="activity-collection-card workspace-card">
+      <button type="button" class="activity-collection-open" :aria-label="t('activityLibrary.openCollection',{name:group.name})" @click="opened=group.id">
+       <div class="flex items-center gap-2.5 pr-5"><Folder :size="18" :stroke-width="1.5" :style="{color:group.color}" /><h3>{{ group.name }}</h3></div>
+       <div class="activity-collection-preview"><span v-for="item in group.items.slice(0,4)" :key="item.id" class="activity-mini-cover"><img v-if="activityImage(item.image_url)" :src="activityImage(item.image_url)!" alt="" loading="lazy" referrerpolicy="no-referrer" @error="($event.target as HTMLImageElement).style.opacity='0'" /><component v-else :is="typeIcons[item.type]" :size="17" :stroke-width="1.3" /></span><span v-if="!group.items.length" class="activity-hint">{{ t('activityLibrary.emptyCollection') }}</span><span v-if="group.items.length>4" class="activity-hint ml-1">+{{ group.items.length-4 }}</span></div>
+       <div class="activity-collection-summary"><span>{{ t('activityLibrary.itemCount',{count:group.items.length}) }}</span><span v-if="group.done">{{ t('activityLibrary.completedCount',{count:group.done}) }}</span><ChevronRight :size="14" class="ml-auto opacity-50" /></div>
+      </button>
+      <button v-if="canWrite&&group.id!==generalCollection" type="button" class="activity-icon activity-collection-menu" :aria-label="t('activityLibrary.editCollection')+': '+group.name" @click="editCollection(group.source!)"><MoreHorizontal :size="16" /></button>
+     </article>
+    </div>
+    <p v-if="!shownCollections.length" class="activity-empty">{{ t('activityLibrary.noArchives') }}</p>
+   </div>
+   <div v-else :key="opened" class="space-y-3">
+    <section v-if="searched" class="activity-results" :aria-label="t('activities.searchResults')"><div class="flex items-center justify-between mb-2"><span class="activity-hint">{{ t('activities.searchResults') }}</span><button type="button" class="activity-icon" :aria-label="t('common.close')" @click="clearSearch"><X :size="15" /></button></div><p v-if="isSearching" class="activity-hint py-2" role="status">{{ t('activityLibrary.loading') }}</p><p v-else-if="!searchResults.length" class="activity-hint py-2">{{ t('activities.noSearchResults') }}</p><div v-else class="activity-results-grid"><button v-for="result in searchResults" :key="result.externalSource+result.externalId" type="button" class="activity-result" :disabled="working||resultAdded(result)" @click="addResult(result)"><span class="activity-result-image"><img v-if="activityImage(result.imageUrl)" :src="activityImage(result.imageUrl)!" alt="" loading="lazy" referrerpolicy="no-referrer" /><component v-else :is="typeIcons[result.type]" :size="17" /></span><span class="flex-1 min-w-0"><span class="block text-xs line-clamp-2">{{ result.title }}</span><span class="activity-hint block truncate">{{ result.subtitle }}</span></span><Check v-if="resultAdded(result)" :size="15" class="text-primary shrink-0" /><Plus v-else :size="15" class="text-muted-foreground shrink-0" /></button></div></section>
+    <div v-if="filteredItems.length" class="workspace-card-grid activity-items-grid"><ActivityCard v-for="item in filteredItems" :key="item.id" :item="item" :busy="store.pending.includes(item.id)||working" :can-organize="!store.setupRequired" :read-only="!!currentCollection?.archived_at" @toggle="toggleItem" @delete="removeItem" @organize="organizeItem" /></div>
+    <div v-else class="activity-empty"><FolderOpen :size="26" :stroke-width="1.2" class="mx-auto mb-3 opacity-50" /><p>{{ t(currentItems.length?'activityLibrary.noMatches':'activityLibrary.emptyHint') }}</p></div>
+   </div>
+  </Transition>
+  <Teleport to="body"><ActivityCollectionEditor v-if="editorMode" :mode="editorMode" :collection="editingCollection" :item="editingItem" :collections="store.collections" :group-ids="editingItem?store.memberships.filter(m=>m.item_id===editingItem!.id).map(m=>m.group_id):[]" :busy="working" :error="editorError" @close="closeEditor" @save="saveEditor" @archive="changeArchive(editingCollection!,!!editingCollection?.archived_at)" /></Teleport>
+ </div>
 </template>
-
 <script setup lang="ts">
-import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { useWorkspaceDraft } from '@/lib/workspaceScope'
-import { computed, ref, watch } from 'vue'
-import { Search, Plus, Film, Tv, MapPin, BookOpen, Clapperboard } from 'lucide-vue-next'
+import { computed,ref,watch,inject,nextTick,onDeactivated,onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Folder,FolderOpen,ArrowLeft,ChevronRight,MoreHorizontal,Plus,Search,X,Check,Loader2,Film,Tv,BookOpen,MapPin,Archive,RotateCcw } from 'lucide-vue-next'
+import CustomSelect from '@/components/ui/CustomSelect.vue'
+import { useModuleAccess,useModuleLoad,useWorkspaceDraft } from '@/lib/workspaceScope'
+import { useSearchReveal,searchScrollKey } from '@/lib/searchNavigation'
 import { useUIStore } from '@/stores/ui'
-import { useActivityListsStore } from '../stores/activityLists'
-import {
-  searchActivities,
-  isTmdbConfigured,
-  type ActivityType,
-  type SearchResult,
-} from '../lib/providers'
+import { useWorkspacesStore } from '@/stores/workspaces'
+import { useActivityListsStore,type ActivityItem } from '../stores/activityLists'
+import { activityImage,activityLibraryError,activityTypes,generalCollection,type ActivityCollection } from '../lib/collections'
+import { searchActivities,isTmdbConfigured,type ActivityType,type SearchResult } from '../lib/providers'
 import ActivityCard from './ActivityCard.vue'
-
-const { canWrite } = useModuleAccess('activities')
-
-const { t } = useI18n()
-const uiStore = useUIStore()
-const store = useActivityListsStore()
-
-const selectedType = useWorkspaceDraft<ActivityType>('activity-type', 'movie')
-const searchQuery = useWorkspaceDraft('activity-search', '')
-const searchResults = ref<SearchResult[]>([])
-const isSearching = ref(false)
-const searched = ref(false)
-const statusFilter = useWorkspaceDraft<'all' | 'want' | 'done'>('activity-status', 'all')
-
-const statusFilters = computed(() => [
-  { id: 'all' as const, label: t('activities.filters.all') },
-  { id: 'want' as const, label: t('activities.filters.want') },
-  { id: 'done' as const, label: t('activities.filters.done') },
-])
-
-const searchPlaceholder = computed(() => t(`activities.searchPlaceholders.${selectedType.value}`))
-
-const needsTmdbKey = computed(
-  () =>
-    (selectedType.value === 'movie' || selectedType.value === 'series') && !isTmdbConfigured()
-)
-
-watch(selectedType, () => {
-  searchResults.value = []
-  searched.value = false
+import ActivityCollectionEditor from './ActivityCollectionEditor.vue'
+const {t}=useI18n(),{canWrite}=useModuleAccess('activities'),store=useActivityListsStore(),ui=useUIStore(),workspaces=useWorkspacesStore(),scope=workspaces.sessionKey
+const libraryRoot=ref<HTMLElement>(),reveal=inject(searchScrollKey,null)
+const opened=useWorkspaceDraft('activity-open-collection',''),selectedType=useWorkspaceDraft<ActivityType>('activity-type','movie'),searchQuery=useWorkspaceDraft('activity-search','')
+const statusFilter=ref('all'),typeFilter=ref('all'),showArchived=ref(false),newName=ref(''),working=ref(false),createId=ref(crypto.randomUUID())
+const searchResults=ref<SearchResult[]>([]),isSearching=ref(false),searched=ref(false),typeIcons={movie:Film,series:Tv,book:BookOpen,place:MapPin}
+let searchGeneration=0,controller:AbortController|undefined
+const editorMode=ref<'collection'|'memberships'|null>(null),editingCollection=ref<ActivityCollection|null>(null),editingItem=ref<ActivityItem|null>(null),editorError=ref<string|null>(null)
+const currentCollection=computed(()=>store.collections.find(c=>c.id===opened.value)),collectionName=computed(()=>opened.value===generalCollection?t('activityLibrary.general'):currentCollection.value?.name||'')
+const currentItems=computed(()=>store.inCollection(opened.value)),hasArchives=computed(()=>store.collections.some(c=>c.archived_at))
+const shownCollections=computed(()=>{
+ const groups:{id:string;name:string;color:string;source:ActivityCollection|null;items:ActivityItem[];done:number}[]=store.collections.filter(c=>Boolean(c.archived_at)===showArchived.value).map(c=>{const items=store.inCollection(c.id);return {id:c.id,name:c.name,color:c.color,source:c,items,done:items.filter(i=>i.status==='done').length}})
+ if(!showArchived.value){const items=store.inCollection(generalCollection);if(items.length||!groups.length)groups.unshift({id:generalCollection,name:t('activityLibrary.general'),color:'currentColor',source:null,items,done:items.filter(i=>i.status==='done').length})}
+ return groups
 })
-
-const visibleGroups = computed(() => {
-  const order: ActivityType[] = ['movie', 'series', 'place', 'book']
-  const icons = { movie: Film, series: Tv, place: MapPin, book: BookOpen }
-
-  return order
-    .map((type) => {
-      let list = store.itemsByType[type] || []
-      if (statusFilter.value !== 'all') {
-        list = list.filter((i) => i.status === statusFilter.value)
-      }
-      return {
-        type,
-        label: t(`activities.types.${type}`),
-        icon: icons[type],
-        items: list,
-      }
-    })
-    .filter((g) => g.items.length > 0)
-})
-
-useModuleLoad(() => store.loadItems())
-
-async function runSearch() {
-  if (!searchQuery.value.trim() || isSearching.value) return
-
-  if (needsTmdbKey.value) {
-    uiStore.addToast(t('activities.tmdbKeyMissing'), 'error')
-    return
-  }
-
-  isSearching.value = true
-  searched.value = true
-  try {
-    searchResults.value = await searchActivities(selectedType.value, searchQuery.value)
-  } catch (err) {
-    searchResults.value = []
-    const msg = err instanceof Error ? err.message : ''
-    if (msg === 'TMDB_KEY_MISSING') {
-      uiStore.addToast(t('activities.tmdbKeyMissing'), 'error')
-    } else {
-      uiStore.addToast(t('activities.searchError'), 'error')
-    }
-  } finally {
-    isSearching.value = false
-  }
+const filteredItems=computed(()=>currentItems.value.filter(i=>(typeFilter.value==='all'||i.type===typeFilter.value)&&(statusFilter.value==='all'||i.status===statusFilter.value)))
+const typeOptions=computed(()=>activityTypes.map(value=>({value,label:t('activities.types.'+value)}))),filterTypes=computed(()=>[{value:'all',label:t('activityLibrary.allTypes')},...typeOptions.value])
+const statusOptions=computed(()=>['all','want','done'].map(value=>({value,label:value==='all'?t('activities.filters.all'):t(typeFilter.value==='all'?'activities.filters.'+value:`activityLibrary.states.${typeFilter.value}.${value}`)})))
+useModuleLoad(reload)
+async function reload(){await store.loadItems();if(opened.value&&opened.value!==generalCollection&&!currentCollection.value)opened.value=''}
+watch(opened,async()=>{clearSearch();searchQuery.value='';statusFilter.value='all';typeFilter.value='all';await nextTick();const toolbar=libraryRoot.value?.querySelector<HTMLElement>('.workspace-toolbar');if(toolbar&&libraryRoot.value!.getBoundingClientRect().top<0)reveal?.(toolbar,'smooth')})
+watch(selectedType,clearSearch)
+function clearSearch(){searchGeneration++;controller?.abort();controller=undefined;searchResults.value=[];searched.value=false;isSearching.value=false}
+onDeactivated(()=>{clearSearch();closeEditor(true)})
+onBeforeUnmount(()=>{clearSearch();closeEditor(true)})
+async function run(action:()=>Promise<unknown>){if(working.value)return false;working.value=true;editorError.value=null;try{await action();return true}catch(error){const code=activityLibraryError(error);if(editorMode.value)editorError.value=code;else ui.addToast(t('activityLibrary.errors.'+code),'error');return false}finally{working.value=false}}
+async function createCollection(){if(!newName.value.trim())return;const name=newName.value.trim();if(await run(async()=>{const data=await store.mutate('collection.create',createId.value,{name});opened.value=data.collection.id})){if(newName.value.trim()===name)newName.value='';createId.value=crypto.randomUUID();showArchived.value=false}}
+function editCollection(collection:ActivityCollection){editingCollection.value={...collection};editingItem.value=null;editorError.value=null;editorMode.value='collection'}
+function organizeItem(item:ActivityItem){editingItem.value={...item};editingCollection.value=null;editorError.value=null;editorMode.value='memberships'}
+function closeEditor(force=false){if(working.value&&!force)return;editorMode.value=null;editingCollection.value=null;editingItem.value=null;editorError.value=null}
+async function saveEditor(payload:{name:string;color:string;group_ids:string[]}){if(await run(async()=>{if(editorMode.value==='memberships'&&editingItem.value)await store.mutate('item.collections',editingItem.value.id,{group_ids:payload.group_ids},editingItem.value.version);else if(editingCollection.value)await store.mutate('collection.update',editingCollection.value.id,{name:payload.name,color:payload.color},editingCollection.value.version)})){closeEditor();ui.addToast(t('activityLibrary.saved'),'success')}}
+async function changeArchive(collection:ActivityCollection,restore=false){let receipt:ActivityCollection|undefined
+ if(!await run(async()=>{receipt=(await store.mutate(restore?'collection.restore':'collection.archive',collection.id,{},collection.version)).collection}))return
+ closeEditor();if(opened.value===collection.id)opened.value=''
+ if(!restore&&receipt)ui.addUndoToast(()=>t('activityLibrary.collectionArchivedToast'),t('activityLibrary.undo'),async()=>{try{await store.mutate('collection.restore',collection.id,{},receipt!.version)}catch(error){ui.addToast(t('activityLibrary.errors.'+activityLibraryError(error)),'error');throw error}},`activity-collections:${scope}`)
 }
-
-async function addResult(result: SearchResult) {
-  const created = await store.addFromSearch(result)
-  if (store.error === 'ALREADY_EXISTS') {
-    uiStore.addToast(t('activities.alreadyExists'), 'info')
-    store.error = null
-    return
-  }
-  if (created) {
-    uiStore.addToast(t('activities.added'), 'success')
-  } else if (store.error) {
-    uiStore.addToast(store.error, 'error')
-  }
+async function runSearch(){
+ if(!searchQuery.value.trim()||isSearching.value||!opened.value)return
+ if((selectedType.value==='movie'||selectedType.value==='series')&&!isTmdbConfigured()){ui.addToast(t('activityLibrary.catalogUnavailable'),'info');return}
+ const request=++searchGeneration,type=selectedType.value,group=opened.value,query=searchQuery.value
+ controller?.abort();const abort=new AbortController();controller=abort;isSearching.value=true;searched.value=true;searchResults.value=[]
+ const timeout=setTimeout(()=>abort.abort(),20000)
+ try{const results=await searchActivities(type,query,abort.signal);if(request===searchGeneration&&scope===workspaces.sessionKey&&group===opened.value)searchResults.value=results}
+ catch{if(request===searchGeneration&&scope===workspaces.sessionKey)ui.addToast(t('activities.searchError'),'error')}
+ finally{clearTimeout(timeout);if(request===searchGeneration){isSearching.value=false;controller=undefined}}
 }
-
-async function toggleItem(id: string) {
-  await store.toggleStatus(id)
+const addRequests=new Map<string,string>()
+function resultKey(result:SearchResult){return `${opened.value}:${result.type}:${result.externalSource}:${result.externalId}`}
+function resultAdded(result:SearchResult){return currentItems.value.some(item=>item.type===result.type&&item.external_source===result.externalSource&&item.external_id===result.externalId)}
+async function addResult(result:SearchResult){const key=resultKey(result),id=addRequests.get(key)||crypto.randomUUID();addRequests.set(key,id)
+ const saved=await run(async()=>{const data=await store.addFromSearch(result,opened.value,id)
+  if(data.already_exists&&opened.value===generalCollection&&data.group_ids?.length){const ids:string[]=data.group_ids;opened.value=ids.find(id=>store.collections.some(c=>c.id===id&&!c.archived_at))||ids[0]!;ui.addToast(t('activities.alreadyExists'),'info')}
+  else ui.addToast(t(data.already_exists?'activityLibrary.alreadyInCollection':'activityLibrary.added'),'info')
+ })
+ if(saved)addRequests.delete(key)
+ return saved
 }
-
-async function removeItem(id: string) {
-  if (!canWrite.value) return
-  await store.deleteItem(id)
-  if (store.error) uiStore.addToast(store.error, 'error')
-}
-useSearchReveal('activities', async (hit, isCurrent) => { await store.loadItems(hit.record_id);if(!isCurrent())return;statusFilter.value='all' })
+async function addManual(){const title=searchQuery.value.trim();if(!title)return;const result:SearchResult={type:selectedType.value,title,subtitle:'',imageUrl:null,externalSource:'manual',externalId:`manual:${selectedType.value}:${title}`,meta:{}};if(await addResult(result)){if(searchQuery.value.trim()===title)searchQuery.value='';clearSearch()}}
+async function toggleItem(id:string){if(!await store.toggleStatus(id))ui.addToast(t('activityLibrary.errors.'+(store.error||'failed')),'error')}
+async function removeItem(id:string){if(!canWrite.value)return;if(!await store.deleteItem(id))ui.addToast(t('activityLibrary.errors.'+(store.error||'failed')),'error')}
+useSearchReveal('activities',async(hit,isCurrent)=>{await store.loadItems(hit.record_id);if(!isCurrent())return;const groups=store.memberships.filter(m=>m.item_id===hit.record_id).map(m=>m.group_id);opened.value=groups.find(id=>store.collections.some(c=>c.id===id&&!c.archived_at))||groups[0]||generalCollection;statusFilter.value='all';typeFilter.value='all';clearSearch()})
 </script>
+<style scoped>
+.activity-breadcrumb{display:flex;align-items:center;gap:8px;min-height:28px;color:hsl(var(--muted-foreground));font-size:11px}.activity-breadcrumb>.activity-subtle:last-child{margin-left:auto}.activity-subtle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:hsl(var(--muted-foreground))}.activity-subtle:hover{color:hsl(var(--foreground))}.activity-back{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;flex-shrink:0}.activity-back:hover{background:hsl(var(--muted)/.5)}.activity-collection-title{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:hsl(var(--foreground))}.activity-collection-grid{--workspace-card-min:14rem;gap:12px}.activity-items-grid{--workspace-card-min:18rem;gap:12px}.activity-collection-card{position:relative;border-radius:16px;background:hsl(var(--card));overflow:hidden}.activity-collection-open{display:flex;flex-direction:column;gap:17px;padding:17px;width:100%;min-height:156px;text-align:left}.activity-collection-open:hover{background:hsl(var(--muted)/.18)}.activity-collection-open:focus-visible{outline:2px solid hsl(var(--primary)/.5);outline-offset:-3px;border-radius:inherit}.activity-collection-card h3{font-size:13px;line-height:1.5;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.activity-collection-preview{display:flex;align-items:center;gap:6px;min-height:42px}.activity-mini-cover{display:flex;align-items:center;justify-content:center;width:32px;height:42px;border-radius:5px;overflow:hidden;background:linear-gradient(145deg,hsl(var(--primary)/.07),hsl(var(--muted)/.65));color:hsl(var(--muted-foreground)/.6)}.activity-mini-cover img{width:100%;height:100%;object-fit:cover}.activity-collection-summary{display:flex;align-items:center;gap:10px;font-size:10px;color:hsl(var(--muted-foreground));margin-top:auto}.activity-collection-menu{position:absolute;top:11px;right:9px}.activity-list-filters{display:flex;align-items:center;gap:4px;border-bottom:1px solid hsl(var(--border)/.6);padding-bottom:8px}.activity-add{display:grid;grid-template-columns:108px minmax(0,1fr) auto auto;gap:7px;align-items:center}.activity-add-type{min-width:0}.activity-notice{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid hsl(var(--border)/.6);border-radius:12px;font-size:12px;color:hsl(var(--muted-foreground))}.activity-empty{text-align:center;padding:30px 14px;color:hsl(var(--muted-foreground));font-size:12px}.activity-results{border:1px solid hsl(var(--border)/.65);border-radius:14px;padding:10px 12px;background:hsl(var(--muted)/.12)}.activity-results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:6px}.activity-result{display:flex;align-items:center;gap:9px;padding:8px;border:1px solid transparent;border-radius:10px;text-align:left}.activity-result:hover:not(:disabled){border-color:hsl(var(--border));background:hsl(var(--card))}.activity-result:disabled{cursor:default}.activity-result-image{display:flex;align-items:center;justify-content:center;width:30px;height:42px;border-radius:4px;overflow:hidden;flex-shrink:0;background:hsl(var(--muted));color:hsl(var(--muted-foreground))}.activity-result-image img{width:100%;height:100%;object-fit:cover}.activity-view-enter-active{transition:opacity 180ms ease,transform 200ms cubic-bezier(.22,1,.36,1)}.activity-view-leave-active{transition:opacity 100ms ease}.activity-view-enter-from{opacity:0;transform:translateY(5px)}.activity-view-leave-to{opacity:0}@media(max-width:479px){.activity-add{grid-template-columns:92px minmax(0,1fr) 38px 38px;gap:5px}.activity-add .activity-button{padding:8px}.activity-list-filters>.activity-hint{font-size:10px}}@media(prefers-reduced-motion:reduce){.activity-view-enter-active,.activity-view-leave-active{transition:none}.activity-view-enter-from{transform:none}}
+</style>

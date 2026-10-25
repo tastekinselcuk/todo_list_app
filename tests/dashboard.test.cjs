@@ -16,6 +16,7 @@ function load(source, dependencies = {}, globals = {}) {
 }
 const dates = load(fs.readFileSync('src/features/plans/lib/periods.ts', 'utf8'))
 const overview = load(fs.readFileSync('src/features/dashboard/lib/overview.ts', 'utf8'), { '@/features/plans/lib/periods': dates })
+const pageNavigation=load(fs.readFileSync('src/lib/workspaceSections.ts','utf8'),{'./moduleCatalog':load(fs.readFileSync('src/lib/moduleCatalog.ts','utf8'))})
 const localDate = new Date(2026, 9, 8, 0, 15)
 
 test('home retains readable modules while suppressing capture and completion for viewers', async () => {
@@ -84,6 +85,7 @@ function fixture({ active = ['plans', 'quick', 'detailed', 'periodic'], failures
     'vue-i18n': { useI18n: () => ({ t: key => key, locale: vue.ref('tr') }) },
     'lucide-vue-next': {},
     '@/components/ui/CustomSelect.vue': { default: {} }, '@/components/ui/WorkspacePicker.vue': { default: {} },
+    '@/components/ui/WorkspaceRail.vue':{default:{}}, '@/lib/workspaceSections':pageNavigation,
     '@/features/analytics/components/WeeklyAnalytics.vue': { default: {} },
     '@/lib/workspaceScope': { useModuleAccess: id => ({canWrite:vue.ref(!readonly.includes(id))}), workspaceStorageKey: key => key, useWorkspaceDraft(key, initial) {
       const draft = vue.ref(memory.has(key) ? JSON.parse(memory.get(key)) : initial)
@@ -129,6 +131,22 @@ test('home loads enabled modules only and reports failed fetches rather than zer
   assert.equal(f.state.moduleMetric('secure'), 'dashboard.home.protected')
   assert.equal(f.state.refreshing.value, false)
   f.close()
+})
+
+test('home keeps related content together and migrates saved sections without losing capture drafts or refetching',async()=>{
+  const f=fixture()
+  try{
+    await settle();const calls=f.calls.length
+    f.state.draft.value='Keep this idea';f.state.homeSection.value='modules';await settle()
+    f.state.homeSection.value='agenda';await settle()
+    assert.equal(f.calls.length,calls);assert.equal(f.state.draft.value,'Keep this idea')
+    assert.equal(f.state.homeSection.value,'overview')
+    assert.deepEqual(Array.from(f.state.homeNavigation.value.items,item=>item.id),['overview'])
+  }finally{f.close()}
+  for(const selected of ['agenda','modules','unknown']){
+    const other=fixture({active:['plans','quick'],saved:{'dashboard-section':JSON.stringify(selected)}})
+    try{assert.equal(other.state.homeSection.value,'overview');assert.equal(other.state.homeNavigation.value.items.some(item=>item.id==='agenda'),false)}finally{other.close()}
+  }
 })
 
 test('home opens shortest populated period, remembers choice and hands it to Plans', async () => {

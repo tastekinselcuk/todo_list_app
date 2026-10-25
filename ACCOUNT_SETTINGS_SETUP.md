@@ -19,3 +19,12 @@ Profil değiştirme ve menüye yansıma; hatalı kaydetmede taslağın korunmas�
 Mevcut parola doğrulaması, browser storage veya uygulamanın aktif oturumunu değiştirmeyen geçici bir Auth istemcisinde yapılır. Geçici doğrulama oturumu yerel kapsamda kapatılır. Parolalar metadata'ya, localStorage'a veya çalışma alanı taslaklarına yazılmaz; başarılı işlem, iptal ve bileşen kapanışında alanlar temizlenir.
 
 Tüm cihazlardan çıkış refresh oturumlarını sonlandırır; mevcut access token'lar geçerlilikleri bitene kadar geçerli kalabilir. Uygulama diğer cihazların/IP adreslerinin güvenilir bir envanterini elde etmediği için oturum listesi veya cihaz sayısı üretmez.
+
+## Google / GitHub ile giriş
+
+- İstemci akışları eklendi; giriş ekranı Supabase'in public Auth ayarından yalnızca etkin sağlayıcıları gösterir. Kontrolde Google/GitHub kapalı, e-posta açık bulundu. E-posta/parola yöntemi devam eder. Sağlayıcı ayarları okunamazsa e-posta girişi engellenmez.
+- Google Cloud → OAuth istemcisi (Web application) oluştur; uygulamanın üretim ve localhost origin adreslerini ekle. Authorized redirect URI: `https://saamxvuphakjpffvvcbj.supabase.co/auth/v1/callback`. Google Client ID/Secret değerlerini yalnızca Supabase Authentication → Sign In / Providers → Google alanına girip etkinleştir.
+- GitHub istenirse Developer settings → OAuth Apps → New OAuth App; callback aynı Supabase adresi. ID/Secret değerlerini Supabase GitHub sağlayıcısına girip etkinleştir.
+- Supabase URL Configuration → Site URL üretim adresi; Redirect URLs listesine uygulamanın üretim giriş adresini ve `http://localhost:5173/` adresini ekle. Kod aynı origin/path'e döner; takvim veya başka servis kapsamı istemez. Client secret hiçbir `VITE_` değişkenine yazılmaz.
+- Kurulum sonrası giriş ekranını yenile: etkin sağlayıcı düğmesi otomatik görünür. İptal/başarısız dönüş anlaşılır mesajla gösterilir; başarılı oturum mevcut Auth listener ve çalışma alanı yükleme akışını kullanır. Tarayıcı geri tuşuyla dönülürse bekleyen giriş durumu temizlenir.
+- Canlı OAuth testi, sağlayıcılar etkinleştirildikten sonra gerçek hesapla yapılmalı; bu değişiklikte sunucudaki sağlayıcı ayarları değiştirilmedi. [Google kurulumu](https://supabase.com/docs/guides/auth/social-sign-in/auth-google), [GitHub kurulumu](https://supabase.com/docs/guides/auth/social-sign-in/auth-github).

@@ -1,7 +1,7 @@
 <template>
-  <div :class="['mx-auto min-w-0 space-y-5 pb-8', settings.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
+  <div :class="['page-width-transition mx-auto w-full min-w-0 space-y-5 pb-8', settings.isFullScreen ? 'max-w-[98%]' : 'max-w-5xl']">
     <header class="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 class="text-lg font-semibold tracking-tight">{{ t('analytics.title') }}</h1><p class="mt-1 text-xs text-muted-foreground">{{ t('analytics.subtitle') }}</p></div>
+      <div><div class="flex items-center gap-2"><WorkspaceRail :model-value="analyticsPage" :context="analyticsNavigation" @update:model-value="selectPage" /><h1 class="text-lg font-semibold tracking-tight">{{ t(`pageNav.analytics.${analyticsPage}`) }}</h1></div><p class="mt-1 text-xs text-muted-foreground">{{ t('analytics.subtitle') }}</p></div>
       <div class="flex flex-wrap items-center gap-2">
         <CustomSelect v-model="workspace" :options="workspaceOptions" :aria-label="t('analytics.workspace')" size="sm" class="w-40" />
         <CustomSelect v-if="section==='activity'" v-model="preset" :options="presetOptions" :aria-label="t('analytics.period')" size="sm" class="w-32" />
@@ -9,8 +9,7 @@
         <button v-if="section==='activity'" type="button" class="analytics-icon" :disabled="!report" :title="t('analytics.export')" :aria-label="t('analytics.export')" @click="exportReport"><Download class="h-3.5 w-3.5" /></button>
       </div>
     </header>
-    <div class="inline-flex gap-1 rounded-xl border border-border/60 bg-card/50 p-1" role="group" :aria-label="t('analytics.title')"><button v-for="view in ['activity','finance'] as const" :key="view" type="button" :aria-pressed="section===view" class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" :class="section===view?'bg-background text-foreground shadow-sm':'text-muted-foreground hover:text-foreground'" @click="section=view">{{ t(view==='finance'?'finance.title':'finance.productivity') }}</button></div>
-    <FinanceReport v-if="section==='finance'" :workspace-id="workspace" />
+    <FinanceReport v-if="section==='finance'" class="context-panel" :workspace-id="workspace" />
     <template v-else>
     <div class="flex flex-wrap items-center justify-between gap-3 text-xs">
       <div class="flex items-center gap-1 rounded-xl border border-border/60 bg-card/60 p-1" role="group" :aria-label="t('analytics.activityScope')">
@@ -30,7 +29,7 @@
       <p v-if="!fullCoverage" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><Info class="mt-0.5 h-3.5 w-3.5 shrink-0" />{{ t('analytics.coverage', { date: recordingLabel }) }}</p>
       <p v-if="pending || storageFailed" class="text-xs leading-5 text-amber-700 dark:text-amber-400" role="status">{{ t(storageFailed ? 'analytics.storageIssue' : 'analytics.pendingSync',{count:pending}) }}</p>
 
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="context-panel grid grid-cols-2 gap-3 sm:grid-cols-4">
         <button v-for="metric in metrics" :key="metric.key" type="button" class="workspace-card bg-card/40 px-4 py-3.5 text-left" @click="chooseMetric(metric.key)">
           <span class="flex items-center justify-between gap-2 text-xs text-muted-foreground">{{ metric.label }}<component :is="metric.icon" class="h-3.5 w-3.5" /></span>
           <span class="mt-2 block text-xl font-semibold tracking-tight tabular-nums">{{ metric.value }}</span>
@@ -38,7 +37,7 @@
         </button>
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-2">
+      <div class="context-panel grid gap-4 lg:grid-cols-2">
         <section ref="focusPanel" class="workspace-card min-w-0 bg-card/40 p-4">
           <div class="mb-4 flex items-center justify-between gap-2"><h2 class="text-sm font-medium">{{ t('analytics.focusTrend') }}</h2><span class="text-[11px] text-muted-foreground">{{ t('analytics.minutes') }}</span></div>
           <AnalyticsChart :rows="focusRows" :series="focusSeries" :label="t('analytics.focusTrend')" :selected="selectedDay" @select="selectDay" />
@@ -62,9 +61,9 @@
         <ul class="flex flex-col gap-2 text-xs leading-5 text-muted-foreground"><li v-for="insight in insights" :key="insight.key"><button type="button" class="flex items-start gap-2 text-left hover:text-foreground" @click="chooseMetric(insight.target)"><span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/60" />{{ insight.text }}</button></li></ul>
       </section>
 
-      <section ref="detailsPanel" class="workspace-card overflow-hidden bg-card/40">
+      <section ref="detailsPanel" class="context-panel workspace-card bg-card/40">
         <header class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-3">
-          <div class="flex gap-1" role="group" :aria-label="t('analytics.details')"><button v-for="tab in ['backlog','plans','daily'] as const" :key="tab" type="button" :aria-pressed="detail===tab" :class="['rounded-lg px-3 py-1.5 text-xs transition-colors', detail===tab ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground']" @click="detail=tab; limit=12">{{ t(`analytics.${tab}`) }}</button></div>
+          <CustomSelect v-model="detail" :options="detailOptions" :aria-label="t('analytics.detailView')" size="sm" class="w-44" />
           <span class="text-[11px] text-muted-foreground">{{ detail==='daily' ? (selectedDay ? formatDate(selectedDay) : dateLabel) : t('analytics.currentState') }}</span>
         </header>
         <template v-if="detail==='backlog'">
@@ -97,10 +96,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue'
 import { ArrowUpRight, Clock3, Download, Info, ListTodo, RefreshCw, Repeat2, Timer } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
+import { getPageNavigation, resolvePageSection } from '@/lib/workspaceSections'
+import { useWorkspaceDraft } from '@/lib/workspaceScope'
 import AnalyticsChart from '@/features/analytics/components/AnalyticsChart.vue'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useSettingsStore } from '@/stores/settings'
@@ -110,7 +112,12 @@ const emit=defineEmits<{'enter-workspace':[id:string]}>()
 const {t,locale}=useI18n(),workspaces=useWorkspacesStore(),settings=useSettingsStore()
 const FinanceReport=defineAsyncComponent(()=>import('@/features/finance/components/FinanceReport.vue'))
 const props=defineProps<{initialSection?:'activity'|'finance'}>()
-const section=ref<'activity'|'finance'>(props.initialSection || 'activity'),activityEnabled=computed(()=>section.value==='activity')
+const analyticsNavigation=getPageNavigation('analytics')
+const analyticsPage=useWorkspaceDraft('analytics-section','overview')
+const savedPage=analyticsPage.value
+if(props.initialSection==='finance')analyticsPage.value='finance'
+analyticsPage.value=resolvePageSection('analytics',analyticsPage.value)||'overview'
+const section=computed(() => analyticsPage.value==='finance'?'finance':'activity'),activityEnabled=computed(()=>section.value==='activity')
 const workspace=ref(workspaces.activeId),preset=ref<DatePreset>('week'),personal=ref(true)
 const timezone=ref(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
 const today=computed(()=>localDay(new Date(),timezone.value))
@@ -145,7 +152,16 @@ const metrics=computed(()=>[
   {key:'backlog',label:t('analytics.olderThan30'),icon:Clock3,value:oldItems.value.length,hint:t('analytics.currentState')},
   {key:'plans',label:t('analytics.carried'),icon:Repeat2,value:carried.value.length,hint:t('analytics.carriedHint')},
 ])
-const selectedDay=ref<string|null>(null),detail=ref<'backlog'|'plans'|'daily'>('backlog'),ageFilter=ref<number|null>(null),limit=ref(12)
+const selectedDay=ref<string|null>(null),detail=ref<'backlog'|'plans'|'daily'>(savedPage==='plans'?'plans':savedPage==='daily'?'daily':'backlog'),ageFilter=ref<number|null>(null),limit=ref(12)
+const detailOptions=computed(()=>['backlog','plans','daily'].map(value=>({value,label:t(`analytics.${value}`)})))
+watch(detail,value=>{ageFilter.value=null;limit.value=12;if(value!=='daily')selectedDay.value=null})
+function selectPage(page:string){
+ const section=resolvePageSection('analytics',page)
+ if(!section)return
+ selectedDay.value=null;analyticsPage.value=section
+ if(page==='plans'||page==='daily')detail.value=page
+ else if(page==='tasks')detail.value='backlog'
+}
 const focusPanel=ref<HTMLElement>(),detailsPanel=ref<HTMLElement>()
 watch(()=>[workspace.value,preset.value,from.value,to.value,personal.value],()=>{selectedDay.value=null;ageFilter.value=null;limit.value=12})
 const focusRows=computed(()=>report.value?.daily.map((d,index)=>({day:d.day,current:knownDay(d.day) || d.seconds>0 ? Number(d.seconds)/60 : null,previous:comparison.value ? Number(previous.value?.daily[index]?.seconds || 0)/60 : null})) || [])
@@ -168,8 +184,13 @@ const insights=computed(()=>{
 })
 const moduleLabel=(module:string)=>t(module==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module}Name`)
 function scroll(panel?:HTMLElement) {panel?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'})}
-function chooseMetric(key:string) {if(key==='focus'){scroll(focusPanel.value);return}detail.value=key as 'backlog'|'plans'|'daily';ageFilter.value=null;limit.value=12;scroll(detailsPanel.value)}
-function selectDay(day:string) {selectedDay.value=selectedDay.value===day ? null : day;detail.value='daily'}
+async function chooseMetric(key:string) {
+ if(!['focus','backlog','plans','daily'].includes(key))return
+ analyticsPage.value='overview';selectedDay.value=null;ageFilter.value=null;limit.value=12
+ if(key==='backlog'||key==='plans'||key==='daily')detail.value=key
+ await nextTick();scroll(key==='focus'?focusPanel.value:detailsPanel.value)
+}
+async function selectDay(day:string) {selectedDay.value=selectedDay.value===day ? null : day;analyticsPage.value='overview';detail.value='daily';await nextTick();scroll(detailsPanel.value)}
 function canOpen(item:AnalyticsItem) {return workspaces.available.some(w=>w.id===(item.workspace_id || workspace.value) && w.active_modules.includes(item.module))}
 function openItem(item:AnalyticsItem) {
   if(!canOpen(item))return

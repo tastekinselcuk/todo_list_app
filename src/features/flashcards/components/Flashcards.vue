@@ -28,7 +28,7 @@
         </div>
       </div>
 
-      <div v-if="store.decks.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+      <div v-if="store.decks.length > 0" class="workspace-card-grid w-full">
         <div
           v-for="deck in store.decks"
           :key="deck.id"
@@ -117,7 +117,7 @@
         </button>
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 perspective-1000 relative z-0">
+      <div class="workspace-card-grid perspective-1000 relative z-0" style="--workspace-card-min:14rem">
         <div v-for="card in activeDeck.cards" :key="card.id" :data-search-record="activeDeck.id" :data-search-child="card.id" class="relative w-full h-32 cursor-pointer group" @click="toggleCard(card.id)">
           <div class="absolute inset-0 w-full h-full transition-all duration-500 transform-style-3d shadow-sm rounded-xl" :class="{ 'rotate-y-180': flippedCards.includes(card.id) }">
             <div class="workspace-card absolute inset-0 w-full h-full bg-card/60 backdrop-blur-sm backface-hidden flex items-center justify-center p-4 text-center">

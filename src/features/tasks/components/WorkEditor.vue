@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" class="work-dialog" :closedby="saving?'none':'closerequest'" :aria-label="t(mode==='task'?'tasks.editTask':'tasks.editBlock')" @cancel.prevent="close" @keydown.esc.stop.prevent="close">
+    <dialog ref="dialog" class="work-dialog" :closedby="saving?'none':'closerequest'" :aria-label="t(mode==='task'?'tasks.editTask':'tasks.editBlock')" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))close()}" @cancel.prevent="close" @keydown.esc.stop.prevent="close">
       <form class="work-editor" @submit.prevent="submit">
         <header class="flex shrink-0 items-center justify-between gap-3"><span class="text-xs font-medium text-muted-foreground">{{ t(mode==='task'?'tasks.editTask':'tasks.editBlock') }}</span><button type="button" class="finance-icon" :disabled="saving" :aria-label="t('common.close')" @click="close"><X class="h-4 w-4" /></button></header>
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-0.5 pb-2">
@@ -51,6 +51,7 @@ import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, wat
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, Clock3, Link2, Loader2, Plus, Trash2, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { browserTimezone, localInput, overlaps, taskStatuses, validBlock, type WorkBlock, type WorkProject, type WorkTask } from '../lib/tasks'
 const props=defineProps<{mode:'task'|'block';task?:WorkTask;block?:Partial<WorkBlock>;tasks:WorkTask[];projects:WorkProject[];blocks:WorkBlock[];saving:boolean;error:string}>()
 const emit=defineEmits<{close:[];save:[payload:Record<string,unknown>];remove:[]}>(),{t}=useI18n()

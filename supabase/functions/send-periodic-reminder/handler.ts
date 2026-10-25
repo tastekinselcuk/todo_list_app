@@ -2,6 +2,7 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 type Claim = { status: string; id?: string; lease?: string; payload?: { to: string; title: string; notes: string; category: string; workspaceName: string; reminderTime: string } }
 export interface ReminderDependencies {
   authenticate(token: string): Promise<string | null>
+  consumeBudget?(user: string): Promise<boolean>
   claim(user: string, task: string, workspace: string, timezone: string): Promise<Claim>
   finish(id: string, lease: string, success: boolean): Promise<void>
   send(key: string, message: NonNullable<Claim['payload']>): Promise<void>
@@ -9,7 +10,7 @@ export interface ReminderDependencies {
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export function reminderHandler(deps: ReminderDependencies) {
   return async (req: Request): Promise<Response> => {
-    const reply = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+    const reply = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control':'no-store', ...(status===429?{'Retry-After':'60'}:{}) } })
     if (req.method === 'OPTIONS') return reply(200, {})
     if (req.method !== 'POST') return reply(405, { error: 'METHOD_NOT_ALLOWED' })
     const token = req.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1]
@@ -18,8 +19,20 @@ export function reminderHandler(deps: ReminderDependencies) {
     try {
       const user = await deps.authenticate(token)
       if (!user) return reply(401, { error: 'AUTH_REQUIRED' })
-      const raw = await req.text()
-      if (raw.length > 1024) return reply(400, { error: 'INVALID_REQUEST' })
+      if (deps.consumeBudget && !await deps.consumeBudget(user)) return reply(429, { error: 'RATE_LIMITED' })
+      if (Number(req.headers.get('content-length')) > 1024) return reply(413, { error: 'INVALID_REQUEST' })
+      const reader=req.body?.getReader(),chunks:Uint8Array[]=[]
+      let length=0
+      if(reader)try{
+        while(true){const {done,value}=await reader.read();if(done)break
+          length+=value.byteLength
+          if(length>1024){await reader.cancel();return reply(413,{error:'INVALID_REQUEST'})}
+          chunks.push(value)
+        }
+      }finally{reader.releaseLock()}
+      const bytes=new Uint8Array(length);let offset=0
+      for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}
+      const raw=new TextDecoder().decode(bytes)
       let body: Record<string, unknown>
       try { body = JSON.parse(raw) } catch { return reply(400, { error: 'INVALID_REQUEST' }) }
       if (!body || Array.isArray(body) || typeof body !== 'object' || Object.keys(body).some(key => !['taskId','workspaceId','timezone'].includes(key))

@@ -170,7 +170,16 @@ test('workspace deletion checks ownership/name/last-workspace, removes personal 
   await db.exec(fs.readFileSync('supabase/migrations/202610120003_workspace_search.sql','utf8'))
   await db.exec(fs.readFileSync('supabase/migrations/202610170001_workspace_trash.sql','utf8'))
   await db.exec(deletionMigration);await db.exec(deletionMigration)
+  await db.exec(fs.readFileSync('supabase/migrations/202610180001_tasks_calendar.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202610120005_finance.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202610130001_finance_recurring_market.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202610220001_integrity_repairs.sql','utf8'))
   const original=(await db.query('select * from workspaces where id=$1',[wid])).rows[0]
+  const project=(await db.query("insert into work_projects(workspace_id,user_id,name) values($1,$2,'Project') returning id",[wid,owner])).rows[0].id
+  const calendarTask=(await db.query("insert into work_tasks(workspace_id,user_id,project_id,title) values($1,$2,$3,'Due task') returning id",[wid,owner,project])).rows[0].id
+  await db.query("insert into work_blocks(workspace_id,user_id,task_id,starts_at,ends_at) values($1,$2,$3,now(),now()+interval '1 hour')",[wid,owner,calendarTask])
+  const recurring=(await db.query("insert into finance_recurring(workspace_id,user_id,title,kind,amount,cadence,starts_on) values($1,$2,'Rent','expense',100,'monthly',current_date) returning id",[wid,owner])).rows[0].id
+  await db.query("insert into finance_transactions(workspace_id,user_id,title,category,kind,amount,occurred_on,recurring_id) values($1,$2,'Rent','Other','expense',100,current_date,$3)",[wid,owner,recurring])
   await as(guest);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/WORKSPACE_ACCESS_DENIED/)
   await as(owner);await assert.rejects(rpc('select delete_workspace($1,$2) as result',[wid,original.name]),/LAST_WORKSPACE/)
   const extra=(await db.query("insert into workspaces(user_id,name) values($1,'Keep') returning *",[owner])).rows[0]
@@ -211,7 +220,7 @@ test('workspace deletion checks ownership/name/last-workspace, removes personal 
   assert.equal(result.id,wid);assert.equal(result.next_workspace.id,extra.id);assert.equal(result.next_workspace.is_default,true)
   await assert.rejects(rpc('select delete_workspace($1,$2) as result',[extra.id,extra.name]),/LAST_WORKSPACE/)
   await as(owner,'postgres')
-  for(const table of ['workspaces','workspace_module_bindings','todos','quick_notes','analytics_focus_sessions']) {
+  for(const table of ['workspaces','workspace_module_bindings','todos','quick_notes','analytics_focus_sessions','work_projects','work_tasks','work_blocks','finance_recurring','finance_transactions']) {
    const column=table==='workspaces'?'id':'workspace_id'
    assert.equal((await db.query(`select count(*)::int n from ${table} where ${column}=$1`,[wid])).rows[0].n,0,table)
   }

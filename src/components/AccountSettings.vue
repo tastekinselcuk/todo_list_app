@@ -1,11 +1,13 @@
 <template>
-  <section ref="section" id="account-settings" class="account-settings scroll-mt-32 space-y-3" aria-labelledby="account-heading">
-    <header class="flex flex-wrap items-center justify-between gap-2">
-      <h2 id="account-heading" class="flex items-center gap-2 text-sm font-semibold"><UserRound class="h-4 w-4 text-muted-foreground" />{{ t('account.title') }}</h2>
-      <span class="text-xs text-muted-foreground">{{ t('account.scope') }}</span>
-    </header>
-    <form class="account-card" @submit.prevent="saveProfile">
-      <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+  <section id="account-settings" class="account-settings space-y-4" aria-labelledby="account-heading">
+    <div class="account-overview" :class="{ 'has-preferences': Boolean($slots.preferences) }">
+      <slot name="preferences" />
+    <form ref="section" class="account-card profile-card" @submit.prevent="saveProfile">
+      <header class="account-card-header flex-wrap">
+        <h2 id="account-heading" class="flex items-center gap-2 text-sm font-semibold"><UserRound class="h-4 w-4 text-muted-foreground" />{{ t('account.title') }}</h2>
+        <span class="text-[11px] text-muted-foreground">{{ t('account.scope') }}</span>
+      </header>
+      <div class="profile-body">
         <div class="flex min-w-0 flex-1 items-center gap-3">
           <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold" :class="avatarClasses[tone]">{{ initials }}</span>
           <div class="min-w-0"><p class="truncate text-sm font-medium">{{ displayName.trim() || accountName(auth.user) }}</p><p class="mt-0.5 truncate text-xs text-muted-foreground">{{ auth.user?.email }}</p>
@@ -14,7 +16,7 @@
             </div>
           </div>
         </div>
-        <div class="w-full sm:w-64">
+        <div class="profile-name">
           <label for="account-display-name" class="account-label">{{ t('account.displayName') }}</label>
           <input id="account-display-name" ref="nameInput" v-model="displayName" class="account-input mt-1.5" autocomplete="name" maxlength="80" required :disabled="auth.accountBusy" :placeholder="t('account.namePlaceholder')" />
         </div>
@@ -24,8 +26,9 @@
         <button type="submit" class="account-primary" :disabled="auth.accountBusy || !profileChanged || !displayName.trim()"><Loader2 v-if="pending === 'profile'" class="h-3.5 w-3.5 animate-spin" />{{ t(pending === 'profile' ? 'settingsPage.saving' : 'common.save') }}</button>
       </footer>
     </form>
+    </div>
 
-    <div class="grid items-start gap-3 md:grid-cols-2">
+    <div class="account-security-grid">
       <section class="account-card" aria-labelledby="account-contact">
         <header class="account-card-header"><h3 id="account-contact"><Mail class="h-4 w-4" />{{ t('account.contact') }}</h3><button type="button" class="account-link" :disabled="auth.accountBusy" :aria-expanded="editor === 'email'" aria-controls="account-email-form" @click="toggleEditor('email')">{{ t(editor === 'email' ? 'common.cancel' : 'account.change') }}</button></header>
         <div class="space-y-3 p-4">
@@ -162,6 +165,15 @@ onBeforeUnmount(() => { disposed = true; clearPasswords(); cancelAnimationFrame(
 </script>
 
 <style scoped>
+.account-settings { container: account-settings / inline-size; min-width: 0; }
+.account-overview { display: grid; gap: 1rem; align-items: stretch; }
+.account-security-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 1rem; }
+.profile-card { container: account-profile / inline-size; display: flex; flex-direction: column; scroll-margin-top: 6rem; }
+.profile-body { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 1rem; padding: 1rem; }
+.profile-name { width: 100%; min-width: 0; }
+@container account-settings (min-width: 48rem) { .account-overview.has-preferences { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); } }
+@container account-settings (min-width: 40rem) { .account-security-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container account-profile (min-width: 32rem) { .profile-body { flex-direction: row; align-items: center; } .profile-name { width: 16rem; } }
 .account-card { overflow: hidden; min-width: 0; border: 1px solid hsl(var(--border) / .6); border-radius: 1rem; background: hsl(var(--card) / .6); box-shadow: 0 1px 2px rgb(0 0 0 / .02); }
 .account-card-header { display: flex; min-height: 3rem; align-items: center; justify-content: space-between; gap: .75rem; border-bottom: 1px solid hsl(var(--border) / .4); padding: .6rem 1rem; }
 .account-card-header h3 { display: flex; align-items: center; gap: .5rem; font-size: .8125rem; font-weight: 500; }

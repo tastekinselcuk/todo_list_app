@@ -14,7 +14,7 @@
 
       <div v-if="loadFailed" role="alert" class="rounded-2xl border border-border/50 p-5 text-center text-xs text-muted-foreground"><p>{{ t('workout.loadFailed') }}</p><button type="button" class="mt-2 text-foreground underline" @click="loadPrograms">{{ t('workout.retry') }}</button></div>
       <div v-else-if="store.isLoading && !store.routines.length" class="flex justify-center py-10" role="status" :aria-label="t('app.loading')"><Loader2 class="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none" /></div>
-      <div v-else-if="filtered.length" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div v-else-if="filtered.length" class="workspace-card-grid">
         <WorkoutRoutineCard v-for="routine in filtered" :key="routine.id" :routine="routine" :data-search-record="routine.id" :disabled="store.isSaving" @open="activeId = $event.id" @edit="editProgram" @duplicate="duplicateProgram" @delete="deleteProgram" />
       </div>
       <div v-else class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/40 bg-muted/[0.04] px-5 py-10 text-center">
@@ -40,22 +40,21 @@
         </header>
         <div v-if="activeRoutine.exercises.length" class="space-y-2">
           <div class="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"><span class="tabular-nums">{{ t('workout.completedCount', { completed, total: activeRoutine.exercises.length }) }}</span><button v-if="canWrite && completed" type="button" :disabled="store.isSaving" class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/50 hover:text-foreground" @click="resetProgram"><RotateCcw class="h-3 w-3" />{{ t('workout.resetRoutine') }}</button></div>
-          <div class="h-0.5 overflow-hidden rounded-full bg-border/40"><div class="h-full rounded-full bg-teal-500/70 transition-[width] duration-300 motion-reduce:transition-none" :style="{ width: progress + '%' }" /></div>
+          <div class="h-0.5 overflow-hidden rounded-full bg-border/40"><div class="h-full rounded-full bg-primary/70 transition-[width] duration-300 motion-reduce:transition-none" :style="{ width: progress + '%' }" /></div>
         </div>
       </div>
 
-      <div v-if="activeRoutine.exercises.length" class="grid grid-cols-1 items-start gap-2.5 min-[1440px]:grid-cols-2">
-        <WorkoutExerciseRow v-for="exercise in activeRoutine.exercises" :key="exercise.id" :exercise="exercise" :data-search-record="activeRoutine.id" :data-search-child="exercise.id" :disabled="store.isSaving" @edit="editExercise" @delete="deleteExercise" @toggle="toggleExercise" />
-      </div>
+      <WorkoutSequence v-if="activeRoutine.exercises.length" :key="activeRoutine.id" :routine="activeRoutine" :disabled="store.isSaving" :save-order="saveSequence" @edit="editExercise" @delete="deleteExercise" @toggle="toggleExercise" @preview="previewExercise = $event" />
       <div v-else class="flex flex-col items-center rounded-2xl border border-dashed border-border/40 px-5 py-10 text-center">
         <Dumbbell class="mb-3 h-6 w-6 text-muted-foreground/40" /><p class="text-xs text-muted-foreground">{{ t('workout.emptyProgram') }}</p>
-        <button v-if="canWrite" type="button" class="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-teal-600 transition-colors hover:bg-teal-500/5 dark:text-teal-400" @click="editedExercise = null; showLibrary = true"><Plus class="h-3.5 w-3.5" />{{ t('workout.firstExercise') }}</button>
+        <button v-if="canWrite" type="button" class="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5" @click="editedExercise = null; showLibrary = true"><Plus class="h-3.5 w-3.5" />{{ t('workout.firstExercise') }}</button>
       </div>
-      <p v-if="progress === 100 && activeRoutine.exercises.length" role="status" class="flex items-center gap-2 text-xs text-teal-600 dark:text-teal-400"><CheckCircle2 class="h-4 w-4" />{{ t('workout.workoutComplete') }}</p>
+      <p v-if="progress === 100 && activeRoutine.exercises.length" role="status" class="flex items-center gap-2 text-xs text-primary"><CheckCircle2 class="h-4 w-4" />{{ t('workout.workoutComplete') }}</p>
     </template>
 
     <ExerciseLibraryModal :show="showLibrary && canWrite" :busy="store.isSaving" :exercise="editedExercise" @close="showLibrary = false" @add="addExercise" @update="updateExercise" />
-    <dialog ref="programDialog" class="program-dialog w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-border/60 bg-card p-4 text-card-foreground shadow-2xl" aria-labelledby="workout-edit-title" @cancel="cancelProgramEdit">
+    <ExercisePreview v-if="previewExercise" :exercise="previewExercise" @close="previewExercise = null" />
+    <dialog ref="programDialog" class="program-dialog w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-border/60 bg-card p-4 text-card-foreground shadow-2xl" aria-labelledby="workout-edit-title" @dblclick="event=>{if(!store.isSaving && isDialogBackdropDoubleClick(event))programDialog?.close()}" @cancel="cancelProgramEdit">
       <form v-if="editingProgram" class="space-y-4" @submit.prevent="saveProgram">
         <header class="flex items-center justify-between gap-3"><h3 id="workout-edit-title" class="text-sm font-semibold">{{ t('workout.editProgram') }}</h3><button type="button" :disabled="store.isSaving" class="icon-button" :aria-label="t('common.close')" @click="programDialog?.close()"><X class="h-4 w-4" /></button></header>
         <label class="block text-xs text-muted-foreground" for="workout-program-title">{{ t('workout.programName') }}<input id="workout-program-title" v-model="editingTitle" type="text" maxlength="120" required class="workout-input mt-1.5 h-10 w-full" :disabled="store.isSaving" /></label>
@@ -67,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useModuleLoad } from '@/lib/workspaceScope'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -78,8 +78,9 @@ import { useWorkoutStore, type Exercise, type Routine } from '../stores/workout'
 import { fold, type ExerciseInput } from '../lib/exercises'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import WorkoutRoutineCard from './WorkoutRoutineCard.vue'
-import WorkoutExerciseRow from './WorkoutExerciseRow.vue'
+import WorkoutSequence from './WorkoutSequence.vue'
 import ExerciseLibraryModal from './ExerciseLibraryModal.vue'
+import ExercisePreview from './ExercisePreview.vue'
 
 const store = useWorkoutStore(), ui = useUIStore(), { t } = useI18n()
 const { canWrite } = useModuleAccess('workout')
@@ -93,6 +94,7 @@ const filtered = computed(() => store.routines.filter(routine => fold(routine.ti
 const completed = computed(() => activeRoutine.value?.exercises.filter(exercise => exercise.isCompleted).length || 0)
 const progress = computed(() => activeRoutine.value?.exercises.length ? Math.round(completed.value / activeRoutine.value.exercises.length * 100) : 0)
 const showLibrary = ref(false), editedExercise = ref<Exercise | null>(null), loadFailed = ref(false)
+const previewExercise = ref<Exercise | null>(null)
 const programDialog = ref<HTMLDialogElement>(), editingProgram = ref<Routine | null>(null), editingTitle = ref(''), editingDay = ref('Any')
 const failed = () => ui.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
 
@@ -100,6 +102,7 @@ async function loadPrograms() { loadFailed.value = !await store.fetchRoutines() 
 useModuleLoad(loadPrograms)
 watch(() => [store.routines, store.isLoading], () => { if (!store.isLoading && activeId.value && !activeRoutine.value) { activeId.value = ''; showLibrary.value = false } })
 watch(canWrite, writable => { if (!writable) { showLibrary.value = false; programDialog.value?.close() } })
+watch(activeId, () => { previewExercise.value = null })
 async function createProgram() {
   if (!canWrite.value || store.isSaving || store.isLoading || !newRoutineTitle.value.trim()) return
   const title = newRoutineTitle.value
@@ -167,6 +170,12 @@ async function resetProgram() {
   const routine = activeRoutine.value
   if (!routine || !canWrite.value || store.isSaving) return
   if (!await store.resetRoutine(routine.id)) failed()
+}
+async function saveSequence(id: string, ids: string[], version?: number) {
+  if (!canWrite.value || store.isSaving) return false
+  const saved = await store.reorderExercises(id, ids, version)
+  if (!saved) { failed(); await loadPrograms() }
+  return Boolean(saved)
 }
 onBeforeUnmount(() => programDialog.value?.close())
 useSearchReveal('workout', async (hit, isCurrent) => { await store.fetchRoutines(hit.record_id);if(!isCurrent())return;activeId.value=hit.record_id;query.value='' })

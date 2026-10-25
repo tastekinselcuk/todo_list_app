@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark'
 // Keep the persisted IDs compatible with existing account preferences and database validation.
-export type ThemePaletteId = 'classic' | 'ocean' | 'forest' | 'sand' | 'lavender' | 'ruby' | 'cobalt' | 'graphite'
+export type ThemePaletteId = 'classic' | 'ocean' | 'forest' | 'lavender' | 'ruby' | 'cobalt' | 'graphite'
 
 // Semantic tokens keep every module on the same palette without changing status/category colors.
 function tokens(background: string, surface: string, foreground: string, primary: string,
@@ -57,10 +57,6 @@ export const themePalettes = [
     light: premiumMode('light', '#F1EEFB', '#FCFAFF', '#7046B8', '#E1D9F3'),
     dark: premiumMode('dark', '#181625', '#242036', '#BAA2F4', '#332D49'),
   } },
-  { id: 'sand', name: { tr: 'Toprak Tonları', en: 'Terracotta' }, colors: {
-    light: premiumMode('light', '#FAF3E9', '#FFFCF7', '#B96545', '#EFE3D4'),
-    dark: premiumMode('dark', '#231A17', '#33251F', '#E5A17F', '#4C3830'),
-  } },
   { id: 'ocean', name: { tr: 'Petrol Mavisi', en: 'Ocean Depth' }, colors: {
     light: premiumMode('light', '#EDF7F7', '#FAFEFE', '#258A88', '#D3EBE9'),
     dark: premiumMode('dark', '#071D25', '#102B35', '#67D6C5', '#20424B'),
@@ -90,8 +86,8 @@ export function isThemePaletteId(value: unknown): value is ThemePaletteId {
 }
 
 export function normalizeThemePaletteId(value: unknown, fallback: ThemePaletteId = 'classic'): ThemePaletteId {
-  // The retired warm palette follows Terracotta instead of leaving the selector empty.
-  return value === 'amber' ? 'sand' : isThemePaletteId(value) ? value : fallback
+  // Retired palettes return to Classic without changing the user's light/dark mode.
+  return value === 'sand' || value === 'amber' ? 'classic' : isThemePaletteId(value) ? value : fallback
 }
 
 export function getThemePalette(id: unknown) {

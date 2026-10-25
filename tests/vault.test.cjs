@@ -5,6 +5,8 @@ const { webcrypto } = require('node:crypto')
 const { parse,compileScript } = require('@vue/compiler-sfc')
 const vue = require('vue')
 const cryptoApi = {}
+const sharedUtils = {}
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/utils.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:sharedUtils,require})
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/vaultCrypto.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,
   { exports:cryptoApi,crypto:webcrypto,TextEncoder,TextDecoder,btoa,atob,Uint8Array,JSON })
 test('vault encrypts every sensitive field, uses random IVs and non-extractable keys', async () => {
@@ -73,7 +75,7 @@ function vaultView() {
   const dependencies={vue,'lucide-vue-next':{},'@/lib/workspaceScope':{useModuleLoad:callback=>vue.onMounted(callback),useWorkspaceClient:()=>client,useModuleAccess:()=>({canWrite:vue.ref(true)})},'@/lib/vaultCrypto':cryptoApi,
     '@/stores/auth':{useAuthStore:()=>({user:{id:'owner'}})},'@/stores/ui':{useUIStore:()=>({addToast:(...args)=>toasts.push(args),showConfirm:async()=>true})},
     'vue-i18n':{useI18n:()=>({t:key=>key})},'@/components/ui/CustomSelect.vue':{default:{}},'./SecureNoteItem.vue':{default:{}}}
-  vm.runInNewContext(code,{exports,require:name=>dependencies[name]||require(name),console:quietConsole,crypto:webcrypto,Date})
+  vm.runInNewContext(code,{exports,require:name=>dependencies[name]||(name==='@/lib/utils'?sharedUtils:require(name)),console:quietConsole,crypto:webcrypto,Date})
   const scope=vue.effectScope()
   let state
   // Script methods are checked independently of browser layout and native dialogs.

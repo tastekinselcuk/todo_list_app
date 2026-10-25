@@ -77,7 +77,7 @@
       </form>
     </dialog>
 
-    <dialog @cancel.prevent="!isLoading && closeNoteDialog()" :aria-label="$t(editingNote.id ? 'secure.editSecureNote' : 'secure.addSecureNote')" ref="noteDialog" class="w-[90vw] max-w-lg vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
+    <dialog @dblclick="event=>{if(!isLoading && isDialogBackdropDoubleClick(event))closeNoteDialog()}" @cancel.prevent="!isLoading && closeNoteDialog()" :aria-label="$t(editingNote.id ? 'secure.editSecureNote' : 'secure.addSecureNote')" ref="noteDialog" class="w-[90vw] max-w-lg vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
       <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
         <h2 class="text-sm font-medium">{{ editingNote.id ? $t('secure.editSecureNote') : $t('secure.addSecureNote') }}</h2>
         <button :disabled="isLoading" @click="closeNoteDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
@@ -178,7 +178,7 @@
       </div>
     </dialog>
       
-    <dialog @cancel.prevent="!isLoading && closeSessionDialog()" :aria-label="$t('secure.editSession')" ref="sessionDialog" class="w-[90vw] max-w-sm vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
+    <dialog @dblclick="event=>{if(!isLoading && isDialogBackdropDoubleClick(event))closeSessionDialog()}" @cancel.prevent="!isLoading && closeSessionDialog()" :aria-label="$t('secure.editSession')" ref="sessionDialog" class="w-[90vw] max-w-sm vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
       <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
         <h2 class="text-sm font-medium">{{ $t('secure.editSessionTitle') }}</h2>
         <button :disabled="isLoading" @click="closeSessionDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
@@ -212,6 +212,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { ref, shallowRef, computed, onBeforeUnmount, onDeactivated, watch } from 'vue'
 import { Lock, Eye, EyeOff, Plus, Edit, Trash2, X, Loader2, ChevronRight } from 'lucide-vue-next'
@@ -473,11 +474,10 @@ onBeforeUnmount(lockVault)
 .vault-entry-form { grid-template-columns:minmax(0,1fr) 140px auto; }
 .vault-field { @apply h-10 w-full min-w-0 rounded-xl border border-border/70 bg-card/65 px-3 text-[13px] text-foreground shadow-[0_1px_3px_rgb(15,23,42,0.025)] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/10 disabled:opacity-50 dark:bg-muted/[0.08]; }
 .vault-create-form .vault-primary,.vault-entry-form .vault-primary { height:40px; }
-.vault-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:12px; }
+.vault-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr)); align-items:start; gap:12px; }
 .vault-session-lock { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground; }
-@media(max-width:1023px){.vault-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:639px){
- .vault-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+ .vault-grid{gap:10px}
  .vault-create-form,.vault-entry-form{grid-template-columns:minmax(0,1fr) auto}
  .vault-create-form>input,.vault-entry-form>input{grid-column:1 / -1}
 }

@@ -152,7 +152,10 @@ async function handleDeleteCategory(id: string) {
   deleting.value = true
   try {
     const result = await todoStore.deleteCategory(id)
-    if (!result.success) { uiStore.addToast(result.message || t('todo.cannotDelete'), 'error'); return }
+    if (!result.success) {
+      const message=result.message || ''
+      uiStore.addToast(t(/PGRST202|42883|Could not find the function/.test(message)?'integrity.categoryDeleteSetup':/SHARING_CONFLICT/.test(message)?'sharing.conflict':'todo.cannotDelete'),'error');return
+    }
     uiStore.addToast(t('todo.categoryDeleted'), 'success')
     emit('update:selectedCategories', props.selectedCategories.filter(value => value !== id))
   } finally { deleting.value = false }

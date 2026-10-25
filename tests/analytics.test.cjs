@@ -1,14 +1,52 @@
 const {test}=require('node:test')
 const assert=require('node:assert/strict')
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript')
-function load(path) {
+function load(path,dependencies={}) {
   const exports={}
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,Date,Map,JSON,Math,Intl,console})
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,Date,Map,JSON,Math,Intl,console,require:name=>dependencies[name]||require(name)})
   return exports
 }
 const {FocusJournal,validFocusSession}=load('src/features/analytics/lib/focusJournal.ts')
 const reports=load('src/features/analytics/lib/reports.ts')
 function storage() {const entries=new Map();return {get length(){return entries.size},key:i=>[...entries.keys()][i]||null,getItem:k=>entries.get(k)||null,setItem:(k,v)=>entries.set(k,v),removeItem:k=>entries.delete(k)}}
+
+const {createFocusStorage}=load('src/features/analytics/lib/focusService.ts',{'@/lib/supabase':{},'@/stores/auth':{},'./focusJournal':{FocusJournal}})
+test('focus storage recovers from temporary access denial without replacing the journal',()=>{
+ const cache=storage();let denied=true
+ const adapter=createFocusStorage('owner',()=>{if(denied)throw Object.assign(Error('Blocked'),{name:'SecurityError'});return cache})
+ const journal=new FocusJournal('owner',adapter,'tab',async()=>{},()=>Date.now(),()=> 'session')
+ journal.start('work',60);assert.equal(journal.storageFailed,true)
+ denied=false;journal.checkStorage();assert.equal(journal.storageFailed,false)
+ assert.equal(JSON.parse(cache.getItem('analytics-focus:owner:outbox:session')).id,'session')
+ assert.equal(JSON.parse(cache.getItem('analytics-focus:owner:active:tab')).session.id,'session')
+})
+
+test('quota recovery compacts only owned server snapshots and preserves order, drafts, auth and pending focus',()=>{
+ const cache=storage(),snapshotKey='workspace:owner:work:todo-app-data:v2:detail'
+ cache.setItem(snapshotKey,JSON.stringify({todos:[{title:'x'.repeat(5000)}],quickNotes:[{content:'cached'}],codeSnippets:[],todoOrder:['a'],categories:[{id:'category'}]}))
+ const secondKey='workspace:owner:other:todo-app-data:v2:detail',secondSnapshot=JSON.stringify({todos:[{title:'Keep offline cache'}]})
+ cache.setItem(secondKey,secondSnapshot)
+ for(const key of ['sb-auth','preferences:owner','workspace:owner:work:draft:todo','workspace:other:work:todo-app-data:v2','analytics-focus:owner:outbox:old'])cache.setItem(key,'must survive')
+ const limit=[...Array(cache.length)].reduce((sum,_,i)=>sum+cache.getItem(cache.key(i)).length,0)+5
+ const quota={...cache,setItem(key,value){let size=value.length;for(let i=0;i<cache.length;i++){const k=cache.key(i);if(k!==key)size+=cache.getItem(k).length}if(size>limit)throw Object.assign(Error('Quota exceeded'),{name:'QuotaExceededError'});cache.setItem(key,value)}}
+ const adapter=createFocusStorage('owner',()=>quota)
+ adapter.setItem('analytics-focus:owner:outbox:new','focus'.repeat(100))
+ const compact=JSON.parse(cache.getItem(snapshotKey))
+ assert.deepEqual(compact.todos,[]);assert.deepEqual(compact.quickNotes,[]);assert.deepEqual(compact.todoOrder,['a']);assert.deepEqual(compact.categories,[{id:'category'}])
+ for(const key of ['sb-auth','preferences:owner','workspace:owner:work:draft:todo','workspace:other:work:todo-app-data:v2','analytics-focus:owner:outbox:old'])assert.equal(cache.getItem(key),'must survive')
+ assert.equal(cache.getItem('analytics-focus:owner:outbox:new'),'focus'.repeat(100))
+ assert.equal(cache.getItem(secondKey),secondSnapshot,'stop reclaiming as soon as the focus record fits')
+})
+
+test('successful outbox cleanup clears a quota warning while a genuine denial remains visible',async()=>{
+ const cache=storage(),seed=new FocusJournal('owner',cache,'tab',async()=>{},()=>Date.now(),()=> 'session')
+ seed.start('work',60);seed.end()
+ const quota={...cache,setItem(key,value){if(cache.getItem('analytics-focus:owner:outbox:session')&&key.endsWith('storage-probe'))throw Error('QuotaExceededError');cache.setItem(key,value)}}
+ const journal=new FocusJournal('owner',quota,'tab',async()=>{})
+ assert.equal(journal.storageFailed,true);await journal.flush();assert.equal(journal.storageFailed,false);assert.equal(journal.pending().length,0)
+ const denied=new FocusJournal('owner',{...storage(),setItem(){throw Error('SecurityError')}},'tab',async()=>{})
+ await denied.flush();assert.equal(denied.storageFailed,true)
+})
 
 test('corrupt active JSON is not a blocked-storage warning, while a failed write probe is',()=>{
  const cache=storage();cache.setItem('analytics-focus:owner:active:tab','{invalid JSON')

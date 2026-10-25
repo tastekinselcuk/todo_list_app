@@ -9,7 +9,7 @@ const vue = require('vue')
 function load(source, dependencies = {}, globals = {}) {
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
   const exports = {}
-  vm.runInNewContext(code, { exports, require: name => dependencies[name] || (['@/lib/workspaceTrash','./workspaceTrash'].includes(name) ? load(fs.readFileSync('src/lib/workspaceTrash.ts','utf8'), {'./supabase':dependencies['./supabase']||dependencies['@/lib/supabase']||{supabase:{}}}, globals) : null) || (name === '@/features/finance/lib/finance' ? load(fs.readFileSync('src/features/finance/lib/finance.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), Date, console, ...globals })
+  vm.runInNewContext(code, { exports, require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (['@/lib/workspaceTrash','./workspaceTrash'].includes(name) ? load(fs.readFileSync('src/lib/workspaceTrash.ts','utf8'), {'./supabase':dependencies['./supabase']||dependencies['@/lib/supabase']||{supabase:{}}}, globals) : null) || (name === '@/features/finance/lib/finance' ? load(fs.readFileSync('src/features/finance/lib/finance.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), Date, console, ...globals })
   return exports
 }
 const scroll = load(fs.readFileSync('src/lib/navigationScroll.ts', 'utf8'))
@@ -17,6 +17,7 @@ const account = load(fs.readFileSync('src/lib/accountProfile.ts', 'utf8'))
 const moduleCatalog = load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'))
 const workspaceSections = load(fs.readFileSync('src/lib/workspaceSections.ts', 'utf8'), { './moduleCatalog': moduleCatalog })
 const workspaceNavigation = load(fs.readFileSync('src/lib/workspaceNavigation.ts', 'utf8'))
+const focusEnvironment = load(fs.readFileSync('src/features/pomodoro/lib/focusEnvironment.ts', 'utf8'))
 
 test('navigation hides after downward scrolling and reappears on small upward scrolling', () => {
   const state = scroll.createNavigationScrollState(100)
@@ -100,6 +101,9 @@ function harness(authOverride) {
   dependencies['@/features/pomodoro/stores/pomodoro'] = load(fs.readFileSync('src/features/pomodoro/stores/pomodoro.ts', 'utf8'), dependencies, globals)
   dependencies['@/components/ui/AppNavigation.vue'] = { default: component('src/components/ui/AppNavigation.vue') }
   dependencies['@/components/ui/UserProfileMenu.vue'] = { default: component('src/components/ui/UserProfileMenu.vue') }
+  dependencies['./PomodoroViewIcon.vue'] = { default: component('src/features/pomodoro/components/PomodoroViewIcon.vue') }
+  dependencies['../lib/focusEnvironment'] = focusEnvironment
+  dependencies['./PomodoroFocus.vue'] = { default: component('src/features/pomodoro/components/PomodoroFocus.vue') }
   dependencies['@/features/pomodoro/components/PomodoroTimer.vue'] = { default: component('src/features/pomodoro/components/PomodoroTimer.vue') }
   const host = tag => ({ tag, tagName: tag.toUpperCase(), children: [], props: {}, parent: null, style: {}, offsetLeft: 4, offsetWidth: 80,
     addEventListener() {}, removeEventListener() {},
@@ -182,6 +186,52 @@ test('successful login opens the workspace and logout permits a second login wit
   }finally{app.unmount();global.Document=previousDocument;global.ShadowRoot=previousShadowRoot}
 })
 
+test('workspace changes carry an enabled module and calendar view, otherwise defer to the destination preference',async()=>{
+ const h=harness(),spaces=h.dependencies['@/stores/workspaces'].useWorkspacesStore()
+ h.enabled.value=['plans','quick','tasks']
+ spaces.available=[{id:'one',active_modules:['plans','quick','tasks']},{id:'two',active_modules:['plans','tasks']},{id:'three',active_modules:['quick']}]
+ let emitPanel;const mounted=[]
+ h.dependencies['@/views/WorkspaceTabs.vue']={default:{props:['initialTab','initialView'],emits:['active-module','active-view'],setup(props,{emit}){
+  mounted.push({module:props.initialTab,view:props.initialView});emitPanel=emit
+  return()=>vue.h('div','Workspace')
+ }}}
+ const app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key
+ try{
+  app.mount(h.root);await settle()
+  emitPanel('active-module','tasks');emitPanel('active-view','tasks','calendar');await settle()
+  spaces.activeId='two';spaces.sessionKey='owner:two';await settle()
+  assert.deepEqual(mounted.at(-1),{module:'tasks',view:'calendar'})
+  emitPanel('active-module','tasks');await settle()
+  spaces.sessionKey='owner:two:bindings-refreshed';await settle()
+  assert.equal(mounted.at(-1).view,'calendar','binding refresh cannot drop the incoming view before its async module has consumed it')
+  emitPanel('active-module','tasks');emitPanel('active-view','tasks','board');await settle()
+  spaces.activeId='one';spaces.sessionKey='owner:one';await settle()
+  assert.deepEqual(mounted.at(-1),{module:'tasks',view:'board'})
+  emitPanel('active-module','tasks');emitPanel('active-view','tasks','calendar');await settle()
+  spaces.activeId='three';spaces.sessionKey='owner:three';await settle()
+  assert.deepEqual(mounted.at(-1),{module:undefined,view:undefined},'the destination restores its own saved module when the current one is unavailable')
+  emitPanel('active-module','quick');await settle()
+  spaces.activeId='one';spaces.sessionKey='owner:one';await settle()
+  assert.deepEqual(mounted.at(-1),{module:'quick',view:undefined},'calendar state must not leak into another module')
+ }finally{app.unmount()}
+})
+
+test('calendar and settings use compact upper spacing while the other pages keep their existing layout',async()=>{
+ const h=harness();h.enabled.value=['plans','tasks','pomodoro'];let emitPanel
+ h.dependencies['@/views/WorkspaceTabs.vue']={default:{emits:['active-module','active-view'],setup(_props,{emit}){emitPanel=emit;return()=>vue.h('div','Workspace')}}}
+ const app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key
+ const content=()=>h.find(node=>String(node.props.class||'').split(' ').includes('app-content'))
+ try{
+  app.mount(h.root);await settle();assert.equal(content().style.paddingTop,'7rem')
+  emitPanel('active-module','tasks');emitPanel('active-view','tasks','calendar');await settle()
+  assert.equal(content().style.paddingTop,'5.25rem')
+  emitPanel('active-view','tasks','list');await settle();assert.equal(content().style.paddingTop,'7rem')
+  emitPanel('active-module','plans');await settle();assert.equal(content().style.paddingTop,'7rem')
+  h.click(h.find(node=>node.props['aria-label']==='app.settings'));await settle();assert.equal(content().style.paddingTop,'5.25rem')
+  h.click(h.find(node=>node.props['aria-label']==='app.home'));await settle();assert.equal(content().style.paddingTop,'7rem')
+ }finally{app.unmount()}
+})
+
 test('global profile menu replaces header actions and opens account editing from every main view',async()=>{
   const h=harness()
   const app=h.renderer.createApp(h.component('src/App.vue'))
@@ -205,7 +255,7 @@ test('global profile menu replaces header actions and opens account editing from
   await settle()
   h.click(h.find(node=>node.props['aria-label']==='pomodoro.expandToNavbar'))
   await settle()
-  assert.equal(h.find(node=>node.props['data-user-profile']!==undefined).props.style.top,'14px')
+  assert.ok(h.find(node=>node.props['data-user-profile']!==undefined).props.class.includes('profile-embedded'),'profile shares the dock layout instead of floating over it')
   const profileTrigger=h.find(node=>node.props['aria-label']==='account.menuLabel')
   h.click(profileTrigger)
   await settle()
@@ -243,7 +293,7 @@ test('attached navigation, profile and timer use the workspace reservation witho
     h.dependencies['@/stores/settings'].useSettingsStore().isPomodoroDocked=true;await settle()
     emitPanel('header-offset',height);await settle()
     const dock=h.find(node=>node.props['data-pomodoro-navigation']!==undefined)
-    assert.equal(parseFloat(dock.style.top)+parseFloat(dock.children[0].style.height),height,'the docked timer fits the same compact reservation')
+    assert.equal(parseFloat(dock.style.top)+parseFloat(dock.style.height),height,'the entire dock including its border fits the same compact reservation')
     assert.equal(h.intervals.size,0,'changing navigation geometry must not start a timer')
   } finally {app.unmount()}
 })
@@ -263,12 +313,15 @@ test('Pomodoro dock keeps main navigation available, shares scroll visibility an
   await settle()
   assert.ok(h.find(node => node.props['data-pomodoro-navigation'] !== undefined))
   assert.ok(h.find(node => node.props['data-app-navigation'] !== undefined))
-  assert.equal(h.find(node => node.props['data-app-navigation'] !== undefined).props.style.top, '14px')
+  assert.ok(h.find(node => node.props['data-app-navigation'] !== undefined).props.class.includes('is-embedded'))
   const dock = h.find(node => node.props['data-pomodoro-navigation'] !== undefined)
   const left = h.find(node => node.props['data-pomodoro-left'] !== undefined)
   assert.equal(h.find(node => node.props['data-pomodoro-modes'] !== undefined).parent, left)
   assert.ok(h.find(node => node.props['aria-label'] === 'pomodoro.clickSetup').parent.parent.parent === left)
-  assert.ok(dock.children[0].props.class.includes('h-14'))
+  assert.equal(dock.style.height,scroll.workspaceHeaderHeight+'px')
+  const inDock=node=>{while(node){if(node===dock)return true;node=node.parent}return false}
+  assert.equal(inDock(h.find(node=>node.props['data-app-navigation']!==undefined)),true,'navigation occupies the dock’s center column')
+  assert.equal(inDock(h.find(node=>node.props['data-user-profile']!==undefined)),true,'profile occupies the dock’s right column')
 
   h.click(h.find(node => node.props['aria-label'] === 'app.settings'))
   await settle()
@@ -294,7 +347,7 @@ test('Pomodoro dock keeps main navigation available, shares scroll visibility an
   h.click(h.find(node => node.props['aria-label'] === 'app.home'))
   await settle()
   assert.ok(h.find(node => node.text === 'Home'))
-  assert.equal(h.find(node => node.props['data-app-navigation'] !== undefined).props.style.top, '14px', 'an active timer stays in the dock on Home')
+  assert.ok(h.find(node => node.props['data-app-navigation'] !== undefined).props.class.includes('is-embedded'), 'an active timer stays in the dock on Home')
   h.click(h.find(node => node.props['aria-label'] === 'pomodoro.collapse'))
   await settle()
   assert.ok(h.find(node=>node.text==='Workspace'),'restoring the timer card returns to its workspace surface')
@@ -350,7 +403,7 @@ test('grouped workspace hides the idle timer outside notes and preserves a runni
     for(const module of ['tasks','finance']) {
       workspaceEvents('active-module',module);await settle()
       assert.ok(h.find(node=>node.props['data-pomodoro-navigation']!==undefined),'active focus remains reachable as a compact dock')
-      assert.equal(navigation().props.style.top,'14px')
+      assert.ok(navigation().props.class.includes('is-embedded'))
       assert.equal(h.intervals.size,1,'section navigation preserves the single running clock')
       h.advance(5_000);await settle()
     }
@@ -426,6 +479,76 @@ test('toast notifications stay above the most recently opened modal and return t
     ui.toasts=[];await settle();state.hideWhenEmpty();assert.equal(host.open,false)
   }finally{app.unmount()}
   assert.equal(disconnected,true)
+})
+
+test('workspace management, profile editing and Settings navigation open the correct sidebar section',async()=>{
+  const h=harness()
+  let workspaceEvents,settingsProps
+  h.dependencies['@/views/WorkspaceTabs.vue']={default:{emits:['manage-workspaces'],setup(_props,{emit}){workspaceEvents=emit;return()=>vue.h('div','Workspace')}}}
+  h.dependencies['@/views/WorkspaceCustomizer.vue']={default:{props:['initialSection','focusAccount'],setup(props){settingsProps=props;return()=>vue.h('div','Settings')}}}
+  const app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key
+  try{
+    app.mount(h.root);await settle()
+    workspaceEvents('manage-workspaces');await settle();assert.equal(settingsProps.initialSection,'workspaces')
+    h.click(h.find(node=>node.props['aria-label']==='account.menuLabel'));await settle()
+    h.click(h.find(node=>node.tag==='button'&&h.text(node).includes('account.editProfile')));await settle()
+    assert.equal(settingsProps.initialSection,'account');assert.equal(settingsProps.focusAccount,1)
+    h.click(h.find(node=>node.props['aria-label']==='app.home'));await settle()
+    h.click(h.find(node=>node.props['aria-label']==='app.settings'));await settle()
+    assert.equal(settingsProps.initialSection,'general')
+  }finally{app.unmount()}
+})
+
+test('productivity combines reports, preserves filters and opens chart details without changing the page',async()=>{
+  const h=harness(),spaces=h.dependencies['@/stores/workspaces'].useWorkspacesStore()
+  spaces.items=[{id:'one',name:'Personal'}]
+  let source,instances=0
+  const drafts=new Map()
+  h.dependencies['@/components/ui/CustomSelect.vue']={default:{}}
+  h.dependencies['@/lib/workspaceScope']={useWorkspaceDraft:(key,initial)=>{const value=vue.ref(initial);drafts.set(key,value);return value}}
+  h.dependencies['@/features/analytics/lib/reports']=load(fs.readFileSync('src/features/analytics/lib/reports.ts','utf8'))
+  h.dependencies['@/features/analytics/components/AnalyticsChart.vue']={default:{}}
+  h.dependencies['@/features/analytics/composables/useAnalyticsReport']={useAnalyticsReport:options=>{
+    instances++;source=options
+    return {report:vue.ref(null),previous:vue.ref(null),status:vue.ref('ready'),error:vue.ref(''),refreshing:vue.ref(false),pending:vue.ref(0),storageFailed:vue.ref(false),load(){}}
+  }}
+  let state
+  const component=h.component('src/views/AnalyticsView.vue',false)
+  const app=h.renderer.createApp({setup(){state=vue.proxyRefs(component.setup({initialSection:'activity'},{expose(){},emit(){}}));return()=>vue.h('div')}})
+  try{
+    app.mount(h.root);assert.equal(state.analyticsPage,'overview');assert.equal(source.enabled.value,true)
+    state.preset='month';state.personal=false
+    state.selectPage('plans');await settle();assert.equal(state.detail,'plans')
+    assert.equal(state.preset,'month');assert.equal(state.personal,false)
+    assert.equal(state.analyticsPage,'overview')
+    await state.chooseMetric('backlog');assert.equal(state.analyticsPage,'overview');assert.equal(state.detail,'backlog')
+    await state.selectDay('2026-10-22');assert.equal(state.analyticsPage,'overview');assert.equal(state.selectedDay,'2026-10-22');assert.equal(state.detail,'daily')
+    state.selectPage('daily');assert.equal(state.selectedDay,null,'the sidebar opens the whole daily report')
+    state.selectPage('finance');assert.equal(source.enabled.value,false)
+    state.selectPage('focus');assert.equal(source.enabled.value,true)
+    state.selectPage('not-a-page');assert.equal(state.analyticsPage,'overview')
+    assert.equal(instances,1,'changing report views does not create independent query sources')
+  }finally{app.unmount()}
+})
+
+test('home, analytics and settings use the shared sidebar-aware layout in both width modes',async()=>{
+  const h=harness(),settings=h.dependencies['@/stores/settings'].useSettingsStore()
+  const app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key
+  const layout=()=>h.find(node=>node.props.class?.includes('app-content'))
+  try{
+    app.mount(h.root);await settle()
+    assert.equal(layout().props['data-page-layout'],undefined)
+    settings.isFullScreen=true;await settle();assert.equal(layout().props['data-workspace-wide'],'')
+    for(const view of ['app.home','app.analytics','app.settings']){
+      h.click(h.find(node=>node.props['aria-label']===view));await settle()
+      assert.equal(layout().props['data-page-layout'],'')
+      assert.equal(layout().props['data-workspace-wide'],'')
+      settings.isFullScreen=false;await settle()
+      assert.equal(layout().props['data-page-layout'],'','pinned sidebars also reserve room in narrow mode')
+      assert.equal(layout().props['data-workspace-wide'],undefined)
+      settings.isFullScreen=true;await settle()
+    }
+  }finally{app.unmount()}
 })
 
 test('compact dock controls can change session, start, reset and restore the timer card', async () => {
@@ -674,6 +797,24 @@ test('async plans load on first mount and refresh once on reactivation without d
     release();await settle();assert.equal(h.intervals.size,1)
   }finally{release?.();await settle();app.unmount()}
   assert.equal(h.intervals.size,0)
+})
+
+test('workspace mounting respects the destination saved tab and applies only enabled incoming views',()=>{
+ for(const incoming of [undefined,'tasks','secure']){
+  const h=harness(),drafts=new Map()
+  h.enabled.value=['plans','quick','tasks']
+  h.dependencies['@/lib/workspaceScope']={useWorkspaceDraft:(key,value)=>{const draft=vue.ref(key==='last-tab'?'quick':value);drafts.set(key,draft);return draft}}
+  for(const path of ['@/components/ui/WorkspacePicker.vue','@/components/ui/WorkspaceModulePane.vue','@/components/ui/WorkspaceModuleFeedback.vue'])h.dependencies[path]={default:{}}
+  const Component=h.component('src/views/WorkspaceTabs.vue',false)
+  let state;const props=vue.reactive({initialTab:incoming,initialView:'calendar'})
+  const app=h.renderer.createApp({setup(){state=Component.setup(props,{expose(){},emit(){}});return()=>vue.h('div')}})
+  try{
+   app.mount(h.root)
+   assert.equal(state.activeTab.value,incoming==='tasks'?'tasks':'quick')
+   assert.equal(state.navigationIntent.value?.view,incoming==='tasks'?'calendar':undefined)
+   assert.equal(drafts.get('last-tab').value,incoming==='tasks'?'tasks':'quick','disabled incoming tabs cannot overwrite a valid destination preference')
+  }finally{app.unmount()}
+ }
 })
 
 test('module transitions retain each tab instance and its unsaved local state across workspace groups', async () => {
