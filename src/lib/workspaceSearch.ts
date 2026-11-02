@@ -12,6 +12,9 @@ export interface SearchHit {
 export interface SearchGroup { module: SearchModule; total: number; items: SearchHit[] }
 const safeModules = new Set<string>(moduleCatalog.filter(m => m.id !== 'secure' && m.id !== 'finance').map(m => m.id))
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export function workspaceSearchOptions(enabled:readonly string[]){
+  return moduleCatalog.filter(module=>enabled.includes(module.id)).map(module=>({value:module.id,label:module.id==='learning'?'study.views.topics':module.id==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module.id}Name`,disabled:!safeModules.has(module.id)}))
+}
 export const searchHitKey = (hit: SearchHit) => `${hit.module}:${hit.record_id}:${hit.child_id || ''}`
 
 // Fail closed if an unexpected module/payload is returned. No full row JSON

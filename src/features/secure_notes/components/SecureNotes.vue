@@ -8,7 +8,7 @@
             <input v-model="inlineSessionPassword" :type="showInlinePassword?'text':'password'" :placeholder="$t('secure.sessionPasswordPlaceholder')" :aria-label="$t('secure.sessionPasswordPlaceholder')" autocomplete="new-password" class="vault-field pr-11" :disabled="isLoading" />
             <button type="button" class="vault-icon absolute right-1.5 top-1/2 -translate-y-1/2" :aria-label="$t(showInlinePassword?'secure.hidePassword':'secure.showPassword')" @click="showInlinePassword=!showInlinePassword"><Eye v-if="showInlinePassword" class="h-3.5 w-3.5" /><EyeOff v-else class="h-3.5 w-3.5" /></button>
           </div>
-          <button type="submit" class="vault-primary" :disabled="!inlineSessionName.trim() || !inlineSessionPassword.trim() || isLoading"><Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-3.5 w-3.5" />{{ $t('secure.newVault') }}</button>
+          <button type="submit" class="workspace-add-button" :disabled="!inlineSessionName.trim() || !inlineSessionPassword.trim() || isLoading"><Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{{ $t('common.add') }}</button>
         </form>
         <div v-if="passwordSessions.length" class="vault-grid">
           <button v-for="session in passwordSessions" :key="session.id" type="button" class="workspace-card vault-session" @click="promptSessionUnlock(session)">
@@ -24,7 +24,7 @@
           <form v-if="canWrite" class="vault-entry-form" @submit.prevent="openAddNoteDialog">
             <input v-model="noteDraftTitle" type="text" maxlength="160" class="vault-field" :placeholder="$t('secure.noteTitlePlaceholder')" :aria-label="$t('secure.title')" :disabled="isLoading" />
             <CustomSelect v-model="noteDraftType" :options="noteTypeOptions" :aria-label="$t('secure.type')" size="md" class="w-full min-w-0" :disabled="isLoading" />
-            <button type="submit" class="vault-primary" :disabled="isLoading"><Plus class="h-3.5 w-3.5" />{{ $t('secure.addShort') }}</button>
+            <button type="submit" class="workspace-add-button" :disabled="isLoading||!noteDraftTitle.trim()">{{ $t('common.add') }}</button>
           </form>
           <div class="flex flex-wrap items-center gap-2 border-b border-border/50 pb-2.5">
             <CustomSelect :model-value="currentSession?.id || ''" @update:model-value="switchVault" :options="vaultOptions" :aria-label="$t('secure.chooseVault')" variant="ghost" size="sm" class="max-w-[200px] flex-1 sm:flex-none" :disabled="isLoading" />
@@ -215,7 +215,7 @@
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { ref, shallowRef, computed, onBeforeUnmount, onDeactivated, watch } from 'vue'
-import { Lock, Eye, EyeOff, Plus, Edit, Trash2, X, Loader2, ChevronRight } from 'lucide-vue-next'
+import { Lock, Eye, EyeOff, Edit, Trash2, X, Loader2, ChevronRight } from 'lucide-vue-next'
 import { useWorkspaceClient } from '@/lib/workspaceScope'
 import { createVaultKey, unlockVaultKey, encryptVaultValue, decryptVaultValue, isSealedVault, vaultKeyId } from '@/lib/vaultCrypto'
 import { useAuthStore } from '@/stores/auth'
@@ -363,6 +363,7 @@ const authenticate = async () => {
 }
 const logout = () => { lockVault(); uiStore.addToast(t('secure.logout'), 'info') }
 const openAddNoteDialog = () => {
+  if(isLoading.value||!noteDraftTitle.value.trim())return
   editingNote.value = { title: noteDraftTitle.value.trim(), description: '', type: noteDraftType.value, username: '', password_encrypted: '', url: '', content: '' }
   showDialogPassword.value = false; showAddNoteDialog.value = true
 }

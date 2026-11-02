@@ -214,12 +214,20 @@ Kişisel gelir, gider ve yatırımları sade bir ekrandan takip etmek içindir. 
 
 **Gelir/Gider:**
 
-- Kısa açıklama, tutar, gelir/gider seçimi ve tarih ile kayıt eklenebilir.
+- Tutar, gelir/gider seçimi ve isteğe bağlı açıklama/kategori ile hızlıca kayıt eklenebilir. Tarih ve tekrar seçenekleri ayrıntılar düğmesindedir.
 - Tek seferlik kayıtların yanında haftalık, aylık veya yıllık tekrarlar tanımlanabilir.
 - Kira, fatura ve düzenli gelir gibi kayıtlar vadesi geldikçe ilgili dönemlere eklenir.
 - Tekrarlar duraklatılabilir, sürdürülebilir veya kaldırılabilir; geçmiş kayıtlar korunur.
 - Seçilen ayın gelir, gider ve dönem neti görülebilir. Dönem neti, gelir ile giderin farkıdır; banka hesabı bakiyesi değildir.
 - Kayıtlar düzenlenebilir ve silinebilir.
+- İşlemler tarihe göre gruplanır; açıklama, gelir/gider, kategori ve tekrar durumuna göre filtrelenebilir. Filtrelenen toplamlar, yüklü sayfayla sınırlı değildir.
+
+**Aylık bütçeler:**
+
+- Yiyecek, Aburcubur, Eğlence, Araç gibi kişisel kategoriler oluşturulup her biri için aylık üst limit belirlenebilir.
+- Limit yalnızca seçilen aya veya o ay ve sonraki aylara uygulanabilir. Geçmiş aylar korunur; kullanılmayan tutar devretmez.
+- Boş limit sınırsız, sıfır limit ise harcama planlanmadığı anlamına gelir. Çubuklar harcanan/kalan tutarı ve aşımı gösterir.
+- Kategori adına tıklamak o kategorinin giderlerini açar. Kategoriler yeniden adlandırılabilir veya geçmişi silmeden arşivlenebilir.
 
 **Yatırım:**
 
@@ -228,7 +236,7 @@ Kişisel gelir, gider ve yatırımları sade bir ekrandan takip etmek içindir. 
 - Sunulan araçlar arasında gram altın, gümüş, platin, paladyum; çeşitli altın türleri, dövizler ve belirli kripto paralar bulunur.
 - Desteklenen araçların güncel fiyatı, toplam değeri, alış maliyeti ve alışa göre tutar/yüzde farkı görülebilir.
 - Fiyatın kaynağı, zamanı ve varsa eski veya referans fiyat olduğu belirtilir; fiyatlar yenilenebilir.
-- TRY, USD, EUR veya GBP cinsinden takip ortamı seçilebilir. Kayıtlar oluştuktan sonra para birimi değiştirilmez.
+- TRY, USD, EUR veya GBP cinsinden takip ortamı seçilebilir. Finans kaydı, tekrar veya tutar tanımlanmış bir bütçe kuralı oluştuktan sonra para birimi değiştirilmez.
 
 Otomatik fiyatlar ilgili fiyat hizmetlerinin etkin ve erişilebilir olmasına bağlıdır. Her değer kesintisiz anlık fiyat anlamına gelmez; gram/spot değer ile yerel bozdurma fiyatı farklı olabilir. Finans kayıtları kişiseldir; sekme paylaşımına ve genel aramaya dahil edilmez.
 
@@ -268,7 +276,7 @@ Yalnızca görüntüleme yetkisi içerikleri okumaya ve kopyalamaya izin verir. 
 
 Hareket analizi hızlı notlar, detaylı notlar, planlar ve PomoNotes kayıtlarını kapsar. Ortak içeriklerde kişisel hareketler ve alan hareketleri ayrılabilir; odak süreleri kişiye özeldir. Analizler kayıtlı geçmişe dayanır; uygulamanın geçmişi takip etmeye başlamasından önceki bilinmeyen çalışma süreleri veya tamamlanma günleri tahmin edilmez.
 
-**Finans analizi** ise seçilen ayın özetini, son 12 aylık gelir/gider grafiğini, gelir–gider dağılımını ve mevcut yatırımların dağılımını gösterir. Alış maliyeti, fiyatı bilinen toplam değer ve alışa göre fark birlikte değerlendirilebilir; eksik veya eski fiyatlar belirtilir.
+**Finans analizi** ise seçilen ayın özetini, son 12 aylık gelir/gider grafiğini, kategori bazında harcamaları ve mevcut yatırımların dağılımını gösterir. Bir kategoriye tıklanarak ilgili işlemler incelenebilir. Finans sekmesinden Analiz'e geçerken seçilen ay korunur. Alış maliyeti, fiyatı bilinen toplam değer ve alışa göre fark birlikte değerlendirilebilir; eksik veya eski fiyatlar belirtilir.
 
 ### Silme, geri alma ve çöp kutusu
 

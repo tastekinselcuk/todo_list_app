@@ -150,15 +150,15 @@ test('native price service fails closed on rejected/unavailable authentication a
  assert.equal(response.status,400)
 })
 
-function storeFixture() {
+function storeFixture(overrides={}) {
  const vue=require('vue'),workspace=vue.reactive({userId:'owner',activeId:'one',sessionKey:'owner:one'}),calls=[],rows=[]
  let gate,readFailed=false,store
- const summary=()=>({currency:'TRY',income:0,expense:rows.reduce((sum,row)=>sum+row.amount,0),count:rows.length,monthly:[],categories:[],allocation:[],quote_requests:[],
-  schedules:[],locked_currency:rows.length>0,portfolio:{count:0,cost:0,value:null,priced_cost:0,gain:null,missing:0,stale:0}})
+ const summary=()=>({currency:'TRY',income:rows.filter(row=>row.kind==='income').reduce((sum,row)=>sum+row.amount,0),expense:rows.filter(row=>row.kind==='expense').reduce((sum,row)=>sum+row.amount,0),count:rows.length,monthly:[],categories:[],allocation:[],quote_requests:[],
+  schedules:[],budget_categories:[],locked_currency:rows.length>0,portfolio:{count:0,cost:0,value:null,priced_cost:0,gain:null,missing:0,stale:0}})
  const client={rpc(name,args){
    calls.push({name,args:structuredClone(args)})
    const data=name==='finance_load'?{summary:summary(),transactions:{items:structuredClone(rows),has_more:false,cursor:null},positions:{items:[],has_more:false,cursor:null}}:name==='finance_mutate'?{...args.payload,id:args.rid,version:1}:null
-   const result=(async()=>{if(gate)await gate;if(name==='finance_load' && readFailed)return {error:{code:'NETWORK_ERROR'}}
+   const result=overrides[name]?Promise.resolve().then(()=>overrides[name](args)):(async()=>{if(gate)await gate;if(name==='finance_load' && readFailed)return {error:{code:'NETWORK_ERROR'}}
     if(name==='finance_mutate')rows.push(data)
     return {data}})()
    result.abortSignal=()=>result
@@ -193,6 +193,38 @@ test('a late finance response cannot populate another workspace and failed month
   await second.store.load();second.store.month='2026-09';second.failReads()
   await second.store.load();assert.equal(second.store.summary,null);assert.equal(second.store.transactions.length,0)
  }finally{second.close()}
+})
+
+test('finance filters keep full-month totals and ignore stale queries and paging failures',async()=>{
+ let releaseIncome,rejectPage
+ const incomeGate=new Promise(resolve=>{releaseIncome=resolve}),pageGate=new Promise((_resolve,reject)=>{rejectPage=reject})
+ const income={id:'income',kind:'income',amount:100,occurred_on:'2026-11-02'},expense={id:'expense',kind:'expense',amount:25,occurred_on:'2026-11-01'}
+ const page=(items,more=false)=>({data:{items,has_more:more,cursor:items.length?{date:items.at(-1).occurred_on,id:items.at(-1).id}:null,totals:{count:items.length,income:items.reduce((n,r)=>n+(r.kind==='income'?r.amount:0),0),expense:items.reduce((n,r)=>n+(r.kind==='expense'?r.amount:0),0)}}})
+ const f=storeFixture({finance_query:args=>{
+  if(args.after_id)return pageGate
+  if(args.filters.kind==='income')return incomeGate
+  return page(args.filters.search?[]:[expense],!args.filters.search)
+ }})
+ try{
+  f.rows.push(income,expense);f.store.month='2026-11'
+  const older=f.store.setFilters({kind:'income'});await new Promise(setImmediate)
+  await f.store.setFilters({kind:'expense'})
+  releaseIncome(page([income]));assert.equal(await older,false)
+  assert.equal(f.store.transactions[0].id,'expense');assert.equal(f.store.filteredTotals.expense,25)
+  assert.equal(f.store.summary.count,2);assert.equal(f.store.summary.income,100);assert.equal(f.store.summary.expense,25)
+  const paging=f.store.loadMore('transaction');await new Promise(setImmediate)
+  await f.store.setFilters({search:'nothing'})
+  rejectPage(new Error('Late network error'));await paging
+  assert.equal(f.store.transactions.length,0);assert.equal(f.store.filteredTotals.count,0);assert.equal(f.store.error,'');assert.equal(f.store.paging,false)
+ }finally{f.close()}
+})
+
+test('budget progress distinguishes unlimited, zero, approaching and exceeded limits',()=>{
+ assert.equal(lib.budgetProgress(30,null).state,'none');assert.equal(lib.budgetProgress(30,null).remaining,null)
+ assert.equal(lib.budgetProgress(0,0).percent,0);assert.equal(lib.budgetProgress(.1,0).state,'over')
+ assert.equal(lib.budgetProgress(79,100).state,'normal');assert.equal(lib.budgetProgress(80,100).state,'near')
+ assert.equal(lib.budgetProgress(100,100).state,'used');assert.equal(lib.budgetProgress(115,100).remaining,-15)
+ assert.equal(lib.budgetProgress(115,100).percent,100)
 })
 test('finance analysis disables productivity queries and re-enabling reloads the report',async()=>{
  const vue=require('vue'),enabled=vue.ref(false),calls=[],scope=vue.effectScope()
@@ -231,7 +263,8 @@ test('cash form saves its optional description without a category, and the recur
   f.state.amount.value='123,45';f.state.name.value='  Market  ';await f.state.save()
   assert.equal(f.writes.length,1);assert.equal(f.writes[0].method,'mutate')
   assert.equal(f.writes[0].args[2],'stable-draft')
-  assert.deepEqual(Object.keys(f.writes[0].args[3]).sort(),['amount','kind','occurred_on','title'])
+  assert.deepEqual(Object.keys(f.writes[0].args[3]).sort(),['amount','category_id','kind','occurred_on','title'])
+  assert.equal(f.writes[0].args[3].category_id,null)
   assert.equal(f.writes[0].args[3].title,'Market')
   assert.equal(f.writes[0].args[3].amount,123.45)
   f.state.cadence.value='monthly';f.state.name.value='Rent';await f.state.save()

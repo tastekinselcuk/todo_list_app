@@ -34,15 +34,15 @@
           <span class="category-checkbox" :class="{ 'is-checked': !selectedCategories.length }"><Check v-if="!selectedCategories.length" class="h-2.5 w-2.5" /></span>
           <span class="flex-1 text-left">{{ t('todo.all') }}</span>
         </button>
-        <div v-if="todoStore.categories.length" role="separator" class="my-1 h-px shrink-0 bg-border/60" />
+        <div role="separator" class="my-1 h-px shrink-0 bg-border/60" />
         <div class="category-options" role="none">
-          <div v-for="category in todoStore.categories" :key="category.id" role="none" class="group/category flex items-center rounded-lg" :class="{ 'bg-muted/50': selectedCategories.includes(category.id) }">
+          <div v-for="category in filterCategories" :key="category.id" role="none" class="group/category flex items-center rounded-lg" :class="{ 'bg-muted/50': selectedCategories.includes(category.id) }">
             <button type="button" role="menuitemcheckbox" data-category-option :aria-checked="selectedCategories.includes(category.id)" class="category-option min-w-0 flex-1" @click="handleCategoryToggle(category.id)">
               <span class="category-checkbox" :class="{ 'is-checked': selectedCategories.includes(category.id) }"><Check v-if="selectedCategories.includes(category.id)" class="h-2.5 w-2.5" /></span>
               <span class="h-1 w-1 shrink-0 rounded-full opacity-70" :style="{ backgroundColor: category.color }" />
               <span class="truncate text-left" :title="category.name">{{ category.name }}</span>
             </button>
-            <button v-if="canWrite && todoStore.categories.length > 1" type="button" role="menuitem" @click="handleDeleteCategory(category.id)" :disabled="deleting" :aria-label="`${t('todo.deleteCategory')}: ${category.name}`" :title="t('todo.deleteCategory')" class="category-delete mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"><Trash2 class="h-3 w-3" /></button>
+            <button v-if="canWrite && category.id !== 'uncategorized' && todoStore.categories.length > 1" type="button" role="menuitem" @click="handleDeleteCategory(category.id)" :disabled="deleting" :aria-label="`${t('todo.deleteCategory')}: ${category.name}`" :title="t('todo.deleteCategory')" class="category-delete mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-40"><Trash2 class="h-3 w-3" /></button>
           </div>
         </div>
       </div>
@@ -76,9 +76,10 @@ const categoryMenu = ref<HTMLElement | null>(null)
 const categoryOpen = ref(false)
 const categoryMenuId = `todo-category-filter-${getCurrentInstance()?.uid ?? 0}`
 const categoryMenuStyle = ref<Record<string, string>>({})
+const filterCategories = computed(() => [{ id: 'uncategorized', name: t('todo.uncategorized'), color: '#94A3B8' }, ...todoStore.categories])
 const categoryLabel = computed(() => !props.selectedCategories.length
   ? t('todo.all')
-  : todoStore.categories.filter(category => props.selectedCategories.includes(category.id)).map(category => category.name).join(', ') || t('todo.category'))
+  : filterCategories.value.filter(category => props.selectedCategories.includes(category.id)).map(category => category.name).join(', ') || t('todo.category'))
 
 function updateCategoryMenuPosition() {
   if (!categoryTrigger.value || typeof window === 'undefined') return
@@ -87,7 +88,7 @@ function updateCategoryMenuPosition() {
   const width = Math.min(Math.max(rect.width, 240), window.innerWidth - edge * 2)
   const below = window.innerHeight - rect.bottom - gap - edge
   const above = rect.top - gap - edge
-  const desiredHeight = Math.min(280, 46 + (todoStore.categories.length ? 9 : 0) + todoStore.categories.length * 32)
+  const desiredHeight = Math.min(280, 46 + 9 + filterCategories.value.length * 32)
   const openAbove = below < desiredHeight && above > below
   const height = Math.min(desiredHeight, Math.max(64, openAbove ? above : below))
   categoryMenuStyle.value = {
@@ -147,7 +148,7 @@ function handleCategoryToggle(id: string) {
   emit('update:selectedCategories', props.selectedCategories.includes(id) ? props.selectedCategories.filter(value => value !== id) : [...props.selectedCategories, id])
 }
 async function handleDeleteCategory(id: string) {
-  if (!canWrite.value || deleting.value) return
+  if (!canWrite.value || deleting.value || id === 'uncategorized') return
   closeCategoryMenu()
   deleting.value = true
   try {
@@ -156,7 +157,7 @@ async function handleDeleteCategory(id: string) {
       const message=result.message || ''
       uiStore.addToast(t(/PGRST202|42883|Could not find the function/.test(message)?'integrity.categoryDeleteSetup':/SHARING_CONFLICT/.test(message)?'sharing.conflict':'todo.cannotDelete'),'error');return
     }
-    uiStore.addToast(t('todo.categoryDeleted'), 'success')
+    uiStore.addToast(t('todo.categoryDeleted'), 'deleted')
     emit('update:selectedCategories', props.selectedCategories.filter(value => value !== id))
   } finally { deleting.value = false }
 }

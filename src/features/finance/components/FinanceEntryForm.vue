@@ -1,18 +1,19 @@
 <template>
-  <form class="space-y-2.5" @submit.prevent="save">
-    <div class="flex flex-wrap items-center gap-1.5">
+  <form class="space-y-3" @submit.prevent="save">
+    <p v-if="record || schedule" class="text-xs font-medium text-muted-foreground">{{ t('finance.editEntry') }}</p>
+    <div class="flex flex-wrap items-center gap-2">
       <template v-if="entity==='transaction'">
         <input ref="firstInput" v-model="name" maxlength="160" :aria-label="t('finance.description')" :placeholder="t('finance.description')" :disabled="disabled" class="finance-input !w-auto min-w-[180px] flex-1" />
         <div class="relative w-28 shrink-0">
           <input v-model="amount" required inputmode="decimal" :aria-label="t('finance.amount')" :placeholder="t('finance.amount')" :disabled="disabled" class="finance-input !pl-3 !pr-10" />
           <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{{ currency }}</span>
         </div>
-        <CustomSelect v-model="kind" :options="kindOptions" :aria-label="t('finance.type')" :disabled="disabled" class="w-fit shrink-0" />
-        <CustomSelect v-if="!record || schedule" v-model="cadence" :options="cadenceOptions" :aria-label="t('finance.repeat')" :disabled="disabled" class="w-fit shrink-0" />
+        <CustomSelect v-model="kind" :options="kindOptions" :aria-label="t('finance.type')" :disabled="disabled" class="w-fit shrink-0" popover />
+        <CustomSelect v-model="cashCategory" :options="cashCategoryOptions" :aria-label="t('finance.category')" :disabled="disabled" class="w-40 max-w-full shrink-0" :action-label="t('finance.addCategory')" popover @action="emit('manage-categories')" />
       </template>
       <template v-else>
-        <CustomSelect v-model="category" :options="categoryOptions" :aria-label="t('finance.category')" :disabled="disabled" class="w-fit max-w-[160px] shrink-0" />
-        <CustomSelect v-model="selection" :options="instrumentOptions" :aria-label="t('finance.instrument')" :disabled="disabled" class="w-fit max-w-[220px] shrink-0" />
+        <CustomSelect v-model="category" :options="categoryOptions" :aria-label="t('finance.category')" :disabled="disabled" class="w-fit max-w-[160px] shrink-0" popover />
+        <CustomSelect v-model="selection" :options="instrumentOptions" :aria-label="t('finance.instrument')" :disabled="disabled" class="w-fit max-w-[220px] shrink-0" popover />
         <input ref="firstInput" v-model="quantity" required inputmode="decimal" :aria-label="t('finance.quantity')" :placeholder="t(selected?.unit==='g'?'finance.grams':selected?.unit==='piece'?'finance.pieces':'finance.quantity')" :disabled="disabled" class="finance-input !w-24 !pl-3 shrink-0" />
         <div class="relative w-36 shrink-0">
           <input v-model="buyPrice" required inputmode="decimal" :aria-label="t('finance.buyPrice')" :placeholder="t('finance.buyPrice')" :disabled="disabled" class="finance-input !pl-3 !pr-10 !text-xs" />
@@ -20,11 +21,16 @@
         </div>
       </template>
       <div class="ml-auto flex shrink-0 items-center gap-1.5">
+        <button v-if="entity==='transaction'" type="button" class="finance-icon !h-10 !w-10" :aria-expanded="detailsOpen" :aria-label="t('finance.entryDetails')" :title="t('finance.entryDetails')" @click="detailsOpen=!detailsOpen"><SlidersHorizontal class="h-4 w-4" /></button>
         <button v-if="record || schedule" type="button" class="finance-icon shrink-0" :aria-label="t('common.cancel')" :disabled="store.saving" @click="emit('cancel')"><X class="h-4 w-4" /></button>
-        <input v-model="date" required type="date" min="1900-01-01" :max="entity==='position'?today:'2100-12-31'" :aria-label="t(entity==='position'?'finance.purchaseDate':'finance.date')" :disabled="disabled" class="finance-input !w-32 !pl-3 !pr-2 !text-xs shrink-0" />
-        <button type="submit" :disabled="disabled || !canSubmit" class="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"><Loader2 v-if="store.saving" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /><span>{{ t(record || schedule?'common.save':'quickNotes.add') }}</span></button>
+        <button type="submit" :disabled="disabled || !canSubmit" class="workspace-add-button"><Loader2 v-if="store.saving" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /><span>{{ t(record || schedule?'common.save':'quickNotes.add') }}</span></button>
       </div>
     </div>
+    <div v-if="detailsOpen || entity==='position'" class="flex flex-wrap items-end gap-3 rounded-xl bg-muted/20 p-3">
+      <label class="space-y-1.5"><span class="block text-xs text-muted-foreground">{{ t(entity==='position'?'finance.purchaseDate':'finance.date') }}</span><input v-model="date" required type="date" min="1900-01-01" :max="entity==='position'?today:'2100-12-31'" :disabled="disabled" class="finance-input !h-9 !w-36 !px-2.5 !text-xs" /></label>
+      <label v-if="entity==='transaction' && (!record || schedule)" class="space-y-1.5"><span class="block text-xs text-muted-foreground">{{ t('finance.repeat') }}</span><CustomSelect v-model="cadence" :options="cadenceOptions" :aria-label="t('finance.repeat')" :disabled="disabled" size="sm" class="w-36" popover /></label>
+    </div>
+    <p v-else class="text-xs text-muted-foreground">{{ new Date(`${date}T12:00:00Z`).toLocaleDateString(locale,{day:'numeric',month:'short',timeZone:'UTC'}) }} · {{ t(`finance.${cadence}`) }}</p>
     <div v-if="legacy" class="flex flex-wrap items-center gap-1.5">
       <input v-if="legacy" v-model="manualPrice" inputmode="decimal" :placeholder="t('finance.currentPrice')" :aria-label="t('finance.currentPrice')" :disabled="disabled" class="finance-input !h-9 !w-40 !text-xs" />
     </div>
@@ -34,14 +40,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loader2, X } from 'lucide-vue-next'
+import { Loader2, SlidersHorizontal, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { useFinanceStore } from '../stores/finance'
 import { investmentCategories, investmentInstruments, investmentInstrument, localFinanceDay, parseFinanceNumber, validFinanceDate, type FinanceEntity, type FinanceTransaction, type FinancePosition, type FinanceSchedule } from '../lib/finance'
 const props=defineProps<{entity:FinanceEntity;record:FinanceTransaction|FinancePosition|null;schedule?:FinanceSchedule|null;currency:string;draftId:string}>()
-const emit=defineEmits<{saved:[];cancel:[]}>()
-const store=useFinanceStore(),{t}=useI18n(),today=localFinanceDay(),firstInput=ref<HTMLInputElement>()
+const emit=defineEmits<{saved:[];cancel:[];'manage-categories':[]}>()
+const store=useFinanceStore(),{t,locale}=useI18n(),today=localFinanceDay(),firstInput=ref<HTMLInputElement>()
 const cash=props.entity==='transaction'?props.record as FinanceTransaction|null:null
+const cashCategory=ref(props.schedule?.category_id || cash?.category_id || '')
+const detailsOpen=ref(Boolean(props.record || props.schedule))
+const cashCategoryOptions=computed(()=>[{value:'',label:t('finance.uncategorized')},...(store.summary?.budget_categories || []).filter(row=>!row.archived || row.id===cashCategory.value).map(row=>({value:row.id,label:row.name}))])
 const position=props.entity==='position'?props.record as FinancePosition|null:null
 const matched=position?investmentInstrument(position):undefined
 const category=ref<string>(matched?.category || position?.kind || 'metal')
@@ -80,10 +89,10 @@ async function save() {
   const value=parseFinanceNumber(amount.value)
   if(value===null || value<=0){validation.value='invalidInput';return}
   if(cadence.value!=='once') {
-   const payload={title:name.value.trim() || kind.value,kind:kind.value,amount:value,cadence:cadence.value,starts_on:date.value,timezone:props.schedule?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Istanbul'}
+   const payload={title:name.value.trim() || kind.value,kind:kind.value,amount:value,cadence:cadence.value,starts_on:date.value,timezone:props.schedule?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Istanbul',category_id:cashCategory.value || null}
    if(await store.mutateSchedule(props.schedule?'update':'create',props.schedule?.id || props.draftId,payload,props.schedule?.version || null))emit('saved')
   }else {
-   if(await store.mutate('transaction',cash?'update':'create',cash?.id || props.draftId,{title:name.value.trim() || kind.value,kind:kind.value,amount:value,occurred_on:date.value},cash?.version || null))emit('saved')
+   if(await store.mutate('transaction',cash?'update':'create',cash?.id || props.draftId,{title:name.value.trim() || kind.value,kind:kind.value,amount:value,occurred_on:date.value,category_id:cashCategory.value || null},cash?.version || null))emit('saved')
   }
  }else {
   const units=parseFinanceNumber(quantity.value,8),purchase=parseFinanceNumber(buyPrice.value,8),current=manualPrice.value.trim()?parseFinanceNumber(manualPrice.value,8):null

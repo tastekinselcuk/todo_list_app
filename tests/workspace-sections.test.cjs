@@ -249,7 +249,7 @@ test('the content picker exposes enabled sibling modules and existing views with
   const enabled=registry.moduleCatalog.map(module=>module.id)
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'quick').map(item=>item.value)),['plans','detailed','quick','secure','code','pomodoro'])
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'finance').map(item=>item.value)),['finance:transaction','finance:position'])
-  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'learning').map(item=>item.value)),['learning:topics','learning:today','learning:mistakes','flashcards'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'learning').map(item=>item.value)),['learning:topics','learning:mistakes','flashcards'])
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'tasks').map(item=>item.value)),['tasks','periodic'])
   assert.equal(navigation.getWorkspaceModuleOptions(enabled,'tasks')[0].label,'tasks.calendar')
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['quick','finance'],'quick').map(item=>item.value)),['quick'])

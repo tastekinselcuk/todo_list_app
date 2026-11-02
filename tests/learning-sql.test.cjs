@@ -9,7 +9,7 @@ async function fixture(storage=false){
  await f.db.exec('alter table todos add column description text;alter table code_snippets add column title text;alter table activity_items add column title text,add column subtitle text,add column notes text;alter table learning_subjects add column color text;alter table flashcard_decks add column color text;')
  for(const name of ['202610120003_workspace_search','202610170001_workspace_trash','202610180001_tasks_calendar'])await f.db.exec(fs.readFileSync(`supabase/migrations/${name}.sql`,'utf8'))
  if(storage)await f.db.exec("create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;grant usage on schema storage to authenticated;grant all on storage.objects to authenticated;")
- await f.db.exec(migration);await f.db.exec(fs.readFileSync('supabase/migrations/202610240003_learning_inline.sql','utf8'));await f.as(f.owner)
+ await f.db.exec(migration);await f.db.exec(fs.readFileSync('supabase/migrations/202610240003_learning_inline.sql','utf8'));await f.db.exec(fs.readFileSync('supabase/migrations/202611030001_learning_focus_and_template_trash.sql','utf8'));await f.as(f.owner)
  f.mutate=(op,sid=null,tid=null,payload={},version=null,wid=f.wid)=>f.rpc('select learning_mutate($1,$2,$3,$4,$5::jsonb,$6) as result',[wid,op,sid,tid,JSON.stringify(payload),version])
  f.load=()=>f.rpc('select learning_load($1) as result',[f.wid])
  return f
@@ -33,6 +33,30 @@ test('learning curriculum is versioned, import is repeatable and topic archives 
   assert.equal((await load()).subjects[0].topics.length,2)
  }finally{await db.close()}
 })
+test('trashed template studies do not block reimport and restore independently with their original progress',async()=>{
+ const f=await fixture()
+ try{
+  const payload={key:'regression',revision:'2026-11',subjects:[{key:'study',title:'Professional study',topics:[{key:'topic',title:'My topic'}]}]}
+  const old=(await f.mutate('template.import',null,null,payload)).subjects[0],tid=old.topics[0].id
+  await f.mutate('progress.update',old.id,tid,{status:'done'},0)
+  const trashed=await f.rpc("select trash_change($1,'learning',$2,'move',$3) as result",[f.wid,old.id,old.version])
+  const newer=(await f.mutate('template.import',null,null,payload)).subjects[0]
+  assert.notEqual(newer.id,old.id);assert.equal((await f.load()).subjects.length,1)
+  assert.equal((await f.mutate('template.import',null,null,payload)).subjects[0].id,newer.id,'retry uses the active copy rather than duplicating it')
+  await f.as(f.owner,'postgres')
+  const deleted=(await f.db.query('select deleted_at,version,template_key from learning_subjects where id=$1',[old.id])).rows[0]
+  assert.ok(deleted.deleted_at);assert.equal(deleted.version,trashed.version);assert.equal(deleted.template_key,old.template_key)
+  await f.as(f.owner)
+  await f.rpc("select trash_change($1,'learning',$2,'restore',$3) as result",[f.wid,old.id,trashed.version])
+  const data=await f.load();assert.equal(data.subjects.length,2);assert.equal(data.subjects.find(s=>s.id===old.id).topics[0].id,tid)
+  assert.equal(data.subjects.find(s=>s.id===old.id).template_key,null)
+  assert.equal(data.progress.find(p=>p.subject_id===old.id).status,'done');assert.equal(data.progress.some(p=>p.subject_id===newer.id),false)
+  assert.equal((await f.mutate('template.import',null,null,payload)).subjects[0].id,newer.id)
+  await f.as(f.owner,'postgres');await f.db.exec(fs.readFileSync('supabase/migrations/202611030001_learning_focus_and_template_trash.sql','utf8'));await f.as(f.owner)
+  assert.equal((await f.load()).subjects.length,2,'the migration can be reapplied without losing studies')
+ }finally{await f.db.close()}
+})
+
 test('learning private progress, mistakes and review retries cannot leak or duplicate',async()=>{
  const f=await fixture(),{db,mutate,owner,guest,wid,gwid,as,rpc}=f
  try{
@@ -66,6 +90,25 @@ test('learning private progress, mistakes and review retries cannot leak or dupl
   await as(owner,'anon');await assert.rejects(rpc('select learning_load($1) as result',[wid]),/permission denied/)
  }finally{await db.close()}
 })
+test('topic review dates follow the completion and recall schedule independently of topic status',async()=>{
+ const f=await fixture();try{
+  let subject=(await f.mutate('subject.create',uuid(601),null,{title:'Review schedule'})).subject
+  subject=(await f.mutate('topic.add',subject.id,null,{titles:['One']})).subject;const tid=subject.topics[0].id
+  const today=(await f.db.query("select to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD') as day")).rows[0].day
+  const after=days=>{const date=new Date(today+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+days);return date.toISOString().slice(0,10)}
+  let p=(await f.mutate('progress.update',subject.id,tid,{status:'done',timezone:'UTC'},0)).progress
+  assert.equal(p.review_on,after(1))
+  p=(await f.mutate('progress.update',subject.id,tid,{status:'todo',timezone:'UTC'},p.version)).progress
+  assert.equal(p.review_on,after(1),'changing status retains the existing scheduled review')
+  for(const [i,days]of [3,7,14,30,60,60].entries()){
+   p=(await f.mutate('review',subject.id,tid,{attempt_id:uuid(610+i),correct:true,timezone:'UTC'})).progress
+   assert.equal(p.review_on,after(days));assert.equal(p.status,'todo','recall does not silently complete the topic')
+  }
+  p=(await f.mutate('review',subject.id,tid,{attempt_id:uuid(620),correct:false,timezone:'UTC'})).progress
+  assert.equal(p.streak,0);assert.equal(p.review_on,after(1));assert.equal(p.status,'todo')
+ }finally{await f.db.close()}
+})
+
 test('learning links create actual note, deck, focus task and calendar block once',async()=>{
  const f=await fixture(),{db,mutate}=f
  try{
@@ -73,7 +116,11 @@ test('learning links create actual note, deck, focus task and calendar block onc
   s=(await mutate('topic.add',s.id,null,{titles:['Topic']})).subject;const tid=s.topics[0].id
   const note=(await mutate('link.note',s.id,tid)).link
   assert.equal((await mutate('link.note',s.id,tid)).link.id,note.id)
-  assert.equal((await db.query('select title from todos where id=$1',[note.id])).rows[0].title,'Topic')
+  const linked=(await db.query('select title,category_id,version from todos where id=$1',[note.id])).rows[0]
+  assert.equal(linked.title,'Topic');assert.equal(linked.category_id,null)
+  const edited=(await db.query('update todos set description=$1,category_id=$2 where id=$3 and version=$4 returning description,category_id',['<p>Learning topic notes</p>',null,note.id,linked.version])).rows[0]
+  assert.equal(edited.description,'<p>Learning topic notes</p>');assert.equal(edited.category_id,null)
+  assert.equal((await mutate('link.note',s.id,tid)).link.id,note.id,'editing without a category keeps the same learning note linked')
   const deck=(await mutate('link.deck',s.id,tid)).link
   assert.equal((await mutate('link.deck',s.id,tid)).link.id,deck.id)
   const focus=(await mutate('link.focus',s.id,tid,{seconds:1500})).link

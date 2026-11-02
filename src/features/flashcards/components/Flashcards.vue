@@ -20,10 +20,9 @@
           </div>
           <button v-if="canWrite"
             @click="handleAddDeck"
-            class="h-10 px-5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm hover:shadow-lg transition-all disabled:opacity-50 text-xs flex items-center gap-1.5 shrink-0"
-            :disabled="!newDeckTitle.trim()"
-          >
-            <Plus class="w-3.5 h-3.5" /> {{ $t('flashcards.create') }}
+            class="workspace-add-button"
+            :disabled="!newDeckTitle.trim()||addingDeck"
+          > {{ $t('common.add') }}
           </button>
         </div>
       </div>
@@ -110,10 +109,10 @@
         />
         <button v-if="canWrite"
           @click="handleAddCard" 
-          :disabled="!newCardFront.trim() || !newCardBack.trim()" 
-          class="h-10 px-6 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm transition-all disabled:opacity-50 text-xs shrink-0"
+          :disabled="!newCardFront.trim()||!newCardBack.trim()||addingCard"
+          class="workspace-add-button"
         >
-          {{ $t('flashcards.addCard') }}
+          {{ $t('common.add') }}
         </button>
       </div>
 
@@ -183,7 +182,7 @@
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { ref, computed, watch, onDeactivated } from 'vue'
-import { Layers, Plus, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
+import { Layers, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
 import { useFlashcardStore, type Deck } from '@/features/flashcards/stores/flashcards'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
@@ -277,7 +276,7 @@ const handleAddCard = async () => {
 const handleDeleteCard = async (cardId: string) => {
   if (canWrite.value && activeDeck.value) {
     if (!await store.deleteCard(activeDeck.value.id, cardId)) return
-    uiStore.addToast('Kart silindi', 'info')
+    uiStore.addToast('Kart silindi', 'deleted')
   }
 }
 

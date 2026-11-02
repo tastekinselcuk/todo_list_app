@@ -13,10 +13,10 @@
       </div>
       <button
         @click="addQuickNote"
-        class="h-10 px-5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-sm hover:shadow-lg transition-all disabled:opacity-50 text-xs"
-        :disabled="!quickNote.trim()"
+        class="workspace-add-button"
+        :disabled="!quickNote.trim()||addingQuickNote"
       >
-        {{ $t('quickNotes.add') }}
+        {{ $t('common.add') }}
       </button>
     </div>
     
@@ -69,7 +69,7 @@ const todoStore = useTodoStore()
 const uiStore = useUIStore()
 const { t, locale } = useI18n()
 
-const quickNote = ref('')
+const quickNote = ref(''), addingQuickNote=ref(false)
 onDeactivated(() => { quickNote.value = '' })
 
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
@@ -118,14 +118,14 @@ const groupedNotes = computed(() => {
 })
 
 const addQuickNote = async () => {
-  if (quickNote.value.trim()) {
-    const value = quickNote.value
-    const result = await todoStore.addQuickNote(value)
-    if (!result.success) { uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error'); return }
-    if (quickNote.value === value) quickNote.value = ''
-    // DÜZELTME: Toast mesajı artık dil dosyasından (i18n) çekiliyor
-    uiStore.addToast(t('quickNotes.noteAdded') || 'Note added successfully', 'success') 
-  }
+  if(!canWrite.value||addingQuickNote.value||!quickNote.value.trim())return
+  const value=quickNote.value;addingQuickNote.value=true
+  try{
+    const result=await todoStore.addQuickNote(value)
+    if(!result.success){uiStore.addToast(t('sharing.errors.SAVE_FAILED'),'error');return}
+    if(quickNote.value===value)quickNote.value=''
+    uiStore.addToast(t('quickNotes.noteAdded'),'success')
+  }finally{addingQuickNote.value=false}
 }
 
 const deletingQuickNotes = new Set<string>()

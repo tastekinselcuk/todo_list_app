@@ -91,19 +91,32 @@ function trackerFixture(){
  const nav={workspaceNavigationKey:Symbol(),workspaceActiveViewKey:Symbol(),workspaceOpenItemKey:Symbol()}
  const compiled=compileScript(parse(fs.readFileSync('src/features/learning/components/LearningTracker.vue','utf8')).descriptor,{id:'study-controller'}).content
  const canWrite=vue.ref(true)
- const mod=load(compiled,{'vue':{...vue,...noHooks,inject:(_key,fallback)=>fallback},'vue-i18n':{useI18n:()=>({t:key=>key})},'lucide-vue-next':{},'vuedraggable':{},'@/components/ui/CustomSelect.vue':{},'./LearningDialog.vue':{},'./LearningSubjectItem.vue':{},'./LearningTitle.vue':{},'./LearningTopicDetails.vue':{},'./LearningTemplatePicker.vue':{},'../stores/learning':{useLearningStore:()=>state,learningError:()=> 'failed'},'../lib/study':study,'../lib/useStudyOrder':order,'../lib/templates':templates,'../lib/images':{},'@/lib/workspaceScope':{useModuleAccess:()=>({canWrite}),useModuleLoad(){},useWorkspaceDraft:(_key,value)=>vue.ref(value)},'@/lib/searchNavigation':{useSearchReveal(){}},'@/lib/workspaceNavigation':nav,'@/stores/ui':{useUIStore:()=>({addToast:(...args)=>toasts.push(args),addUndoToast(){}})},'@/stores/settings':{useSettingsStore:()=>({isModuleActive:()=>true})},'@/features/pomodoro/stores/pomodoro':{usePomodoroStore:()=>({durations:{focus:25}})}})
+ const mod=load(compiled,{'vue':{...vue,...noHooks,inject:(_key,fallback)=>fallback},'vue-i18n':{useI18n:()=>({t:key=>key})},'lucide-vue-next':{},'vuedraggable':{},'@/components/ui/CustomSelect.vue':{},'./LearningDialog.vue':{},'./LearningSubjectItem.vue':{},'./LearningTitle.vue':{},'./LearningTopicDetails.vue':{},'./LearningTopicRow.vue':{},'./LearningTemplatePicker.vue':{},'../stores/learning':{useLearningStore:()=>state,learningError:()=> 'failed'},'../lib/study':study,'../lib/useStudyOrder':order,'../lib/templates':templates,'../lib/images':{},'@/lib/workspaceScope':{useModuleAccess:()=>({canWrite}),useModuleLoad(){},useWorkspaceDraft:(_key,value)=>vue.ref(value)},'@/lib/searchNavigation':{useSearchReveal(){}},'@/lib/workspaceNavigation':nav,'@/stores/ui':{useUIStore:()=>({addToast:(...args)=>toasts.push(args),addUndoToast(){}})},'@/stores/settings':{useSettingsStore:()=>({isModuleActive:()=>true})},'@/features/pomodoro/stores/pomodoro':{usePomodoroStore:()=>({durations:{focus:25}})}})
  const scope=vue.effectScope(),controller=scope.run(()=>mod.default.setup({}, {expose(){}}))
  return {state,controller,calls,toasts,canWrite,respond:fn=>response=fn,stop:()=>scope.stop()}
 }
 test('inline study creation preserves failed drafts, retries the same ID and never starts focus on mount',async()=>{
  const f=trackerFixture();try{
   assert.equal(f.calls.length,0)
-  await f.controller.beginStudy();f.controller.newTitle.value='Algebra';assert.equal(f.controller.panel.value,null)
+  f.controller.newTitle.value='Algebra';assert.equal(f.controller.panel.value,null)
   f.respond(async()=>{throw Error('offline')});await f.controller.saveSubject()
-  assert.equal(f.controller.newStudy.value,true);assert.equal(f.controller.newTitle.value,'Algebra')
-  f.respond(async()=>({subject:{id:'created'}}));await f.controller.saveSubject();assert.equal(f.controller.newStudy.value,false);assert.equal(f.calls[0][1],f.calls[1][1],'a retry uses the same idempotency key')
+  assert.ok(f.controller.newId.value);assert.equal(f.controller.newTitle.value,'Algebra')
+  f.respond(async()=>({subject:{id:'created'}}));await f.controller.saveSubject();assert.equal(f.controller.newTitle.value,'');assert.equal(f.controller.newId.value,'');assert.equal(f.controller.panel.value,null);assert.equal(f.calls[0][1],f.calls[1][1],'a retry uses the same idempotency key')
  }finally{f.stop()}
 })
+test('study filters combine across large curricula without changing the user-selected list mode',async()=>{
+ const f=trackerFixture();try{
+  f.state.subjects=[{id:'english',title:'English',version:1,topics:Array.from({length:50},(_,i)=>({id:'e'+i,title:'Topic '+i,_version:1}))},{id:'work',title:'Professional work',version:1,topics:[{id:'w1',title:'Design',_version:1}]}]
+  f.state.state=(_sid,id)=>({status:['e17','w1'].includes(id)?'doing':id==='e5'?'done':'todo',version:1})
+  f.controller.selectedStudy.value='english';f.controller.status.value='doing';await vue.nextTick()
+  assert.equal(f.controller.listMode.value,'subjects');assert.deepEqual(Array.from(f.controller.groups.value.map(group=>group.subject.id)),['english'])
+  assert.deepEqual(Array.from(f.controller.flatTopics.value.map(entry=>entry.topic.id)),['e17'])
+  f.controller.listMode.value='topics';f.controller.status.value='done';await vue.nextTick();assert.equal(f.controller.listMode.value,'topics');assert.deepEqual(Array.from(f.controller.flatTopics.value.map(entry=>entry.topic.id)),['e5'])
+  f.controller.selectedStudy.value='';f.controller.status.value='doing';await vue.nextTick();assert.equal(f.controller.flatTopics.value.length,2);assert.equal(f.controller.listMode.value,'topics')
+  f.controller.selectedStudy.value='english';f.state.subjects=f.state.subjects.filter(s=>s.id!=='english');await vue.nextTick();assert.equal(f.controller.selectedStudy.value,'','removing a selected study cannot leave an invisible filter active')
+ }finally{f.stop()}
+})
+
 test('review retries use the same attempt ID and successful reviews get a new ID next time',async()=>{
  const f=trackerFixture();try{
   f.respond(async()=>{throw Error('offline')});await f.controller.review('s','t',true)
@@ -130,7 +143,7 @@ test('inline title and topic saves enforce permissions and limits and retain ser
   assert.deepEqual(f.calls.map(call=>[call[0],call[3].title,call[4]]),[['subject.update','Updated work',7],['topic.update','Updated topic',4]])
   await f.controller.saveTopics(s,['One','Two']);assert.equal(f.controller.panel.value,null);assert.equal(f.calls[2][0],'topic.add')
   await f.controller.saveTopics(s,['x'.repeat(101)]);await f.controller.rename(s,null,'x'.repeat(81),1);assert.equal(f.calls.length,3)
-  f.canWrite.value=false;await f.controller.rename(s,topic,'Blocked',4);await f.controller.saveTopics(s,['Blocked']);await f.controller.beginStudy();assert.equal(f.controller.newStudy.value,false);assert.equal(f.calls.length,3)
+  f.canWrite.value=false;await f.controller.rename(s,topic,'Blocked',4);await f.controller.saveTopics(s,['Blocked']);f.controller.newTitle.value='Blocked';await f.controller.saveSubject();assert.equal(f.calls.length,3)
  }finally{f.stop()}
 })
 
@@ -204,36 +217,62 @@ test('inline title editing focuses the input, retains failed drafts and saves th
  }finally{app.unmount();close()}
 })
 
-test('topic cards open details on row click, edit names only inside details and isolate controls from toggling',async()=>{
- const {dom,doc,renderer,compile,flush,close}=studyDOM(),Title=compile('LearningTitle'),events=[],created=[],renamed=[];let save=false
+test('study cards open a focused window, topics open focused details and creation uses the main input with Enter',async()=>{
+ const {dom,doc,renderer,compile,flush,close}=studyDOM(),utils=load(fs.readFileSync('src/lib/utils.ts','utf8')),calls=[],toasts=[],canWrite=vue.ref(true)
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false}
  const order=load(fs.readFileSync('src/features/learning/lib/useStudyOrder.ts','utf8'),{}, {window:dom.window})
  const Drag=vue.defineComponent({props:['modelValue'],setup:(p,{slots})=>()=>vue.h('div',p.modelValue.map((element,index)=>slots.item({element,index})))})
- const Select=vue.defineComponent({props:['modelValue','options'],emits:['update:modelValue'],setup:(p,{emit})=>()=>vue.h('select',{value:p.modelValue,onChange:event=>emit('update:modelValue',event.target.value)},p.options.map(option=>vue.h('option',{value:option.value},option.label)))})
- const Subject=compile('LearningSubjectItem',{'vuedraggable':{default:Drag},'@/components/ui/CustomSelect.vue':{default:Select},'./LearningTitle.vue':{default:Title},'../lib/useStudyOrder':order,'../stores/learning':{useLearningStore:()=>({state:()=>({status:'todo'})})}})
- const topic={id:'t',title:'Work topic',_version:1},second={id:'t2',title:'Second topic',_version:1},subject={id:'s',title:'Work study',version:1,topics:[topic,second]}
- const props=vue.reactive({subject,topics:[topic,second],isExpanded:true,canWrite:true,disabled:false,canReorder:true,archivedView:false,createTopics:async titles=>{created.push(Array.from(titles));return save},saveOrder:async()=>true})
- const app=renderer.createApp({setup:()=>()=>vue.h(Subject,{...props,onManage:()=>events.push('details'),onDelete:()=>events.push('delete'),onArchive:()=>events.push('archive'),onStatus:(_topic,status)=>events.push(status)},{details:({topic})=>vue.h('div',{class:'topic-tools'},[vue.h(Title,{title:topic.title,version:topic._version,limit:100,label:'Topic name',editable:props.canWrite&&!topic.archived,disabled:props.disabled,save:async(title,version)=>{renamed.push([title,version]);props.topics[0].title=title;return true}}),vue.h('button',{class:'detail-action',onClick:()=>events.push('tool')},'Topic actions')])})})
+ const Select=vue.defineComponent({props:['modelValue','options','disabled'],emits:['update:modelValue'],setup:(p,{emit})=>()=>vue.h('select',{value:p.modelValue,disabled:p.disabled,onChange:event=>emit('update:modelValue',event.target.value)},p.options.map(option=>vue.h('option',{value:option.value},option.label)))})
+ const store=vue.reactive({subjects:[{id:'s',title:'Work study',version:1,topics:[{id:'t',title:'Work topic',_version:1},{id:'t2',title:'Second topic',_version:1}]}],dueMistakes:[],mistakes:[],busy:false,isLoading:false,setupRequired:false,error:'',statuses:{t:'doing',t2:'todo'},state:(_sid,id)=>({status:store.statuses[id]||'todo',version:0,review_on:null,streak:0}),async fetchSubjects(){},async fetchMistakes(){},async reorder(){}})
+ let fail=true
+ store.mutate=async(op,sid,tid,payload)=>{calls.push([op,sid,tid,copy(payload)]);if(op==='subject.create'){if(fail)throw Error('offline');const subject={id:sid,title:payload.title,version:1,topics:[]};store.subjects.push(subject);return {subject}}
+  if(op==='progress.update'){store.statuses[tid]=payload.status;return {}}
+  if(op==='topic.archive'){store.subjects.find(s=>s.id===sid).topics.find(t=>t.id===tid).archived=true;return {}}
+  if(op==='topic.add'){store.subjects.find(s=>s.id===sid).topics.push({id:'added',title:payload.titles[0],_version:1});return {subject:store.subjects.find(s=>s.id===sid)}}return {}}
+ const shared={'../stores/learning':{useLearningStore:()=>store,learningError:()=> 'failed'},'../lib/useStudyOrder':order,'@/components/ui/CustomSelect.vue':{default:Select},vuedraggable:{default:Drag}}
+ const Title=compile('LearningTitle'),Dialog=compile('LearningDialog',{'@/lib/utils':utils})
+ const timer={taskStatsSequence:0,durations:{focus:25}}
+ const Details=compile('LearningTopicDetails',{...shared,'@/stores/settings':{useSettingsStore:()=>({isModuleActive:()=>true})},'@/features/pomodoro/stores/pomodoro':{usePomodoroStore:()=>timer}})
+ const Row=compile('LearningTopicRow',{...shared,'./LearningTitle.vue':{default:Title},'./LearningTopicDetails.vue':{default:Details}})
+ shared['./LearningTopicRow.vue']={default:Row}
+ const Subject=compile('LearningSubjectItem',shared)
+ const nav={workspaceNavigationKey:Symbol(),workspaceActiveViewKey:Symbol(),workspaceOpenItemKey:Symbol()}
+ const Tracker=compile('LearningTracker',{...shared,'./LearningSubjectItem.vue':{default:Subject},'./LearningTitle.vue':{default:Title},'./LearningDialog.vue':{default:Dialog},'./LearningTopicDetails.vue':{default:{setup:()=>()=>vue.h('div',{class:'focused-topic-tools'},'Topic details')}},'./LearningTemplatePicker.vue':{default:{}},'../lib/images':{},'@/lib/workspaceNavigation':nav,'@/lib/workspaceScope':{useModuleAccess:()=>({canWrite}),useModuleLoad:callback=>{void callback()}},'@/lib/searchNavigation':{useSearchReveal(){}},'@/stores/ui':{useUIStore:()=>({addToast:(...args)=>toasts.push(args),addUndoToast(){}})},'@/features/pomodoro/stores/pomodoro':{usePomodoroStore:()=>({taskStatsSequence:0,durations:{focus:25}})}})
+ const app=renderer.createApp(Tracker)
+ const enter=(input,composing=false)=>input.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',isComposing:composing,bubbles:true,cancelable:true}))
  try{
-  app.mount(doc.querySelector('main'));await flush();assert.equal(doc.querySelector('dialog'),null)
-  assert.equal(doc.querySelector('.title-pencil'),null,'cards do not offer inline rename')
-  assert.equal(doc.querySelector('.study-topic .study-topic-actions button:not(.is-delete)'),null,'there is no topic ellipsis')
-  doc.querySelector('[aria-label="study.manageSubject"]').click();doc.querySelector('[aria-label="study.deleteSubject"]').click();assert.deepEqual(events,['details','delete'])
-  const row=doc.querySelector('.study-topic'),open=row.querySelector('.study-topic-open')
-  row.querySelector('.study-topic-handle').click();await flush();assert.equal(open.getAttribute('aria-expanded'),'false')
-  row.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));await flush();assert.ok(doc.querySelector('.topic-tools'));assert.equal(doc.querySelector('dialog'),null);assert.equal(open.getAttribute('aria-expanded'),'true')
-  doc.querySelector('[aria-label="study.archive"]').click();assert.equal(events[2],'archive')
-  row.querySelector('.study-topic-actions').dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));doc.querySelector('.detail-action').click();await flush();assert.equal(open.getAttribute('aria-expanded'),'true','actions do not collapse details')
-  doc.querySelector('.topic-tools .study-title').click();await flush();let name=doc.querySelector('.topic-tools input');assert.equal(name.maxLength,100)
-  name.value='Renamed topic';name.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await flush();doc.querySelector('.topic-tools form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await flush()
-  assert.deepEqual(renamed,[['Renamed topic',1]]);assert.equal(open.textContent,'Renamed topic');assert.equal(open.getAttribute('aria-expanded'),'true')
-  open.click();await flush();assert.equal(doc.querySelector('.title-pencil'),null);props.disabled=true;await flush();row.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));await flush();assert.equal(open.getAttribute('aria-expanded'),'false');props.disabled=false;await flush()
-  doc.querySelector('.study-add-topic').click();await flush();let field=doc.querySelector('textarea');assert.equal(field.maxLength,100);assert.equal(doc.activeElement,field)
-  field.value='Next topic';field.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await flush();field.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await flush()
-  assert.equal(doc.querySelector('textarea').value,'Next topic');save=true;doc.querySelector('form.study-topic-create').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await flush()
-  assert.equal(doc.querySelector('textarea').value,'');assert.equal(doc.activeElement,doc.querySelector('textarea'));assert.deepEqual(created,[['Next topic'],['Next topic']])
-  props.canWrite=false;await flush();assert.equal(doc.querySelector('.study-topic-create'),null);assert.equal(doc.querySelector('[aria-label="study.archive"]'),null);assert.equal(doc.querySelector('[aria-label="study.deleteSubject"]'),null)
-  open.click();await flush();assert.ok(doc.querySelector('.topic-tools'));assert.equal(doc.querySelector('.title-pencil'),null)
-  const select=doc.querySelector('select');select.value='done';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));assert.equal(events.at(-1),'done')
+  app.mount(doc.querySelector('main'));await flush()
+  assert.equal(doc.querySelector('.study-topic-row'),null,'study cards do not unfold topics into the page');assert.equal(doc.querySelector('.study-create'),null)
+  const input=doc.querySelector('input[aria-label="study.newSubject"]');assert.ok(input);assert.equal(input.maxLength,80)
+  enter(input);await flush();assert.equal(calls.length,0)
+  input.value='Professional growth';input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));enter(input,true);await flush();assert.equal(calls.length,0)
+  enter(input);await flush();assert.equal(input.value,'Professional growth');assert.equal(doc.querySelector('dialog'),null)
+  fail=false;input.closest('form').querySelector('button[type=submit]').click();await flush();assert.equal(calls[0][1],calls[1][1]);assert.equal(input.value,'');assert.equal(store.subjects.length,2);assert.equal(doc.querySelector('dialog'),null)
+  const statusFilter=doc.querySelector('select[aria-label="study.filter"]'),studyFilter=doc.querySelector('select[aria-label="study.filterSubject"]')
+  assert.ok(studyFilter);assert.equal(studyFilter.previousElementSibling,statusFilter)
+  studyFilter.value='s';studyFilter.dispatchEvent(new dom.window.Event('change',{bubbles:true}));statusFilter.value='doing';statusFilter.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await flush()
+  assert.equal(doc.querySelectorAll('.study-subject:not(.is-focused)').length,1);assert.equal(doc.querySelectorAll('.study-topic-row').length,0,'filtering preserves the chosen Studies view')
+  doc.querySelectorAll('.study-list-modes button')[1].click();await flush();assert.equal(doc.querySelectorAll('.study-topic-row').length,1);assert.equal(doc.querySelector('.study-topic-parent').textContent,'Work study')
+  statusFilter.value='todo';statusFilter.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await flush();assert.equal(doc.querySelector('.study-list-modes button[aria-pressed="true"]').textContent,'study.views.topics');assert.equal(doc.querySelectorAll('.study-topic-row').length,1)
+  const capture=input.closest('form'),add=capture.querySelector('button[type=submit]');assert.equal(add.previousElementSibling.getAttribute('aria-label'),'study.template')
+  statusFilter.value='all';statusFilter.dispatchEvent(new dom.window.Event('change',{bubbles:true}));studyFilter.value='';studyFilter.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await flush();doc.querySelector('.study-list-modes button').click();await flush()
+  const card=doc.querySelector('.study-subject:not(.is-focused)');card.querySelector('.study-subject-toggle').click();await flush()
+  let dialog=doc.querySelector('dialog');assert.ok(dialog.open);assert.equal(doc.querySelectorAll('dialog').length,1);assert.equal(dialog.querySelectorAll('.study-topic-row').length,2)
+  assert.equal(dialog.querySelector('.study-subject-header'),null);assert.ok(dialog.querySelector('.study-dialog-heading .title-pencil'))
+  assert.ok(dialog.classList.contains('note-edit-dialog'),'learning uses the same focused surface as notes and code')
+  assert.equal(dialog.querySelector('select'),null,'topic status and actions do not require dropdowns');assert.equal(dialog.querySelector('.grid.grid-cols-3'),null)
+  assert.equal(dialog.querySelectorAll('.study-summary>span').length,3)
+  const row=dialog.querySelector('.study-topic-row');assert.equal(row.querySelectorAll('.study-topic-status button').length,3)
+  for(const key of ['note','cards','focus','plan','addMistake'])assert.ok(Array.from(row.querySelectorAll('button')).some(button=>button.textContent.includes('study.'+key)),key+' is immediately visible')
+  row.querySelector('[aria-label="study.status.done"]').click();await flush();assert.equal(store.statuses.t,'done');assert.equal(doc.querySelectorAll('dialog').length,1)
+  Array.from(row.querySelectorAll('button')).find(button=>button.textContent.includes('study.plan')).click();await flush();assert.ok(dialog.querySelector('input[type="date"]'));assert.equal(doc.querySelectorAll('dialog').length,1,'planning reuses the existing window')
+  Array.from(dialog.querySelectorAll('footer button')).find(button=>button.textContent.includes('study.backToSubject')).click();await flush()
+  const topicInput=dialog.querySelector('textarea');assert.ok(topicInput,'topic entry is directly available');assert.equal(topicInput.maxLength,100)
+  topicInput.value='New topic';topicInput.dispatchEvent(new dom.window.Event('input',{bubbles:true}));enter(topicInput);await flush();assert.equal(topicInput.value,'');assert.equal(dialog.querySelectorAll('.study-topic-row').length,3);assert.equal(calls.at(-1)[0],'topic.add')
+  dialog.querySelectorAll('.study-topic-row')[1].querySelector('[aria-label="study.deleteTopic"]').click();await flush();assert.equal(dialog.querySelectorAll('.study-topic-row').length,2);assert.equal(doc.querySelectorAll('dialog').length,1)
+  dialog.querySelector('header>button').click();await flush();assert.equal(doc.querySelector('dialog'),null);assert.equal(doc.querySelector('.study-topic-row'),null)
+  canWrite.value=false;await flush();assert.equal(doc.querySelector('input[aria-label="study.newSubject"]'),null);assert.equal(doc.querySelector('input[aria-label="study.search"]'),null);assert.equal(doc.querySelector('[aria-label="study.deleteSubject"]'),null)
+  doc.querySelector('.study-subject-toggle').click();await flush();assert.ok(doc.querySelector('dialog[open]'));assert.equal(doc.querySelector('.study-topic-create'),null)
  }finally{app.unmount();close()}
 })
 

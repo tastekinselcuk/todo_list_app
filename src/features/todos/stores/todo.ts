@@ -46,13 +46,6 @@ export interface CodeSnippet {
   updatedAt: string;
 }
 
-const defaultCategories: Category[] = [
-  { id: '1', name: 'Work', color: '#EF4444', icon: 'briefcase' },
-  { id: '2', name: 'Personal', color: '#3B82F6', icon: 'user' },
-  { id: '3', name: 'Shopping', color: '#10B981', icon: 'shopping-bag' },
-  { id: '4', name: 'Fitness', color: '#F59E0B', icon: 'dumbbell' },
-]
-
 const STORAGE_KEY = 'todo-app-data'
 
 export const useTodoStore = defineStore('todo', () => {
@@ -243,7 +236,7 @@ export const useTodoStore = defineStore('todo', () => {
         title: todo.title,
         description: todo.description || '',
         completed: todo.completed || false,
-        categoryId: todo.category_id || '',
+        categoryId: todo.category_id || null,
         priority: todo.priority || 'medium',
         dueDate: todo.due_date || null,
         createdAt: todo.created_at,
@@ -276,45 +269,7 @@ export const useTodoStore = defineStore('todo', () => {
         throw new Error('User not authenticated')
       }
 
-      if (categories.value.length === 0) {
-        await fetchCategories()
-      }
-
-      if (categories.value.length === 0) {
-        for (const cat of defaultCategories) {
-          try {
-            const { data: catData, error: catErr } = await supabase
-              .from('categories')
-              .insert([{ created_by: userId, name: cat.name, color: cat.color, icon: cat.icon }])
-              .select()
-            
-            if (catErr) {
-              continue
-            }
-            
-            const record = catData && Array.isArray(catData) ? catData[0] : catData;
-            if (record && record.id) {
-              categories.value.push({ id: record.id, name: record.name, color: record.color, icon: record.icon })
-            }
-          } catch (catErr) {
-            console.warn('Exception creating default category:', catErr)
-          }
-        }
-      }
-
-      let categoryId = String(todo.categoryId || '').trim()
-      if (!categoryId || !categories.value.find(c => c.id === categoryId)) {
-        categoryId = categories.value[0]?.id || ''
-        if (!categoryId) {
-          error.value = 'No categories available. Please create a category first.'
-          return { success: false, message: error.value }
-        }
-      }
-      
-      if (!categoryId) {
-        error.value = 'Invalid category ID'
-        return { success: false, message: error.value }
-      }
+      const categoryId = todo.categoryId?.trim() || null
 
       const { data, error: err } = await supabase
         .from('todos')
@@ -343,7 +298,7 @@ export const useTodoStore = defineStore('todo', () => {
           title: record.title,
           description: record.description || '',
           completed: record.completed,
-          categoryId: record.category_id || '',
+          categoryId: record.category_id || null,
           priority: record.priority,
           dueDate: record.due_date || null,
           createdAt: record.created_at,
@@ -389,6 +344,7 @@ export const useTodoStore = defineStore('todo', () => {
   const updateTodo = async (updatedTodo: Todo) => {
     const previous=todos.value.find(todo=>todo.id===updatedTodo.id)
     if(updatedTodo.title.trim().length>TODO_TITLE_MAX_LENGTH && updatedTodo.title.trim()!==previous?.title.trim()){error.value='TITLE_TOO_LONG';return false}
+    const categoryId = updatedTodo.categoryId?.trim() || null
     isLoading.value = true
     error.value = null
     try {
@@ -399,7 +355,7 @@ export const useTodoStore = defineStore('todo', () => {
           title: updatedTodo.title,
           description: updatedTodo.description,
           completed: updatedTodo.completed,
-          category_id: updatedTodo.categoryId,
+          category_id: categoryId,
           priority: updatedTodo.priority,
           due_date: updatedTodo.dueDate
         })
@@ -410,7 +366,7 @@ export const useTodoStore = defineStore('todo', () => {
       const index = todos.value.findIndex(t => t.id === updatedTodo.id)
       if (index !== -1) {
         const record = Array.isArray(data) ? data[0] : data
-        todos.value[index] = { ...updatedTodo, ...(record?.version === undefined ? {} : { version: record.version }) }
+        todos.value[index] = { ...updatedTodo, categoryId, ...(record?.version === undefined ? {} : { version: record.version }) }
       }
       return true
     } catch (err) {

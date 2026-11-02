@@ -100,7 +100,7 @@ async function confirmDelete() {
     if (await store.remove(target.id, target.name)) {
       selectedId.value = store.activeId; deleteTarget.value = null
       for (const toast of [...(ui.toasts || [])]) if (toast.group === `trash:${owner}:${target.id}`) ui.removeToast(toast.id)
-      ui.addToast(t('workspaces.deleted'), 'success')
+      ui.addToast(t('workspaces.deleted'), 'deleted')
     } else {
       const key = store.error?.includes('LAST_WORKSPACE') ? 'keepOne'
         : store.error?.includes('WORKSPACE_SHARED') ? 'deleteShared'

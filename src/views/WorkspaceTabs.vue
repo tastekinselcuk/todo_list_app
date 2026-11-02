@@ -104,8 +104,8 @@ const props = defineProps<{
   headerInset?: number
 }>()
 
-const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': []; 'active-module': [module:string]; 'active-view':[module:string,view:string]; pinned: [pinned:boolean]; 'header-offset': [offset:number] }>()
-provide(openFinanceAnalysisKey,()=>emit('open-finance-analysis'))
+const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': [month?:string]; 'active-module': [module:string]; 'active-view':[module:string,view:string]; pinned: [pinned:boolean]; 'header-offset': [offset:number] }>()
+provide(openFinanceAnalysisKey,(month)=>emit('open-finance-analysis',month))
 const activeTab = useWorkspaceDraft('last-tab', props.initialTab || 'plans')
 if (props.initialTab && settingsStore.isModuleActive(props.initialTab)) activeTab.value = props.initialTab
 const navigationIntent = ref<WorkspaceNavigationIntent|null>(null)
@@ -115,7 +115,7 @@ const moduleViews=shallowReactive<Record<string,string>>({})
 const activeModuleView=computed(()=>moduleViews[activeTab.value]||'')
 provide(workspaceActiveViewKey,(module,view)=>{moduleViews[module]=view;emit('active-view',module,view)})
 function applyInitialView(){
-  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','today','mistakes']}
+  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','mistakes']}
   if(allowed[activeTab.value]?.includes(props.initialView||'')){moduleViews[activeTab.value]=props.initialView!;navigationIntent.value={module:activeTab.value,view:props.initialView!,sequence:++navigationSequence}}
 }
 applyInitialView()
@@ -129,7 +129,7 @@ function selectModule(module:string) {
 }
 function selectModuleView(module:string,view:string) {
   if(!activeModules.value.some(tab=>tab.id===module))return
-  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','today','mistakes']}
+  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','mistakes']}
   if(!allowed[module]?.includes(view))return
   destination.value=null
   activeTab.value=module
@@ -183,7 +183,7 @@ const stopTrashMoves=onTrashMove((receipt,change)=>{
   ui.addUndoToast(count=>t(count===1?'trash.moved':'trash.movedMany',{count}),t('trash.undo'),async()=>{
     try{await changeTrash(change.workspace,change.module,receipt.id,'restore',receipt.version,change.owner)}
     catch(error){ui.addToast(t('trash.'+trashError(error)),'error');throw error}
-  },`trash:${change.owner}:${change.workspace}`,trashUndoKey(change,receipt.version))
+  },`trash:${change.owner}:${change.workspace}`,trashUndoKey(change,receipt.version),'deleted')
 })
 const stopTrashChanges=onTrashChange(change=>{if(change.owner===workspaces.userId&&change.id&&change.version&&change.action!=='move')ui.discardUndo(trashUndoKey(change,change.version-(change.action==='restore'?1:0)))})
 onBeforeUnmount(()=>{stopTrashMoves();stopTrashChanges()})

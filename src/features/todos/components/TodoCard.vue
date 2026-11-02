@@ -35,7 +35,7 @@
               <template v-else>
                <div class="flex shrink-0 flex-wrap items-center gap-2">
                 <input ref="titleInputRef" v-model="editForm.title" type="text" required :maxlength="TODO_TITLE_MAX_LENGTH" :disabled="saving || categorySaving" :aria-label="t('todo.title')" class="note-input h-9 min-w-36 flex-1" />
-                <CustomSelect :model-value="editForm.categoryId ?? ''" @update:model-value="editForm.categoryId=$event || ''" :options="categoryOptions" :disabled="saving || mediaBusy || categorySaving" :action-label="t('todo.addNewCategory')" @action="categoryOpen=true" popover :aria-label="t('todo.category')" size="sm" class="w-40 min-w-0" />
+                <CustomSelect :model-value="editForm.categoryId ?? ''" @update:model-value="editForm.categoryId=$event || null" :options="categoryOptions" :disabled="saving || mediaBusy || categorySaving" :action-label="t('todo.addNewCategory')" @action="categoryOpen=true" popover :aria-label="t('todo.category')" size="sm" class="w-40 min-w-0" />
               </div>
               <CategoryModal :open="categoryOpen" @update:open="categoryOpen=$event" @created="editForm.categoryId=$event" @busy-change="categorySaving=$event" />
               <RichTextEditor :fit-height="true" key="writer" v-model="editForm.description" :disabled="saving || categorySaving" :placeholder="t('todo.descriptionPlaceholder')" @busy-change="mediaBusy=$event" />
@@ -136,7 +136,7 @@ const descriptionPreview = computed(() => {
   }
 })
 
-const categoryOptions = computed(() => todoStore.categories.map(cat => ({ value: cat.id, label: cat.name })))
+const categoryOptions = computed(() => [{ value: '', label: t('todo.uncategorized') }, ...todoStore.categories.map(cat => ({ value: cat.id, label: cat.name }))])
 
 watch([isOpen,isEditing], async ([open]) => {
   const epoch=++dialogEpoch

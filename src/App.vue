@@ -34,7 +34,7 @@
       
       <transition name="fade-slide" mode="out-in">
         
-        <AnalyticsView v-if="currentView === 'analytics'" :initial-section="analyticsSection" @enter-workspace="goToWorkspace" />
+        <AnalyticsView v-if="currentView === 'analytics'" :initial-section="analyticsSection" :finance-month="analyticsFinanceMonth" @enter-workspace="goToWorkspace" />
 
         <div v-else-if="currentView === 'settings'" class="min-w-0">
           <WorkspaceCustomizer :focus-account="accountFocusRequest" :focus-workspaces="workspaceFocusRequest" :initial-section="settingsSection" @logout="handleLogout" />
@@ -119,7 +119,8 @@ function rememberWorkspaceView(module:string,view:string){if(currentWorkspaceMod
 const workspacePinned = ref(false)
 const headerOffset = ref(workspaceHeaderHeight)
 const analyticsSection=ref<'activity'|'finance'>('activity')
-function openFinanceAnalysis(){navigate('analytics');analyticsSection.value='finance'}
+const analyticsFinanceMonth=ref<string>()
+function openFinanceAnalysis(month?:string){navigate('analytics');analyticsFinanceMonth.value=month;analyticsSection.value='finance'}
 const hasActiveFocus = computed(() => focusTimer.canReset || focusTimer.starting || focusTimer.clearing)
 const showTimerCard = computed(() => currentView.value === 'workspace' && settingsStore.isModuleActive('pomodoro') && ['notes','learning'].includes(workspaceSectionFor(currentWorkspaceModule.value) || ''))
 const isTimerDocked = computed(() => (isNavbarExpanded.value && settingsStore.isModuleActive('pomodoro')) || (hasActiveFocus.value && !showTimerCard.value))
@@ -167,7 +168,7 @@ function handleSharingConflict() { uiStore.addToast(t('sharing.conflict'), 'warn
 function handleSharingSaveError() { uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error') }
 function navigate(view: 'workspace' | 'analytics' | 'settings') {
   pendingWorkspaceAction.value = null
-  if(view==='analytics')analyticsSection.value='activity'
+  if(view==='analytics'){analyticsSection.value='activity';analyticsFinanceMonth.value=undefined}
   if(view==='settings')settingsSection.value='general'
   revealNavigation()
   currentView.value = view

@@ -42,7 +42,7 @@ export function getWorkspaceModuleOptions(enabled:readonly string[],activeModule
   const section=getWorkspaceSections(enabled).find(item=>item.id===workspaceSectionFor(activeModule))
   if(!section)return []
   const views:Partial<Record<ModuleId,{view:string;label:string;icon:string}[]>>={
-    learning:[{view:'topics',label:'study.views.topics',icon:'BookOpen'},{view:'today',label:'study.views.today',icon:'CalendarDays'},{view:'mistakes',label:'study.views.mistakes',icon:'NotebookPen'}],
+    learning:[{view:'topics',label:'study.views.topics',icon:'BookOpen'},{view:'mistakes',label:'study.views.mistakes',icon:'NotebookPen'}],
     finance:[{view:'transaction',label:'finance.cashflow',icon:'ArrowLeftRight'},{view:'position',label:'finance.positions',icon:'TrendingUp'}],
   }
   return section.modules.flatMap((module):WorkspaceModuleOption[]=>{

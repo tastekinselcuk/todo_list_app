@@ -2,8 +2,8 @@
   <section class="workspace-content space-y-4" style="--workspace-default-max:76rem">
     <div v-if="view!=='calendar'" class="workspace-toolbar space-y-3">
       <form class="flex items-center gap-2" @submit.prevent="createTask">
-        <input v-model="draftTitle" maxlength="180" required class="finance-input !h-11 flex-1" :placeholder="t('tasks.placeholder')" :aria-label="t('tasks.title')" :disabled="busy||!store.ready||activeProjectArchived" />
-        <button type="submit" class="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-primary px-4 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40" :disabled="busy||!store.ready||!draftTitle.trim()||activeProjectArchived"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><span v-else>{{ t('tasks.add') }}</span></button>
+        <input v-model="draftTitle" maxlength="180" required class="finance-input !h-10 flex-1" :placeholder="t('tasks.placeholder')" :aria-label="t('tasks.title')" :disabled="busy||!store.ready||activeProjectArchived" />
+        <button type="submit" class="workspace-add-button" :disabled="busy||!store.ready||!draftTitle.trim()||activeProjectArchived"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><span v-else>{{ t('tasks.add') }}</span></button>
       </form>
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
         <div class="flex items-center gap-0.5 rounded-xl bg-muted/35 p-0.5" role="group" :aria-label="t('tasks.view')"><button v-for="item in views" :key="item.id" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :class="view===item.id?'bg-background text-foreground shadow-sm ring-1 ring-border/50':'text-muted-foreground hover:bg-background/40 hover:text-foreground'" :aria-pressed="view===item.id" :disabled="busy" @click="view=item.id"><component :is="item.icon" class="h-3.5 w-3.5" />{{ item.label }}</button></div>

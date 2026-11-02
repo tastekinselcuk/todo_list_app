@@ -94,7 +94,7 @@
         <h2 id="finance-analysis-heading" class="text-sm font-semibold">{{ t('pageNav.analytics.finance') }}</h2>
         <CustomSelect v-if="!workspace" v-model="financeWorkspace" :options="financeWorkspaceOptions" :aria-label="t('finance.selectWorkspace')" size="sm" class="w-40" />
       </header>
-      <FinanceReport :workspace-id="workspace || financeWorkspace" />
+      <FinanceReport :workspace-id="workspace || financeWorkspace" :initial-month="props.financeMonth" />
     </section>
   </div>
 </template>
@@ -112,7 +112,7 @@ import { ageBuckets, comparisonAvailable, itemAge, localDay, percentChange, repo
 const emit=defineEmits<{'enter-workspace':[id:string]}>()
 const {t,locale}=useI18n(),workspaces=useWorkspacesStore(),settings=useSettingsStore()
 const FinanceReport=defineAsyncComponent(()=>import('@/features/finance/components/FinanceReport.vue'))
-const props=defineProps<{initialSection?:'activity'|'finance'}>()
+const props=defineProps<{initialSection?:'activity'|'finance';financeMonth?:string}>()
 const financePanel = ref<HTMLElement>()
 async function revealFinance() { await nextTick(); scroll(financePanel.value) }
 watch(() => props.initialSection, value => { if (value === 'finance') void revealFinance() })

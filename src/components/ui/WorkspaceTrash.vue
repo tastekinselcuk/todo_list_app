@@ -53,8 +53,8 @@ async function permanentlyDelete(){
   if(target==='all'){
    const result=await supabase.rpc('trash_empty',{wid:workspace,only_module:module.value||null,cutoff:asOf.value})
    if(result.error)throw result.error
-   if(current()){ui.addToast(t('trash.emptied',{count:result.data.count}),'info');for(const row of result.data.removed)notifyTrash({owner,workspace,module:row.module,id:row.id,version:row.version,action:'purge'})}
-  }else{await changeTrash(workspace,target.module,target.id,'purge',target.version,owner);if(current())ui.addToast(t('trash.deleted'),'info')}
+   if(current()){ui.addToast(t('trash.emptied',{count:result.data.count}),'deleted');for(const row of result.data.removed)notifyTrash({owner,workspace,module:row.module,id:row.id,version:row.version,action:'purge'})}
+  }else{await changeTrash(workspace,target.module,target.id,'purge',target.version,owner);if(current())ui.addToast(t('trash.deleted'),'deleted')}
   if(current()){confirmation.value?.close();confirm.value=null;await load()}
  }catch(failure){if(current()){confirmation.value?.close();confirm.value=null;error.value=trashError(failure)}}
  finally{busy.value=false;await nextTick();if(current())(confirmFocus?.isConnected?confirmFocus:dialog.value?.querySelector<HTMLElement>('[data-trash-close]'))?.focus({preventScroll:true})}

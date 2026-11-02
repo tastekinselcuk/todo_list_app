@@ -9,7 +9,7 @@ export interface Topic { id:string; title:string; learn:boolean; practice:boolea
 export interface Subject { id:string; title:string; color:string; topics:Topic[]; version?:number; position?:number; template_key?:string }
 export interface Progress { subject_id:string; topic_id:string; status:StudyStatus; version:number; review_on:string|null; streak:number; seconds?:number; note_id?:string; deck_id?:string; pomo_task_id?:string }
 export interface Mistake { id:string; subject_id:string; topic_id:string; prompt:string; solution:string; source:string; reason:string; image_path:string|null; resolved:boolean; review_on:string|null; attempts:number; version:number; created_at:string; deleted_at:string|null }
-export type LearningView = 'topics' | 'today' | 'mistakes'
+export type LearningView = 'topics' | 'mistakes'
 export function learningError(error:unknown) {
  const text=String((error as {message?:string})?.message || error),code=(error as {code?:string})?.code
  if(['setup','conflict','permission','templateTrash','unavailable','nameLimit','failed'].includes(text))return text

@@ -208,11 +208,11 @@ test('Undo groups deletions, pauses for pointer and focus, deduplicates clicks a
  let now=0,id=0,fail=true,release;const timers=new Map(),restored=[]
  const store=loadSource('src/stores/ui.ts',{Date:class extends Date{static now(){return now}},setTimeout:(callback,ms)=>{const key=++id;timers.set(key,{callback,ms});return key},clearTimeout:key=>timers.delete(key)}).useUIStore()
  try{
-  const describe=count=>String(count),add=(run)=>store.addUndoToast(describe,'Undo',run,'workspace')
+  const describe=count=>String(count),add=(run)=>store.addUndoToast(describe,'Undo',run,'workspace',undefined,'deleted')
   add(async()=>{if(fail)throw Error('offline');restored.push('one')})
   add(async()=>{restored.push('two')})
   assert.equal(store.toasts.length,1);assert.equal(store.toasts[0].message,'2')
-  const toast=store.toasts[0]
+  const toast=store.toasts[0];assert.equal(toast.type,'deleted')
   now=2000;store.pauseToast(toast.id);store.pauseToast(toast.id,'focus');assert.equal(timers.size,0)
   store.resumeToast(toast.id);assert.equal(timers.size,0,'focus still holds the timer')
   store.resumeToast(toast.id,'focus');assert.equal([...timers.values()][0].ms,8000)

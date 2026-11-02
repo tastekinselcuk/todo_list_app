@@ -96,24 +96,24 @@ test('learning returns to topics with collapsed studies and clear filters withou
   '../lib/useStudyOrder':{useStudyOrder:()=>({ordered:vue.ref([])})},
   '@/lib/workspaceNavigation':{workspaceNavigationKey:Symbol(),workspaceActiveViewKey:Symbol(),workspaceOpenItemKey:Symbol()},
   '@/features/pomodoro/stores/pomodoro':{usePomodoroStore:()=>vue.reactive({taskStatsSequence:0,durations:{focus:25}})},
-  vuedraggable:{},'./LearningDialog.vue':{},'./LearningSubjectItem.vue':{},'./LearningTitle.vue':{},'./LearningTopicDetails.vue':{},'./LearningTemplatePicker.vue':{},
+  vuedraggable:{},'./LearningDialog.vue':{},'./LearningSubjectItem.vue':{},'./LearningTitle.vue':{},'./LearningTopicDetails.vue':{},'./LearningTopicRow.vue':{},'./LearningTemplatePicker.vue':{},
  },{'subject-view':'mistakes'})
  try{
-  assert.equal(f.state.view.value,'topics');f.state.view.value='mistakes';f.state.expanded.value='subject';f.state.status.value='done';f.state.showArchive.value=true;f.state.mistakeFilter.value='resolved';await settle();f.state.query.value='old search'
+  assert.equal(f.state.view.value,'topics');f.state.view.value='mistakes';f.state.selectedSubject.value='subject';f.state.panel.value='subject';f.state.status.value='done';f.state.selectedStudy.value='subject';f.state.listMode.value='topics';f.state.mistakeFilter.value='resolved';await settle()
   await f.leave();await f.return()
-  assert.equal(f.mounts,1);assert.equal(f.state.view.value,'topics');assert.equal(f.state.expanded.value,null);assert.equal(f.state.query.value,'');assert.equal(f.state.status.value,'all');assert.equal(f.state.mistakeFilter.value,'open');assert.equal(f.state.showArchive.value,false)
+  assert.equal(f.mounts,1);assert.equal(f.state.view.value,'topics');assert.equal(f.state.panel.value,null);assert.equal(f.state.status.value,'all');assert.equal(f.state.mistakeFilter.value,'open');assert.equal(f.state.listMode.value,'subjects');assert.equal(f.state.selectedStudy.value,'')
   assert.equal(store.state().seconds,1500);assert.equal(store.state().status,'done')
-  await f.reveals[0]({record_id:'subject'},()=>true);assert.equal(f.state.expanded.value,'subject')
+  await f.reveals[0]({record_id:'subject'},()=>true);assert.equal(f.state.panel.value,null);assert.equal(f.state.listMode.value,'subjects')
  }finally{f.close()}
 })
 test('a learning subject does not reopen its old topic detail or add form after returning to the module',async()=>{
  const f=cachedController('src/features/learning/components/LearningSubjectItem.vue',{
-  '../stores/learning':{useLearningStore:()=>({})},'../lib/study':{},'../lib/useStudyOrder':{useStudyOrder:()=>({ordered:vue.ref([])})},vuedraggable:{},
+  '../stores/learning':{useLearningStore:()=>({})},'./LearningTopicRow.vue':{},'../lib/study':{},'../lib/useStudyOrder':{useStudyOrder:()=>({ordered:vue.ref([])})},vuedraggable:{},
  })
  try{
-  f.state.detailTopic.value='old-topic';f.state.adding.value=true;f.state.singleDraft.value='Unfinished topic'
+  f.state.singleDraft.value='Unfinished topic'
   await f.leave();await f.return()
-  assert.equal(f.mounts,1);assert.equal(f.state.detailTopic.value,'');assert.equal(f.state.adding.value,false);assert.equal(f.state.singleDraft.value,'')
+  assert.equal(f.mounts,1);assert.equal(f.state.singleDraft.value,'')
  }finally{f.close()}
 })
 

@@ -5,7 +5,7 @@
         <form v-if="canWrite" class="flex flex-wrap items-center gap-2.5" @submit.prevent="createProgram">
           <input v-model="newRoutineTitle" type="text" maxlength="120" required :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programName')" :placeholder="t('workout.routinePlaceholder')" class="workout-input h-10 min-w-40 flex-1" />
           <CustomSelect v-model="newRoutineDay" :options="dayOptions" :disabled="store.isSaving || store.isLoading" :aria-label="t('workout.programDay')" class="w-36 shrink-0" />
-          <button type="submit" :disabled="store.isSaving || store.isLoading || !newRoutineTitle.trim()" class="primary-button h-10"><Plus class="h-3.5 w-3.5" />{{ t('workout.newRoutine') }}</button>
+          <button type="submit" :disabled="store.isSaving || store.isLoading || !newRoutineTitle.trim()" class="workspace-add-button">{{ t('common.add') }}</button>
         </form>
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
           <div class="flex items-center gap-2"><h2 class="text-xs font-semibold">{{ t('workout.programs') }}</h2><span class="rounded-md bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{{ store.routines.length }}</span></div>

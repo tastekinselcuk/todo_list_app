@@ -15,7 +15,7 @@
         </CustomSelect>
         <input v-model="form.reminderTime" type="time" required :aria-label="t('periodicTasks.reminderTime')" :disabled="loading" class="routine-input !w-[6.75rem] !px-2.5 !text-xs" />
         <button v-if="editId" type="button" :disabled="loading" class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50" :aria-label="t('common.cancel')" @click="emit('cancel')"><X class="h-4 w-4" /></button>
-        <button type="submit" :disabled="!canSubmit || loading" class="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"><Loader2 v-if="loading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{{ t(editId?'periodicTasks.save':'quickNotes.add') }}</button>
+        <button type="submit" :disabled="!canSubmit || loading" class="workspace-add-button"><Loader2 v-if="loading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{{ t(editId?'periodicTasks.save':'quickNotes.add') }}</button>
       </div>
     </div>
     <div v-if="form.frequency==='weekly'" class="flex flex-wrap items-center gap-1.5" role="group" :aria-label="t('periodicTasks.weekDays')">

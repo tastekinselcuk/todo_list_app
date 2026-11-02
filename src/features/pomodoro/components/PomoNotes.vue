@@ -140,7 +140,7 @@ useSearchReveal('pomodoro', async (hit, isCurrent) => {
           <span class="text-xs text-muted-foreground">{{ t('pomoNotes.sessions') }}</span>
           <button type="button" class="pomo-icon" :aria-label="t('pomoNotes.more')" :disabled="estimate>=999" @click="estimate=Math.min(999,estimate+1)"><Plus class="h-3 w-3" /></button>
         </div>
-        <button type="submit" :disabled="!title.trim()||store.saving||store.status!=='ready'" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-40" :aria-label="t('pomoNotes.add')"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><Plus v-else class="h-4 w-4" /></button>
+        <button type="submit" :disabled="!title.trim()||store.saving||store.status!=='ready'" class="workspace-add-button" :aria-label="t('pomoNotes.add')"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><span>{{ t('common.add') }}</span></button>
       </form>
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
         <CustomSelect v-model="store.filter" :options="options" :aria-label="t('pomoNotes.filter')" class="w-36" />

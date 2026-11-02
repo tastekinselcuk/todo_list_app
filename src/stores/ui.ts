@@ -5,7 +5,7 @@ import { ref, onScopeDispose } from 'vue'
 export interface Toast {
   id: string
   message: string
-  type: 'success' | 'error' | 'info' | 'warning'
+  type: 'success' | 'error' | 'info' | 'warning' | 'deleted'
   duration?: number
   pending?: boolean
   action?: { label:string;run:()=>Promise<void>|void }
@@ -53,10 +53,10 @@ export const useUIStore = defineStore('ui', () => {
     const timer=timers.get(id);if(timer?.handle)clearTimeout(timer.handle);timers.delete(id)
     toasts.value = toasts.value.filter(t => t.id !== id)
   }
-  function addUndoToast(describe:(count:number)=>string,label:string,run:()=>Promise<void>,group:string,key?:string){
+  function addUndoToast(describe:(count:number)=>string,label:string,run:()=>Promise<void>,group:string,key?:string,type:Toast['type']='info'){
     if(key)undoKeys.set(run,key)
     let toast=toasts.value.find(item=>item.group===group&&!item.pending)
-    if(!toast){const id=addToast(describe(1),'info',10000);toast=toasts.value.find(item=>item.id===id)!;toast.group=group;toast.undo=[];toast.describe=describe}
+    if(!toast){const id=addToast(describe(1),type,10000);toast=toasts.value.find(item=>item.id===id)!;toast.group=group;toast.undo=[];toast.describe=describe}
     toast.undo!.push(run);toast.message=describe(toast.undo!.length)
     toast.action={label,run:async()=>{
       for(const undo of [...toast!.undo!].reverse()){

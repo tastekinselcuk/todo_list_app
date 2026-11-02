@@ -4,50 +4,54 @@ import { ArrowUpRight, Loader2, Search, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { supabase } from '@/lib/supabase'
-import { parseSearchGroups, searchHitKey, type SearchGroup, type SearchHit } from '@/lib/workspaceSearch'
+import CustomSelect from './CustomSelect.vue'
+import { workspaceSearchOptions, parseSearchGroups, searchHitKey, type SearchGroup, type SearchHit } from '@/lib/workspaceSearch'
 
 const props = defineProps<{ enabled: string[] }>()
 const emit = defineEmits<{ select: [hit: SearchHit] }>()
 const { t } = useI18n(), workspaces = useWorkspacesStore()
-const dialog = ref<HTMLDialogElement>(), input = ref<HTMLInputElement>(), query = ref(''), opened = ref(false)
+const dialog = ref<HTMLDialogElement>(), input = ref<HTMLInputElement>(), query = ref(''), opened = ref(false), selectedModule=ref('')
 const groups = ref<SearchGroup[]>([]), busy = ref(false), error = ref(''), highlighted = ref(0), completedQuery = ref('')
 const hits = computed(() => groups.value.flatMap(group => group.items))
 const resultCount = computed(() => groups.value.reduce((n, group) => n + group.total, 0))
+const moduleOptions=computed(()=>[{value:'',label:t('search.allTabs')},...workspaceSearchOptions(props.enabled).map(option=>({...option,label:t(option.label)}))])
+const searchScope=computed(()=>`${scope.value}|${selectedModule.value}`)
 const scope = computed(() => `${workspaces.sessionKey}|${props.enabled.join(',')}`)
 let sequence = 0, delay: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined
 function cancel() { sequence++;clearTimeout(delay);delay = undefined;controller?.abort();controller = undefined;busy.value = false }
 function reset() { cancel();groups.value = [];error.value = '';completedQuery.value = '';highlighted.value = 0 }
 async function open() {
-  reset();query.value = '';opened.value = true;dialog.value?.showModal()
+  reset();query.value = '';selectedModule.value='';opened.value = true;dialog.value?.showModal()
   await nextTick();input.value?.focus()
 }
-function close() { opened.value = false;reset();query.value = '';dialog.value?.close() }
+function close() { opened.value = false;reset();query.value = '';selectedModule.value='';dialog.value?.close() }
 async function search(module?: string) {
   const text = query.value.trim().slice(0, 120)
-  if (!text || !opened.value) return
+  const target=module||selectedModule.value||null
+  if (!text || !opened.value || (target&&!workspaceSearchOptions(props.enabled).some(option=>option.value===target&&!option.disabled))) {busy.value=false;return}
   cancel()
-  const request = sequence, capturedScope = scope.value
+  const request = sequence, capturedScope = searchScope.value
   const abort = new AbortController();controller = abort
   const deadline = setTimeout(() => abort.abort(), 12_000)
   busy.value = true;error.value = ''
   try {
     const existing = module ? groups.value.find(group => group.module === module) : undefined
-    const result = await supabase.rpc('search_workspace', { wid: workspaces.activeId, query_text: text, page_size: 5, page_offset: existing?.items.length || 0, only_module: module || null }).abortSignal(abort.signal)
-    if (request !== sequence || scope.value !== capturedScope || !opened.value) return
+    const result = await supabase.rpc('search_workspace', { wid: workspaces.activeId, query_text: text, page_size: 5, page_offset: existing?.items.length || 0, only_module: target }).abortSignal(abort.signal)
+    if (request !== sequence || searchScope.value !== capturedScope || !opened.value) return
     if (result.error) throw result.error
-    const parsed = parseSearchGroups(result.data, props.enabled)
+    const parsed = parseSearchGroups(result.data, selectedModule.value?[selectedModule.value]:props.enabled)
     if (module && existing) {
       const next = parsed.find(group => group.module === module)
       if (next) { existing.total = next.total;existing.items.push(...next.items.filter(item => !existing.items.some(old => searchHitKey(old) === searchHitKey(item)))) }
     } else { groups.value = parsed;highlighted.value = 0 }
     completedQuery.value = text
   } catch (failure) {
-    if (request !== sequence || scope.value !== capturedScope || !opened.value) return
+    if (request !== sequence || searchScope.value !== capturedScope || !opened.value) return
     const code = (failure as { code?: string })?.code
     error.value = ['PGRST202','42883','42P01'].includes(code || '') ? 'search.setup' : 'search.failed'
   } finally { clearTimeout(deadline);if (request === sequence) busy.value = false }
 }
-watch(query, () => {
+watch([query,selectedModule], () => {
   reset()
   if (query.value.trim() && opened.value) { busy.value = true;delay = setTimeout(() => { delay = undefined;void search() }, 250) }
 })
@@ -58,7 +62,7 @@ function move(direction: number) {
   dialog.value?.querySelector(`#workspace-search-result-${highlighted.value}`)?.scrollIntoView({ block: 'nearest' })
 }
 function select(hit?: SearchHit) {
-  if (!hit || !props.enabled.includes(hit.module) || busy.value) return
+  if (!hit || !props.enabled.includes(hit.module) || (selectedModule.value&&hit.module!==selectedModule.value) || busy.value) return
   emit('select', hit);close()
 }
 function submit() { if (completedQuery.value === query.value.trim() && !busy.value) select(hits.value[highlighted.value]);else void search() }
@@ -77,6 +81,7 @@ defineExpose({ open, close })
     </div>
     <div class="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-2 text-[10px] text-muted-foreground">
       <span class="truncate">{{ workspaces.active?.name }} · {{ t('search.scope') }}</span>
+      <CustomSelect v-model="selectedModule" :options="moduleOptions" popover size="sm" variant="ghost" class="w-40 min-w-0" :aria-label="t('search.module')" />
       <span v-if="completedQuery && !busy" class="shrink-0 tabular-nums" aria-live="polite">{{ t('search.count', { count: resultCount }) }}</span>
     </div>
     <div id="workspace-search-results" role="listbox" :aria-label="t('search.results')" :aria-busy="busy" class="max-h-[min(55vh,28rem)] overflow-y-auto p-2">

@@ -26,6 +26,7 @@
         class="snippet-toolbar-select w-full sm:w-44 shrink-0 z-30 relative"
         :disabled="isDrafting"
       />
+      <button type="button" class="workspace-add-button" :disabled="isDrafting||saving||!snippetForm.title.trim()" @click="handleInitNewSnippet">{{ t('common.add') }}</button>
     </div>
 
     <div class="space-y-4 pt-2 workspace-content relative z-20" style="overflow: visible;">

@@ -95,7 +95,9 @@ test('recurring finance catches up once, clamps month ends, preserves historical
   await schedule('delete',sid,{},4);await sync(`${year+1}-12-31`)
   assert.equal((await db.query('select count(*)::int as n from finance_transactions where recurring_id=$1',[sid])).rows[0].n,4,'removing a schedule preserves its historical entries')
   await schedule('create',gap,{...payload,starts_on:`${year}-01-01`})
-  await db.exec('reset role');await db.query("update finance_recurring set starts_on=$2::date,next_index=1,active=false where id=$1",[gap,`${year-11}-01-01`]);await as(owner)
+  // Keep this paused schedule off today's due day, including runs on the first of a month.
+  const pausedDay=today.slice(-2)==='01'?'02':'01'
+  await db.exec('reset role');await db.query("update finance_recurring set starts_on=$2::date,next_index=1,active=false where id=$1",[gap,`${year-11}-01-${pausedDay}`]);await as(owner)
   await schedule('resume',gap,{},1)
   const g=(await db.query('select * from finance_recurring where id=$1',[gap])).rows[0]
   assert.ok(g.next_index>100,'resume advances past paused dates rather than retroactively charging them')

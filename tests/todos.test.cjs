@@ -52,6 +52,7 @@ function fixture({ cache = new Map(), workspace = 'personal', viewer = false } =
           return (async () => {
             if (held) await held
             if (failures.has(operation) || failures.has(table + ':' + operation)) return { data: null, error: new Error('OFFLINE') }
+            if (table === 'todos' && ['insert','update'].includes(operation) && (Array.isArray(payload) ? payload : [payload]).some(row => typeof row.category_id === 'string' && !row.category_id.trim())) return { data: null, error: new Error('invalid input syntax for type uuid') }
             let data = rows[table].filter(row => filters.every(([key, value]) => row[key] === value))
             if (operation === 'update') data.forEach(row => Object.assign(row, payload, { version: row.version + 1 }))
             if (operation === 'delete') data.forEach(row => rows[table].splice(rows[table].indexOf(row), 1))
@@ -311,6 +312,47 @@ test('category dropdown keeps multiple selections open and filters the board unt
   filters.app.unmount(); board.app.unmount()
 })
 
+test('uncategorized filtering combines with categories, search and completion and follows category removal',async()=>{
+  const h=fixture()
+  h.rows.todos.push({...h.rows.todos[0],id:'legacy',category_id:'',title:'Legacy note'}, {...h.rows.todos[0],id:'orphan',category_id:'removed',title:'Orphan note'})
+  const board=setupState('src/features/todos/components/TodoBoard.vue',h.store);await settle()
+  const props=vue.reactive({selectedCategories:[],showCompleted:true,isGrouped:false})
+  const filters=setupState('src/features/todos/components/TodoFilters.vue',h.store,props)
+  const toggle=id=>{filters.state.handleCategoryToggle(id);props.selectedCategories=filters.events.at(-1)[1];board.state.selectedCategories.value=props.selectedCategories}
+  const visible=()=>board.state.filteredTodosArray.value.map(note=>note.id).sort()
+  try{
+    toggle('uncategorized');assert.equal(filters.state.categoryLabel.value,'todo.uncategorized');assert.deepEqual(visible(),['d','legacy','orphan'])
+    assert.equal(board.state.groupedTodos.value.length,1);assert.equal(board.state.groupedTodos.value[0].category.id,'uncategorized')
+    board.state.showCompleted.value=false;assert.deepEqual(visible(),['legacy','orphan'])
+    board.state.showCompleted.value=true;board.state.query.value='completed';assert.deepEqual(visible(),['d']);board.state.query.value=''
+    toggle('work');assert.ok(filters.state.categoryLabel.value.startsWith('todo.uncategorized, '));assert.deepEqual(visible(),['a','c','d','legacy','orphan'])
+    toggle('uncategorized');assert.deepEqual(visible(),['a','c']);toggle('uncategorized');toggle('work')
+    const calls=h.calls.length;await filters.state.handleDeleteCategory('uncategorized');assert.equal(h.calls.length,calls,'the virtual option cannot be deleted')
+    await h.store.deleteCategory('work');assert.deepEqual(visible(),['a','c','d','legacy','orphan'],'notes detached by category removal join the current uncategorized results')
+    filters.state.clearCategorySelection();props.selectedCategories=filters.events.at(-1)[1];board.state.selectedCategories.value=props.selectedCategories
+    assert.equal(filters.state.categoryLabel.value,'todo.all');assert.equal(visible().length,6)
+  }finally{filters.app.unmount();board.app.unmount()}
+})
+
+test('category menu renders Uncategorized before named categories even when no categories exist',async()=>{
+  const {JSDOM}=require('jsdom')
+  for(const empty of [false,true]){
+    const h=fixture();if(empty)h.rows.categories=[];await h.store.fetchCategories()
+    const props=vue.reactive({selectedCategories:['uncategorized'],showCompleted:true,isGrouped:false})
+    const f=setupState('src/features/todos/components/TodoFilters.vue',h.store,props)
+    try{
+      const component=load(compileScript(parse(fs.readFileSync('src/features/todos/components/TodoFilters.vue','utf8')).descriptor,{id:'uncategorized-menu',inlineTemplate:true}).content,f.dependencies).default
+      const dom=new JSDOM(await renderToString(vue.createSSRApp(component,props))),doc=dom.window.document
+      try{
+        const options=[...doc.querySelectorAll('[data-category-option]')]
+        assert.equal(options[0].textContent,'todo.all');assert.equal(options[1].textContent,'todo.uncategorized');assert.equal(options[1].getAttribute('aria-checked'),'true')
+        assert.equal(options.length,h.store.categories.length+2);assert.equal(doc.querySelectorAll('.category-delete').length,empty?0:2)
+        assert.equal(options[1].parentElement.querySelector('.category-delete'),null)
+      }finally{dom.window.close()}
+    }finally{f.app.unmount()}
+  }
+})
+
 test('category deletion in the dropdown closes it and removes only the deleted category from the selected filters', async () => {
   const h = fixture(); await h.store.fetchTodos(); await h.store.fetchCategories()
   const props = vue.reactive({ selectedCategories: ['work', 'personal'], selectedPriority: 'all', showCompleted: true, isGrouped: false })
@@ -340,6 +382,7 @@ test('a failed category deletion preserves categories and notes and reports fail
 test('composer prevents duplicate submits, retains failed drafts and saves categorized rich notes without a deadline', async () => {
   const h = fixture(); await h.store.fetchCategories()
   const { state, app, toasts } = setupState('src/features/todos/components/TodoQuickAdd.vue', h.store)
+  state.quickTodoCategoryId.value = 'work'
   state.quickTodoTitle.value = '  My note  '; state.quickTodoDescription.value = '<b>Rich</b><img src="https://example.test/image.jpg">'; state.isDraftingTodo.value = true
   h.hold(); h.failures.add('insert')
   const pending = state.saveDraft(); await state.saveDraft(); await vue.nextTick()
@@ -353,10 +396,52 @@ test('composer prevents duplicate submits, retains failed drafts and saves categ
   assert.equal(h.store.todos[0].title, 'My note')
   assert.equal(h.store.todos[0].dueDate, null)
   assert.equal(h.store.todos[0].priority, 'low')
+  assert.equal(h.store.todos[0].categoryId, 'work')
   assert.match(h.store.todos[0].description, /<b>Rich<\/b><img/)
   assert.equal(state.quickTodoTitle.value, '')
   assert.equal(state.isDraftingTodo.value, false)
   app.unmount()
+})
+
+test('uncategorized notes from learning can be edited and legacy empty category values are saved as null',async()=>{
+  const h=fixture();await h.store.fetchTodos()
+  const note=h.store.todos.find(note=>note.id==='d')
+  assert.equal(note.categoryId,null)
+  const props=vue.reactive({todo:copy(note),color:'#64748b',categoryName:'Uncategorized'})
+  const f=setupState('src/features/todos/components/TodoCard.vue',h.store,props)
+  try{
+    assert.equal(f.state.categoryOptions.value[0].value,'')
+    f.state.startEdit();f.state.editForm.value.description='<p>Notes on this learning topic</p>'
+    h.failures.add('update');await f.state.saveEdit();assert.equal(f.state.isEditing.value,true);assert.match(f.state.editForm.value.description,/learning topic/)
+    h.failures.clear();await f.state.saveEdit();assert.equal(f.state.isEditing.value,false);assert.equal(f.state.isOpen.value,true)
+    assert.equal(h.calls.filter(call=>call.table==='todos'&&call.operation==='update').at(-1).payload.category_id,null)
+    assert.equal(h.rows.todos.find(note=>note.id==='d').category_id,null)
+    assert.equal(h.store.todos.find(note=>note.id==='d').categoryId,null)
+    assert.match(h.store.todos.find(note=>note.id==='d').description,/learning topic/)
+    for(const categoryId of ['', '  ', null]){
+      assert.equal(await h.store.updateTodo({...h.store.todos.find(note=>note.id==='a'),categoryId}),true)
+      assert.equal(h.rows.todos.find(note=>note.id==='a').category_id,null,'removing a category uses SQL null rather than an invalid empty UUID')
+      assert.equal(h.store.todos.find(note=>note.id==='a').categoryId,null)
+    }
+    await h.store.fetchTodos();assert.equal(h.store.todos.find(note=>note.id==='d').categoryId,null)
+  }finally{f.app.unmount()}
+})
+
+test('new detailed notes can be saved without choosing or creating any category',async()=>{
+  for(const hasCategories of [false,true]){
+    const h=fixture();if(!hasCategories)h.rows.categories=[]
+    await h.store.fetchCategories()
+    const f=setupState('src/features/todos/components/TodoQuickAdd.vue',h.store)
+    try{
+      assert.equal(f.state.quickTodoCategoryId.value,'')
+      f.state.quickTodoTitle.value='Independent study';f.state.quickTodoDescription.value='<p>My own notes</p>';f.state.openFocusedEditor()
+      await f.state.saveDraft()
+      assert.equal(f.state.isFocused.value,false);assert.equal(f.state.quickTodoTitle.value,'')
+      assert.equal(h.store.todos[0].title,'Independent study');assert.equal(h.store.todos[0].categoryId,null)
+      assert.equal(h.calls.filter(call=>call.table==='categories'&&call.operation==='insert').length,0,'saving a note must not auto-create categories')
+      assert.equal(h.calls.find(call=>call.table==='todos'&&call.operation==='insert').payload[0].category_id,null)
+    }finally{f.app.unmount()}
+  }
 })
 
 test('the focused composer opens category creation inside the editor without discarding the note draft',async()=>{
@@ -404,7 +489,7 @@ test('Enter opens the focused note composer without saving, preserves the editor
   try{
     app.mount(doc.getElementById('app'));await settle()
     const title=doc.querySelector('input'),dialog=doc.querySelector('dialog'),origin=doc.querySelector('[data-shared-editing]')
-    assert.equal(origin.querySelectorAll('input').length,1);assert.equal(origin.querySelector('svg,select,button'),null,'the entry toolbar contains only the title field')
+    assert.equal(origin.querySelectorAll('input').length,1);assert.equal(origin.querySelector('svg,select'),null);assert.equal(origin.querySelector('button[type=submit]').disabled,true,'Add is disabled until a title is typed')
     const enter=(composing=false)=>title.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',isComposing:composing,bubbles:true,cancelable:true}))
     enter();await settle();assert.equal(dialog.open,false,'an empty title cannot open a composer')
     title.value='Focused draft';title.dispatchEvent(new dom.window.Event('input',{bubbles:true}));title.focus()
@@ -413,10 +498,11 @@ test('Enter opens the focused note composer without saving, preserves the editor
     assert.equal(doc.querySelector('[data-editor-body],.note-reveal'),null);assert.equal(editorMounts,0)
     assert.equal(doc.querySelector('button[aria-label="todo.addTodo"]'),null,'the duplicate plus action stays removed')
     enter(true);await settle();assert.equal(dialog.open,false,'IME composition must not open the editor')
-    enter();await settle();await settle()
+    assert.equal(origin.querySelector('button[type=submit]').disabled,false);origin.querySelector('button[type=submit]').click();await settle();await settle()
     const editor=dialog.querySelector('[data-editor-body]')
     assert.equal(dialog.open,true);assert.ok(editor);assert.equal(doc.activeElement,editor)
     assert.equal(dialog.querySelector('input').value,'Focused draft');assert.equal(editorMounts,1)
+    assert.match(dialog.querySelector('[aria-label="todo.category"]').textContent,/todo.uncategorized/);assert.equal(dialog.querySelector('button[type="submit"]').disabled,false,'a category is optional in the actual editor')
     assert.equal(h.calls.some(call=>call.operation==='insert'),false,'Enter opens the dialog without adding a note')
     assert.equal(origin.style.height,'','opening the dialog does not change the toolbar height')
     const category=dialog.querySelector('[aria-label="todo.category"]');category.click();await settle();Array.from(dialog.querySelectorAll('.select-option')).find(button=>button.textContent.includes(h.store.categories.find(item=>item.id==='personal').name)).click();await settle()

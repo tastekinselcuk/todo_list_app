@@ -159,3 +159,6 @@
 @media(prefers-reduced-motion:reduce){.context-panel{animation:none}}
 @media(max-width:639px){.note-edit-dialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);border-radius:14px}.note-edit-form{padding:12px;gap:10px}}
 @media(prefers-reduced-motion:no-preference){.note-edit-dialog[open]{animation:note-editor-enter 180ms ease-out}@keyframes note-editor-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}}
+
+/* Shared lightweight capture controls across workspace modules. */
+.workspace-capture{display:flex;align-items:center;gap:10px;min-width:0}.workspace-add-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;height:40px;min-width:62px;padding:0 20px;border:0;border-radius:12px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font-size:12px;font-weight:600;line-height:18px;box-shadow:0 1px 2px #0000000d;transition:background 160ms,opacity 160ms}.workspace-add-button:hover:not(:disabled){background:hsl(var(--primary)/.9)}.workspace-add-button:disabled{opacity:.45;cursor:default}.workspace-add-button:focus-visible{outline:2px solid hsl(var(--primary)/.4);outline-offset:3px}@media(prefers-reduced-motion:reduce){.workspace-add-button{transition:none}}

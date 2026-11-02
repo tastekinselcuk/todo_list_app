@@ -84,8 +84,10 @@ useModuleLoad(loadNotes)
 
 const scopedTodos = computed(() => {
   const search=query.value.trim().toLocaleLowerCase(locale.value)
+  const categoryIds=new Set(todoStore.categories.map(category=>category.id))
   return todoStore.todos.filter(todo => {
-    const categoryMatch=!selectedCategories.value.length || (todo.categoryId!==null && selectedCategories.value.includes(todo.categoryId))
+    const categoryId=todo.categoryId && categoryIds.has(todo.categoryId)?todo.categoryId:'uncategorized'
+    const categoryMatch=!selectedCategories.value.length || selectedCategories.value.includes(categoryId)
     const description=todo.description.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ')
     return categoryMatch && (!search || `${todo.title} ${description}`.toLocaleLowerCase(locale.value).includes(search))
   })

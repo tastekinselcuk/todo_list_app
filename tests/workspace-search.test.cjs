@@ -101,7 +101,7 @@ function componentFixture() {
   const requests = [], emitted = [], timers = new Map();let timerId = 0, state
   const workspaces = vue.reactive({ sessionKey: 'owner:workspace:one', activeId: 'one', active: { name: 'Kişisel' } })
   const dependencies = { vue, 'vue-i18n': { useI18n: () => ({ t: key => key }) },
-    '@/stores/workspaces': { useWorkspacesStore: () => workspaces }, '@/lib/workspaceSearch': search,
+    '@/stores/workspaces': { useWorkspacesStore: () => workspaces }, '@/lib/workspaceSearch': search, './CustomSelect.vue':{default:{}},
     '@/lib/supabase': { supabase: { rpc(name, args) {
       let resolve;const promise = new Promise(r => resolve = r)
       const entry = { name, args, resolve };requests.push(entry)
@@ -141,6 +141,24 @@ test('search cancels stale queries and scope responses, pages one group and does
     f.requests[3].resolve({ data: { groups: [{ module: 'quick', total: 1, items: [hit()] }] } });await pending
     assert.equal(s.groups.value.length, 0);assert.equal(s.opened.value, false)
   } finally { f.close() }
+})
+
+test('module selection restricts the RPC and results, preserves paging and discards responses from another tab',async()=>{
+ const f=componentFixture(),s=f.state
+ try{
+  f.props.enabled=['learning','quick','code','secure','finance'];await settle();await s.open();s.query.value='Topic';await settle()
+  assert.equal(s.moduleOptions.value.length,6);assert.equal(s.moduleOptions.value.find(option=>option.value==='learning').label,'study.views.topics')
+  const all=s.search();s.selectedModule.value='learning';await settle();assert.equal(f.requests[0].signal.aborted,true);assert.equal(s.query.value,'Topic');assert.equal(s.groups.value.length,0)
+  const selected=s.search();assert.equal(f.requests[1].args.only_module,'learning');assert.equal(f.requests[1].args.page_offset,0)
+  f.requests[1].resolve({data:{groups:[{module:'learning',total:2,items:[hit('learning')]},{module:'quick',total:1,items:[hit()]}]}});await selected
+  f.requests[0].resolve({data:{groups:[{module:'quick',total:1,items:[hit()]}]}});await all;assert.equal(s.groups.value.length,1);assert.equal(s.groups.value[0].module,'learning')
+  const next=s.search('learning');assert.equal(f.requests[2].args.page_offset,1);assert.equal(f.requests[2].args.only_module,'learning')
+  f.requests[2].resolve({data:{groups:[{module:'learning',total:2,items:[hit('learning','80000000-0000-0000-0000-000000000008')]}]}});await next;assert.equal(s.groups.value[0].items.length,2)
+  const pending=s.search();s.selectedModule.value='code';await settle();assert.equal(f.requests[3].signal.aborted,true)
+  f.requests[3].resolve({data:{groups:[{module:'learning',total:1,items:[hit('learning')]}]}});await pending;assert.equal(s.groups.value.length,0)
+  s.selectedModule.value='secure';await settle();await s.search();assert.equal(f.requests.length,4,'encrypted vaults retain their existing search restriction');assert.equal(s.busy.value,false)
+  s.close();await s.open();assert.equal(s.selectedModule.value,'');assert.equal(s.query.value,'')
+ }finally{f.close()}
 })
 
 test('search distinguishes missing database setup from transient errors and remains retryable', async () => {

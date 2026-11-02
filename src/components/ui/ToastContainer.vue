@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { useUIStore } from '@/stores/ui'
-import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, Info, AlertTriangle, Trash2, X } from 'lucide-vue-next'
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -95,6 +95,7 @@ onBeforeUnmount(() => { disposed = true; observer?.disconnect() })
 const getToastStyle = (type: string) => {
   switch (type) {
     case 'success': return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+    case 'deleted':
     case 'error': return 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
     case 'warning': return 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
     default: return 'bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400' // info
@@ -105,6 +106,7 @@ const getToastStyle = (type: string) => {
 const getIcon = (type: string) => {
   switch (type) {
     case 'success': return CheckCircle2
+    case 'deleted': return Trash2
     case 'error': return AlertCircle
     case 'warning': return AlertTriangle
     default: return Info

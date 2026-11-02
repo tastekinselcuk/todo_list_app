@@ -1,7 +1,8 @@
 ﻿<template>
   <div :data-shared-editing="isFocused" class="relative z-40 min-w-0">
-    <form @submit.prevent="openFocusedEditor">
-      <input ref="titleInputRef" v-model="quickTodoTitle" @keydown.enter="handleTitleEnter" type="text" :maxlength="TODO_TITLE_MAX_LENGTH" :disabled="saving || isFocused" :placeholder="t('todo.noteTitlePlaceholder')" :aria-label="t('todo.title')" class="h-10 w-full rounded-xl border border-border/50 bg-background/50 px-4 text-sm font-normal text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:ring-1 focus:ring-primary/30 disabled:opacity-50" />
+    <form class="workspace-capture" @submit.prevent="openFocusedEditor">
+      <input ref="titleInputRef" v-model="quickTodoTitle" @keydown.enter="handleTitleEnter" type="text" :maxlength="TODO_TITLE_MAX_LENGTH" :disabled="saving || isFocused" :placeholder="t('todo.noteTitlePlaceholder')" :aria-label="t('todo.title')" class="h-10 min-w-0 flex-1 rounded-xl border border-border/50 bg-background/50 px-4 text-sm font-normal text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:ring-1 focus:ring-primary/30 disabled:opacity-50" />
+      <button type="submit" class="workspace-add-button" :disabled="saving||isFocused||!quickTodoTitle.trim()">{{ t('common.add') }}</button>
     </form>
     <Teleport to="body">
       <dialog ref="draftDialogRef" class="note-edit-dialog" :closedby="saving || mediaBusy || categorySaving ? 'none' : 'closerequest'" :aria-label="t('todo.addTodo')" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))closeFocusedEditor()}" @keydown.esc.stop.prevent="closeFocusedEditor" @cancel.prevent="closeFocusedEditor" @close="onDialogClosed">
@@ -15,7 +16,7 @@
           <div class="flex min-h-0 flex-1 flex-col"><RichTextEditor ref="editorRef" v-model="quickTodoDescription" :fit-height="true" :disabled="saving || categorySaving" :placeholder="t('todo.descriptionPlaceholder')" @busy-change="mediaBusy=$event" /></div>
           <footer class="flex shrink-0 items-center justify-end gap-1.5 border-t border-border/30 pt-3">
             <button type="button" @click="cancelDraft" :disabled="saving || mediaBusy || categorySaving" class="h-8 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-40">{{ t('common.cancel') }}</button>
-            <button type="submit" :disabled="saving || mediaBusy || categorySaving || !quickTodoTitle.trim() || !quickTodoCategoryId" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"><Loader2 v-if="saving" class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('common.save') }}</button>
+            <button type="submit" :disabled="saving || mediaBusy || categorySaving || !quickTodoTitle.trim()" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"><Loader2 v-if="saving" class="h-3 w-3 animate-spin motion-reduce:animate-none" />{{ t('common.save') }}</button>
           </footer>
         </form>
       </dialog>
@@ -63,16 +64,16 @@ watch(isFocused,async focused=>{
 })
 watch(editorRef,editor=>{if(editor && active && isFocused.value && draftDialogRef.value?.open)editor.focus()},{flush:'post'})
 onActivated(()=>{active=true})
-onDeactivated(()=>{quickTodoTitle.value='';quickTodoDescription.value='';quickTodoCategoryId.value=todoStore.categories[0]?.id || '';active=false;isFocused.value=false;isDraftingTodo.value=false;categoryOpen.value=false;categorySaving.value=false;draftDialogRef.value?.close();releaseScroll()})
+onDeactivated(()=>{quickTodoTitle.value='';quickTodoDescription.value='';quickTodoCategoryId.value='';active=false;isFocused.value=false;isDraftingTodo.value=false;categoryOpen.value=false;categorySaving.value=false;draftDialogRef.value?.close();releaseScroll()})
 onUnmounted(()=>{disposed=true;dialogEpoch++;draftDialogRef.value?.close();releaseScroll()})
-watch(()=>todoStore.categories,categories=>{if(categories.length && !categories.some(category=>category.id===quickTodoCategoryId.value))quickTodoCategoryId.value=categories[0]!.id},{immediate:true})
-const categoryOptions=computed(()=>todoStore.categories.map(category=>({value:category.id,label:category.name})))
+watch(()=>todoStore.categories,categories=>{if(quickTodoCategoryId.value && !categories.some(category=>category.id===quickTodoCategoryId.value))quickTodoCategoryId.value=''},{deep:true})
+const categoryOptions=computed(()=>[{value:'',label:t('todo.uncategorized')},...todoStore.categories.map(category=>({value:category.id,label:category.name}))])
 function cancelDraft(){
  if(saving.value || mediaBusy.value || categorySaving.value)return
  isFocused.value=false;isDraftingTodo.value=false;quickTodoTitle.value='';quickTodoDescription.value=''
 }
 async function saveDraft(){
- if(saving.value || mediaBusy.value || categorySaving.value || !quickTodoTitle.value.trim() || !quickTodoCategoryId.value)return
+ if(saving.value || mediaBusy.value || categorySaving.value || !quickTodoTitle.value.trim())return
  if(quickTodoTitle.value.trim().length>TODO_TITLE_MAX_LENGTH){uiStore.addToast(t('todo.titleTooLong',{count:TODO_TITLE_MAX_LENGTH}),'error');return}
  saving.value=true
  try{

@@ -1,13 +1,16 @@
 import type { InjectionKey } from 'vue'
-export const openFinanceAnalysisKey: InjectionKey<() => void> = Symbol('open-finance-analysis')
+export const openFinanceAnalysisKey: InjectionKey<(month?:string) => void> = Symbol('open-finance-analysis')
 export type FinanceCurrency = 'TRY' | 'USD' | 'EUR' | 'GBP'
 export type FinanceEntity = 'transaction' | 'position'
-export interface FinanceTransaction { id:string;title:string;kind:'income'|'expense';category:string;amount:number;occurred_on:string;version:number;recurring_id?:string|null }
-export interface FinanceSchedule { id:string;title:string;kind:'income'|'expense';amount:number;cadence:'weekly'|'monthly'|'yearly';starts_on:string;timezone:string;next_on:string;active:boolean;version:number }
+export interface FinanceTransaction { id:string;title:string;kind:'income'|'expense';category:string;category_id?:string|null;amount:number;occurred_on:string;version:number;recurring_id?:string|null }
+export interface FinanceSchedule { id:string;title:string;kind:'income'|'expense';category_id?:string|null;amount:number;cadence:'weekly'|'monthly'|'yearly';starts_on:string;timezone:string;next_on:string;active:boolean;version:number }
+export interface FinanceBudgetCategory { id:string;name:string;archived:boolean;version:number;budget_version:number;budget:number|null;budget_scope:'month'|'forward'|null;spent:number }
+export interface FinanceFilters { search:string;kind:string;category:string;recurring:string }
 export interface FinancePosition { id:string;title:string;kind:string;instrument:string;price_source:string;quantity:number;buy_price:number;purchased_on:string;manual_price:number|null;version:number;price:number|null;price_at:string|null;stale:boolean;cost:number;current_value:number|null;gain:number|null;gain_percent:number|null;quote_info?:{source?:string;quality?:string;unit?:string;basis?:string;fx_at?:string;market_status?:string} }
 export interface FinanceSummary {
   currency:FinanceCurrency;income:number;expense:number;count:number;locked_currency:boolean;
-  monthly:{day:string;income:number;expense:number}[];categories:{category:string;amount:number}[];
+  monthly:{day:string;income:number;expense:number}[];categories:{category:string|null;category_id?:string|null;amount:number}[];
+  budget_categories?:FinanceBudgetCategory[];uncategorized_expense?:number;
   portfolio:{count:number;cost:number;value:number|null;priced_cost:number;gain:number|null;missing:number;stale:number};
   schedules?:FinanceSchedule[];
   allocation:{kind:string;amount:number}[];quote_requests:{provider:'frankfurter'|'coingecko'|'market';instrument:string}[];
@@ -66,5 +69,14 @@ export function financeError(error:unknown) {
   if(['PGRST202','42883','42P01'].includes(failure?.code || ''))return 'setup'
   if(failure?.message?.includes('FINANCE_CONFLICT'))return 'conflict'
   if(failure?.message?.includes('FINANCE_CURRENCY_LOCKED'))return 'currencyLocked'
+  if(failure?.code==='23505')return 'categoryExists'
+  if(failure?.message?.includes('INVALID_FINANCE_CATEGORY'))return 'categoryUnavailable'
   return 'failed'
+}
+
+export function budgetProgress(spent:number,limit:number|null) {
+  if(limit===null)return {percent:0,remaining:null,state:'none' as const}
+  const remaining=Math.round((Number(limit)-Number(spent))*100)/100
+  return {percent:limit===0?(spent>0?100:0):Math.min(100,Math.max(0,spent/limit*100)),remaining,
+    state:remaining<0?'over' as const:remaining===0?'used' as const:spent/limit>=.8?'near' as const:'normal' as const}
 }
