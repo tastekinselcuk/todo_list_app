@@ -47,29 +47,44 @@ test('the rail has only main sections and a searchable workspace picker that sur
  }finally{f.close()}
 })
 
-test('the header picker selects sibling notes and existing finance, learning and calendar views',async()=>{
+test('all workspace sections expose direct sibling tabs with consistent active state and keyboard navigation',async()=>{
  const f=fixture();try{
-  const open=async()=>{f.doc.querySelector('.workspace-module-picker>button').click();await f.flush();return f.doc.querySelector('.workspace-module-picker [popover]')}
-  let menu=await open();assert.equal(menu.querySelectorAll('button').length,6);assert.equal(menu.dataset.shown,'true');assert.ok(f.nativeMenus>0)
-  Array.from(menu.querySelectorAll('button')).find(button=>button.textContent.includes('workspace.modules.detailedName')).click();await f.flush();assert.equal(f.props.module,'detailed')
+  const tabs=()=>f.doc.querySelector('.workspace-module-tabs'),items=()=>Array.from(tabs().querySelectorAll('[role="tab"]'))
+  const choose=async label=>{tabs().querySelector(`[aria-label="${label}"]`).click();await f.flush()}
+  const active=()=>items().filter(item=>item.getAttribute('aria-selected')==='true')
+  assert.equal(items().length,6);assert.equal(f.doc.querySelector('.workspace-module-picker'),null)
+  assert.equal(active().length,1);assert.equal(active()[0].getAttribute('aria-label'),'workspace.modules.quickName')
+  await choose('workspace.modules.detailedName');assert.equal(f.props.module,'detailed');assert.equal(active()[0].getAttribute('aria-label'),'workspace.modules.detailedName')
   assert.equal(f.doc.querySelector('.workspace-rail [data-section="notes"]').getAttribute('aria-current'),'page')
-  f.doc.querySelector('.workspace-rail [data-section="finance"]').click();await f.flush();menu=await open();assert.equal(menu.querySelectorAll('button').length,2)
-  Array.from(menu.querySelectorAll('button')).find(button=>button.textContent.includes('finance.positions')).click();await f.flush();assert.deepEqual(f.events.at(-1),['view','finance','position']);assert.ok(f.doc.querySelector('.workspace-module-picker>button').textContent.includes('finance.positions'))
-  f.doc.querySelector('.workspace-rail [data-section="learning"]').click();await f.flush()
-  const tabs=f.doc.querySelector('[role="tablist"]');assert.equal(tabs.querySelectorAll('[role="tab"]').length,3);assert.equal(f.doc.querySelector('.workspace-module-picker'),null)
-  tabs.querySelector('[aria-label="study.views.mistakes"]').click();await f.flush();assert.deepEqual(f.events.at(-1),['view','learning','mistakes']);assert.equal(tabs.querySelector('[aria-label="study.views.mistakes"]').getAttribute('aria-selected'),'true')
-  const mistakes=tabs.querySelector('[aria-label="study.views.mistakes"]');mistakes.focus();mistakes.dispatchEvent(new f.dom.window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));await f.flush()
-  assert.equal(f.props.module,'flashcards');assert.equal(tabs.querySelectorAll('[aria-selected="true"]').length,1)
-  f.enabled.value=['learning'];f.props.module='learning';await f.flush();assert.equal(tabs.querySelectorAll('[role="tab"]').length,2)
-  assert.equal(tabs.querySelector('[aria-label="study.views.today"]'),null)
-  f.enabled.value=['flashcards'];f.props.module='flashcards';await f.flush();assert.equal(tabs.querySelectorAll('[role="tab"]').length,1)
+  f.doc.querySelector('.workspace-rail [data-section="finance"]').click();await f.flush();assert.equal(items().length,2)
+  await choose('finance.positions');assert.deepEqual(f.events.at(-1),['view','finance','position']);assert.equal(active()[0].getAttribute('aria-label'),'finance.positions')
+  await choose('finance.cashflow');assert.deepEqual(f.events.at(-1),['view','finance','transaction']);assert.equal(active().length,1)
+  f.doc.querySelector('.workspace-rail [data-section="life"]').click();await f.flush();assert.equal(items().length,2)
+  await choose('workspace.modules.activitiesName');assert.equal(f.props.module,'activities');assert.equal(active()[0].getAttribute('aria-label'),'workspace.modules.activitiesName')
+  f.doc.querySelector('.workspace-rail [data-section="learning"]').click();await f.flush();assert.equal(items().length,3)
+  await choose('study.views.mistakes');assert.deepEqual(f.events.at(-1),['view','learning','mistakes']);assert.equal(active()[0].getAttribute('aria-label'),'study.views.mistakes')
+  const press=async key=>{active()[0].focus();active()[0].dispatchEvent(new f.dom.window.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));await f.flush();assert.equal(f.doc.activeElement,active()[0]);assert.equal(items().filter(item=>item.tabIndex===0).length,1)}
+  await press('ArrowRight');assert.equal(f.props.module,'flashcards')
+  await press('ArrowRight');assert.deepEqual(f.events.at(-1),['view','learning','topics'])
+  await press('ArrowLeft');assert.equal(f.props.module,'flashcards')
+  await press('Home');assert.deepEqual(f.events.at(-1),['view','learning','topics'])
+  await press('End');assert.equal(f.props.module,'flashcards')
+  f.enabled.value=['learning'];f.props.module='learning';await f.flush();assert.equal(items().length,2);assert.equal(tabs().querySelector('[aria-label="study.views.today"]'),null)
+  f.enabled.value=['flashcards'];f.props.module='flashcards';await f.flush();assert.equal(items().length,1)
   f.enabled.value=['tasks','periodic','quick','learning','flashcards'];await f.flush()
+  f.doc.querySelector('.workspace-rail [data-section="planning"]').click();await f.flush();assert.equal(items().length,2)
+  assert.equal(tabs().textContent.includes('tasks.board'),false);assert.equal(tabs().textContent.includes('tasks.list'),false)
+  await choose('tasks.calendar');assert.deepEqual(f.events.at(-1),['module','tasks']);assert.equal(active()[0].getAttribute('aria-label'),'tasks.calendar')
+  f.enabled.value=['quick'];f.props.module='quick';f.props.view='';await f.flush();assert.equal(items().length,1);assert.equal(active().length,1)
+  f.enabled.value=[];await f.flush();assert.equal(tabs(),null)
+ }finally{f.close()}
+})
 
-  f.doc.querySelector('.workspace-rail [data-section="planning"]').click();await f.flush();menu=await open();assert.equal(menu.querySelectorAll('button').length,2)
-  assert.equal(menu.textContent.includes('tasks.board'),false);assert.equal(menu.textContent.includes('tasks.list'),false)
-  Array.from(menu.querySelectorAll('button')).find(button=>button.textContent.includes('tasks.calendar')).click();await f.flush();assert.deepEqual(f.events.at(-1),['module','tasks'])
-  assert.ok(f.doc.querySelector('.workspace-module-picker>button').textContent.includes('tasks.calendar'))
-  f.enabled.value=['quick'];f.props.module='quick';f.props.view='';await f.flush();menu=await open();assert.equal(menu.querySelectorAll('button').length,1)
+test('mobile sibling tabs remain directly selectable with accessible names',async()=>{
+ const f=fixture({mobile:true});try{
+  const tabs=f.doc.querySelector('.workspace-module-tabs');assert.equal(tabs.querySelectorAll('[role="tab"]').length,6)
+  tabs.querySelector('[aria-label="workspace.modules.codeName"]').click();await f.flush();assert.equal(f.props.module,'code');assert.equal(tabs.querySelector('[aria-selected="true"]').getAttribute('aria-label'),'workspace.modules.codeName')
+  assert.equal(f.doc.querySelector('.select-menu'),null);assert.equal(tabs.querySelectorAll('[aria-selected="true"]').length,1)
  }finally{f.close()}
 })
 

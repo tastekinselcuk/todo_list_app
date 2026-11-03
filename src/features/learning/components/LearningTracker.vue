@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed,inject,nextTick,onActivated,onDeactivated,onBeforeUnmount,onMounted,ref,watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BookOpen,Plus,Trash2,Upload,RotateCcw,GripVertical,ArrowLeft,X,List } from 'lucide-vue-next'
+import { BookOpen,Plus,Trash2,Upload,GripVertical,ArrowLeft,X,List } from 'lucide-vue-next'
 import draggable from 'vuedraggable'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import LearningDialog from './LearningDialog.vue'
@@ -40,12 +40,12 @@ function refreshVisible(){if(active&&document.visibilityState==='visible'&&!disa
 onMounted(()=>document.addEventListener('visibilitychange',refreshVisible));onActivated(()=>{active=true});onDeactivated(()=>{
  active=false;entryGeneration++;closePanel(true);view.value='topics';status.value='all';selectedStudy.value='';listMode.value='subjects';mistakeFilter.value='open';newTitle.value='';newId.value='';prompt.value='';solution.value='';source.value='';reason.value=''
 })
-onBeforeUnmount(()=>{document.removeEventListener('visibilitychange',refreshVisible);closePanel(true)})
+onBeforeUnmount(()=>{active=false;entryGeneration++;document.removeEventListener('visibilitychange',refreshVisible);closePanel(true)})
 useSearchReveal('learning',async(hit,isCurrent)=>{await store.fetchSubjects(hit.record_id);if(!isCurrent())return;view.value='topics';status.value='all';selectedStudy.value='';const found=store.subjects.find(s=>s.id===hit.record_id);if(!found)return;closePanel(true);listMode.value=hit.child_id?'topics':'subjects';if(hit.child_id)selectedStudy.value=found.id})
 
 type Panel='subject'|'mistake'|'template'|'plan'|null
 const panel=ref<Panel>(null),selectedSubject=ref(''),selectedTopic=ref(''),draftId=ref('')
-const newTitle=ref(''),newId=ref(''),newInput=ref<HTMLInputElement>()
+const newTitle=ref(''),newId=ref(''),focusedStudy=ref<InstanceType<typeof LearningSubjectItem>>()
 const working=ref(false),uploading=ref(false),photo=ref(''),imagePath=ref(''),imageError=ref(''),fileInput=ref<HTMLInputElement>(),editingMistake=ref<Mistake|null>(null)
 const canReorder=computed(()=>status.value==='all'&&!selectedStudy.value)
 const {ordered:orderedSubjects,blocked:orderBlocked,reducedMotion,announcement,start:startOrder,finish:finishOrder,move:moveOrder}=useStudyOrder(()=>groups.value.map(group=>group.subject),()=>disabled.value||working.value||!canWrite.value||!canReorder.value,()=>Object.fromEntries(store.subjects.map(s=>[s.id,s.version])),(ids,versions)=>saveOrder(null,ids,versions))
@@ -62,7 +62,6 @@ const reasonOptions=computed(()=>['','knowledge','attention','time'].map(value=>
 const panelTitle=computed(()=>panel.value==='subject'?subject.value?.title||t('study.manageSubject'):panel.value==='template'?t('study.importTemplate'):panel.value==='mistake'?t(editingMistake.value?'study.mistakeDetail':'study.addMistake'):panel.value==='plan'?t('study.plan'):t('study.topic'))
 const subjectStats=computed(()=>{const topics=subject.value?.topics.filter(topic=>!topic.archived)||[];return {total:topics.length,doing:topics.filter(topic=>store.state(subject.value!.id,topic.id).status==='doing').length,done:topics.filter(topic=>store.state(subject.value!.id,topic.id).status==='done').length}})
 const validMistake=computed(()=>Boolean(selectedTopic.value&&(prompt.value.trim()||source.value.trim()||imagePath.value)))
-const mistakeDirty=computed(()=>{const m=editingMistake.value;return !!m&&(prompt.value!==m.prompt||solution.value!==m.solution||source.value!==m.source||reason.value!==m.reason||(imagePath.value||null)!==m.image_path)})
 function topicLabel(sid:string,tid:string){const s=store.subjects.find(s=>s.id===sid);return `${s?.title||''} · ${s?.topics.find(topic=>topic.id===tid)?.title||''}`}
 function errorToast(error?:unknown){ui.addToast(t('study.errors.'+(error?learningError(error):store.error||'failed')),'error')}
 async function run(action:()=>Promise<unknown>,success?:string){if(panelBusy.value||store.setupRequired)return false;working.value=true;try{await action();if(success)ui.addToast(t('study.'+success),'success');return true}catch(error){errorToast(error);return false}finally{working.value=false}}
@@ -75,8 +74,12 @@ function handleSubjectEnter(event:KeyboardEvent){if(event.isComposing||event.key
 async function saveSubject(){
  if(!canWrite.value||view.value!=='topics'||panel.value||panelBusy.value||disabled.value||!validStudyName(newTitle.value,studyNameLimit))return
  if(!newId.value)newId.value=crypto.randomUUID()
- const entry=entryGeneration
- if(await run(()=>store.mutate('subject.create',newId.value,null,{title:newTitle.value.trim()}))&&entry===entryGeneration){newTitle.value='';newId.value='';status.value='all';selectedStudy.value='';await nextTick();newInput.value?.focus()}
+ const entry=entryGeneration,createdId=newId.value
+ if(await run(()=>store.mutate('subject.create',createdId,null,{title:newTitle.value.trim()}))&&entry===entryGeneration){
+  newTitle.value='';newId.value='';status.value='all';selectedStudy.value=''
+  const created=store.subjects.find(subject=>subject.id===createdId)
+  if(created){openPanel('subject',created);await nextTick();focusedStudy.value?.focusTopic()}
+ }
 }
 async function saveTopics(s:Subject,titles:string[]){
  if(!canWrite.value||!titles.length||titles.length>100||!titles.every(title=>validStudyName(title,topicNameLimit)))return false
@@ -100,11 +103,6 @@ async function removeTopic(s:Subject,topic:Topic){
  ui.addUndoToast(()=>t('study.topicDeleted'),t('study.undo'),async()=>{try{await store.mutate('topic.restore',s.id,topic.id,{},version)}catch(error){errorToast(error);throw error}},'learning-topics',undefined,'deleted')
 }
 async function deleteSubject(s:Subject){if(!canWrite.value)return;if(await run(async()=>{if(!await store.deleteSubject(s.id))throw Error(store.error)})){if(selectedSubject.value===s.id)closePanel()}}
-const attempts=new Map<string,string>()
-async function review(sid:string,tid:string,correct:boolean,m?:Mistake){
- const key=`${sid}:${tid}:${m?.id||''}:${correct}`,attempt_id=attempts.get(key)||crypto.randomUUID();attempts.set(key,attempt_id)
- if(await run(()=>store.mutate(m?'mistake.review':'review',sid,tid,{attempt_id,correct,...(m?{id:m.id}:{})},m?.version),'reviewSaved')){attempts.delete(key);if(m){closePanel();await store.fetchMistakes(mistakeFilter.value)}}
-}
 async function link(kind:'note'|'deck'|'focus'){
  await run(async()=>{const data=await store.mutate('link.'+kind,selectedSubject.value,selectedTopic.value,kind==='focus'?{seconds:timer.durations.focus*60}:{})
   if(kind==='focus'){const target=data.link.target;await timer.focusOn({...target,title:target.title,workspace_id:target.workspace_id,collection_id:target.collection_id,estimated_sessions:target.estimated_sessions||1,focus_seconds:target.focus_seconds||timer.durations.focus*60});if(timer.error)throw Error(timer.error);ui.addToast(t(timer.queuedTarget?.id===target.id?'study.queued':'study.focusStarted'),'success')}
@@ -143,12 +141,12 @@ async function removeMistake(m:Mistake,restore=false){
 <template>
  <div class="learning-workspace space-y-3 min-w-0">
   <div class="workspace-toolbar space-y-3">
-   <form v-if="view==='topics'&&canWrite" class="workspace-capture" @submit.prevent="saveSubject"><input ref="newInput" v-model="newTitle" type="text" class="study-input flex-1 min-w-0" :maxlength="studyNameLimit" :disabled="disabled||working" :placeholder="t('study.newSubjectPlaceholder')" :aria-label="t('study.newSubject')" @keydown.enter="handleSubjectEnter" /><button type="button" class="study-btn study-template-action" :disabled="disabled||working" :aria-label="t('study.template')" :title="t('study.template')" @click="openPanel('template')"><Upload :size="14" /><span class="hidden sm:inline">{{ t('study.template') }}</span></button><button type="submit" class="workspace-add-button" :disabled="disabled||working||!validStudyName(newTitle,studyNameLimit)">{{ t('study.add') }}</button></form>
+   <form v-if="view==='topics'&&canWrite" class="workspace-capture" @submit.prevent="saveSubject"><input v-model="newTitle" type="text" class="study-input flex-1 min-w-0" :maxlength="studyNameLimit" :disabled="disabled||working" :placeholder="t('study.newSubjectPlaceholder')" :aria-label="t('study.newSubject')" @keydown.enter="handleSubjectEnter" /><button type="button" class="study-btn study-template-action" :disabled="disabled||working" :aria-label="t('study.template')" :title="t('study.template')" @click="openPanel('template')"><Upload :size="14" /><span class="hidden sm:inline">{{ t('study.template') }}</span></button><button type="submit" class="workspace-add-button" :disabled="disabled||working||!validStudyName(newTitle,studyNameLimit)">{{ t('study.add') }}</button></form>
    <div class="flex flex-wrap items-center gap-2">
     <div v-if="view==='topics'" role="group" :aria-label="t('study.listMode')" class="study-list-modes"><button type="button" :aria-pressed="listMode==='subjects'" @click="listMode='subjects'"><BookOpen :size="14" />{{ t('study.subjectsLabel') }}</button><button type="button" :aria-pressed="listMode==='topics'" @click="listMode='topics'"><List :size="14" />{{ t('study.views.topics') }}</button></div>
-    <CustomSelect v-if="view==='topics'" v-model="status" :options="filterOptions" size="sm" :aria-label="t('study.filter')" class="w-[124px]" />
-    <CustomSelect v-if="view==='topics'" v-model="selectedStudy" :options="studyFilterOptions" size="sm" :aria-label="t('study.filterSubject')" class="w-40 min-w-0" />
-    <CustomSelect v-if="view==='mistakes'" v-model="mistakeFilter" :options="mistakeFilters" :disabled="store.mistakesLoading" size="sm" :aria-label="t('study.filter')" class="w-[124px]" />
+    <CustomSelect popover v-if="view==='topics'" v-model="selectedStudy" :options="studyFilterOptions" size="sm" :aria-label="t('study.filterSubject')" class="w-40 min-w-0" />
+    <CustomSelect popover v-if="view==='topics'" v-model="status" :options="filterOptions" size="sm" :aria-label="t('study.filter')" class="w-[124px]" />
+    <CustomSelect popover v-if="view==='mistakes'" v-model="mistakeFilter" :options="mistakeFilters" :disabled="store.mistakesLoading" size="sm" :aria-label="t('study.filter')" class="w-[124px]" />
 
     <button v-if="view==='mistakes'" type="button" class="study-btn ml-auto" :disabled="disabled||!store.subjects.some(s=>s.topics.some(topic=>!topic.archived))" @click="openMistake()"><Plus :size="14" />{{ t('study.addMistake') }}</button>
    </div>
@@ -164,25 +162,26 @@ async function removeMistake(m:Mistake,restore=false){
      </LearningSubjectItem>
     </template>
    </draggable>
-   <section v-else-if="flatTopics.length" class="study-topic-list"><LearningTopicRow v-for="entry in flatTopics" :key="entry.subject.id+entry.topic.id" :subject="entry.subject" :topic="entry.topic" :can-write="canWrite" :busy="disabled||working" show-subject :save-title="(title,version)=>rename(entry.subject,entry.topic,title,version)" @status="changeStatus(entry.subject,entry.topic,$event)" @remove="removeTopic(entry.subject,entry.topic)" @link="kind=>withTopic(entry.subject,entry.topic,()=>link(kind))" @plan="withTopic(entry.subject,entry.topic,openPlan)" @mistake="withTopic(entry.subject,entry.topic,()=>openMistake())" @review="correct=>review(entry.subject.id,entry.topic.id,correct)" /></section>
+   <section v-else-if="flatTopics.length" class="study-topic-list"><LearningTopicRow v-for="entry in flatTopics" :key="entry.subject.id+entry.topic.id" :subject="entry.subject" :topic="entry.topic" :can-write="canWrite" :busy="disabled||working" show-subject :save-title="(title,version)=>rename(entry.subject,entry.topic,title,version)" @status="changeStatus(entry.subject,entry.topic,$event)" @remove="removeTopic(entry.subject,entry.topic)" @link="kind=>withTopic(entry.subject,entry.topic,()=>link(kind))" @plan="withTopic(entry.subject,entry.topic,openPlan)" @mistake="withTopic(entry.subject,entry.topic,()=>openMistake())" /></section>
    <p class="sr-only" role="status" aria-live="polite">{{ announcement?t('study.order.'+announcement):'' }}</p>
    <div v-if="listMode==='topics'?!flatTopics.length:!groups.length" class="study-empty"><BookOpen :size="24" class="mx-auto mb-3 opacity-50" />{{ t(store.subjects.length?'study.noMatches':'study.startHint') }}</div>
   </template>
   <template v-else>
    <p v-if="!visibleMistakes.length" class="study-empty">{{ t(store.mistakesLoading?'study.loading':'study.noMistakes') }}</p>
    <article v-for="m in visibleMistakes" :key="m.id" class="study-review-row workspace-card">
-    <button class="text-left flex-1 min-w-0" :disabled="disabled" @click="openMistake(m)"><span class="block text-[13px] line-clamp-2">{{ m.prompt||m.source||t('study.photoQuestion') }}</span><span class="study-hint truncate block">{{ topicLabel(m.subject_id,m.topic_id) }}<span v-if="m.review_on"> · {{ m.review_on }}</span></span></button>
-    <button class="study-btn" :disabled="disabled||working" :aria-label="t('study.deleteMistake')" @click="removeMistake(m)"><RotateCcw v-if="m.deleted_at" :size="15" /><Trash2 v-else :size="15" /></button>
+    <button class="text-left flex-1 min-w-0" :disabled="disabled" @click="openMistake(m)"><span class="block text-[13px] line-clamp-2">{{ m.prompt||m.source||t('study.photoQuestion') }}</span><span class="study-hint truncate block">{{ topicLabel(m.subject_id,m.topic_id) }}</span></button>
+    <button class="study-btn" :disabled="disabled||working" :aria-label="t('study.deleteMistake')" @click="removeMistake(m)"><Trash2 :size="15" /></button>
    </article>
    <button v-if="store.hasMore" class="study-btn mx-auto" :disabled="store.mistakesLoading" @click="store.fetchMistakes(mistakeFilter,true)">{{ t('study.loadMore') }}</button>
   </template>
 
   <Teleport to="body">
-   <LearningDialog v-if="panel" :title="panelTitle" :busy="panelBusy" :wide="panel==='template'" :workspace="panel!=='template'" @close="closePanel()">
+   <LearningDialog v-if="panel" :title="panelTitle" :busy="panelBusy" :wide="panel==='template'" :workspace="panel!=='template'" :contained="panel==='subject'" @close="closePanel()">
     <template v-if="subject&&panel==='subject'" #title><LearningTitle class="study-detail-title" :title="subject.title" :version="subject.version" :limit="studyNameLimit" :label="t('study.subjectName')" :editable="canWrite" :disabled="panelBusy" :save="(title,version)=>rename(subject!,null,title,version)" /></template>
     <template v-if="panel==='subject'&&subject">
-     <div class="study-summary" role="status"><span>{{ t('study.topicCount',{count:subjectStats.total}) }}</span><span>{{ t('study.doingCount',{count:subjectStats.doing}) }}</span><span>{{ t('study.doneCount',{count:subjectStats.done}) }}</span></div>
-     <LearningSubjectItem :key="subject.id" :subject="subject" :topics="studyTopics(subject,'','all',store.state)" focused :can-write="canWrite" :disabled="disabled||working" :can-reorder="true" :save-title="(topic,title,version)=>rename(subject!,topic,title,version)" :create-topics="titles=>saveTopics(subject!,titles)" :save-order="(ids,version)=>saveOrder(subject!.id,ids,{[subject!.id]:version})" @status="(topic,status)=>changeStatus(subject!,topic,status)" @remove="removeTopic(subject!,$event)" @link="(topic,kind)=>withTopic(subject!,topic,()=>link(kind))" @plan="withTopic(subject!,$event,openPlan)" @mistake="withTopic(subject!,$event,()=>openMistake())" @review="(topic,correct)=>review(subject!.id,topic.id,correct)" />
+     <LearningSubjectItem ref="focusedStudy" :key="subject.id" :subject="subject" :topics="studyTopics(subject,'','all',store.state)" focused :can-write="canWrite" :disabled="disabled||working" :can-reorder="true" :save-title="(topic,title,version)=>rename(subject!,topic,title,version)" :create-topics="titles=>saveTopics(subject!,titles)" :save-order="(ids,version)=>saveOrder(subject!.id,ids,{[subject!.id]:version})" @status="(topic,status)=>changeStatus(subject!,topic,status)" @remove="removeTopic(subject!,$event)" @link="(topic,kind)=>withTopic(subject!,topic,()=>link(kind))" @plan="withTopic(subject!,$event,openPlan)" @mistake="withTopic(subject!,$event,()=>openMistake())">
+      <template v-if="subjectStats.total" #summary><div class="study-summary" role="status"><span>{{ t('study.topicCount',{count:subjectStats.total}) }}</span><span>{{ t('study.doingCount',{count:subjectStats.doing}) }}</span><span>{{ t('study.doneCount',{count:subjectStats.done}) }}</span></div></template>
+     </LearningSubjectItem>
     </template>
     <template v-else-if="panel==='template'">
      <LearningTemplatePicker :busy="panelBusy" @update:selection="templateSelection=$event" />
@@ -190,15 +189,13 @@ async function removeMistake(m:Mistake,restore=false){
     <template v-else-if="panel==='plan'"><div class="grid grid-cols-2 gap-3"><label class="study-field"><span>{{ t('study.date') }}</span><input v-model="planDate" type="date" class="study-input" required /></label><label class="study-field"><span>{{ t('study.time') }}</span><input v-model="planTime" type="time" class="study-input" required /></label></div><label class="study-field"><span>{{ t('study.duration') }}</span><input v-model.number="planMinutes" type="number" min="5" max="480" class="study-input" /></label></template>
     <template v-else-if="panel==='mistake'">
      <div @paste="paste" @dragover.prevent @drop="drop">
-      <div class="grid grid-cols-2 gap-3 mb-4"><CustomSelect v-model="selectedSubject" :options="subjectOptions" :disabled="!!editingMistake||panelBusy" :aria-label="t('study.subjectName')" @update:model-value="selectedTopic=topicOptions[0]?.value||''" /><CustomSelect v-model="selectedTopic" :options="topicOptions" :disabled="!!editingMistake||panelBusy" :aria-label="t('study.topic')" /></div>
+      <div class="grid grid-cols-2 gap-3 mb-4"><CustomSelect popover v-model="selectedSubject" :options="subjectOptions" :disabled="!!editingMistake||panelBusy" :aria-label="t('study.subjectName')" @update:model-value="selectedTopic=topicOptions[0]?.value||''" /><CustomSelect popover v-model="selectedTopic" :options="topicOptions" :disabled="!!editingMistake||panelBusy" :aria-label="t('study.topic')" /></div>
       <label class="study-field"><span>{{ t('study.question') }}</span><textarea v-model="prompt" class="study-input" maxlength="4000" :placeholder="t('study.questionHint')" :readonly="!!editingMistake?.deleted_at" /></label>
       <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" @change="upload(($event.target as HTMLInputElement).files?.[0]);($event.target as HTMLInputElement).value=''" />
       <div class="flex items-center gap-2 mb-3"><button class="study-btn" :disabled="panelBusy||!!editingMistake?.deleted_at" @click="fileInput?.click()"><Upload :size="14" />{{ t(uploading?'study.uploading':'study.photo') }}</button><button v-if="imagePath" class="study-btn" :disabled="panelBusy||!!editingMistake?.deleted_at" :aria-label="t('study.removePhoto')" @click="imagePath='';photo='' "><X :size="14" /></button><span class="study-hint">{{ t('study.photoHint') }}</span></div>
       <img v-if="photo" :src="photo" :alt="t('study.photoQuestion')" class="max-h-[320px] w-full object-contain rounded-xl border border-border mb-3" referrerpolicy="no-referrer" @error="imageError=t('study.imageFailed')" />
       <p v-if="imageError" role="alert" class="text-xs text-destructive mb-3">{{ imageError }}</p>
-      <details class="mb-4"><summary class="text-xs text-muted-foreground cursor-pointer mb-3">{{ t('study.solutionDetails') }}</summary><label class="study-field"><span>{{ t('study.solution') }}</span><textarea v-model="solution" class="study-input" maxlength="4000" :readonly="!!editingMistake?.deleted_at" /></label><label class="study-field"><span>{{ t('study.reference') }}</span><input v-model="source" class="study-input" maxlength="300" :readonly="!!editingMistake?.deleted_at" /></label><CustomSelect v-model="reason" :options="reasonOptions" :disabled="!!editingMistake?.deleted_at" :aria-label="t('study.reasonLabel')" /></details>
-      <p v-if="mistakeDirty" class="study-hint mb-2">{{ t('study.saveBeforeReview') }}</p>
-      <div v-if="editingMistake&&!editingMistake.deleted_at" class="flex gap-2"><button class="study-btn flex-1" :disabled="panelBusy||mistakeDirty" @click="review(selectedSubject,selectedTopic,false,editingMistake)">{{ t('study.again') }}</button><button class="study-btn flex-1" :disabled="panelBusy||mistakeDirty" @click="review(selectedSubject,selectedTopic,true,editingMistake)">{{ t('study.solved') }}</button></div>
+      <details class="mb-4"><summary class="text-xs text-muted-foreground cursor-pointer mb-3">{{ t('study.solutionDetails') }}</summary><label class="study-field"><span>{{ t('study.solution') }}</span><textarea v-model="solution" class="study-input" maxlength="4000" :readonly="!!editingMistake?.deleted_at" /></label><label class="study-field"><span>{{ t('study.reference') }}</span><input v-model="source" class="study-input" maxlength="300" :readonly="!!editingMistake?.deleted_at" /></label><CustomSelect popover v-model="reason" :options="reasonOptions" :disabled="!!editingMistake?.deleted_at" :aria-label="t('study.reasonLabel')" /></details>
       <p class="study-hint mt-3">{{ t('study.personal') }}</p>
      </div>
     </template>
@@ -215,6 +212,6 @@ async function removeMistake(m:Mistake,restore=false){
 </template>
 <style scoped>
 .study-template-action{height:40px;flex-shrink:0}.study-topic-list{min-width:0}
-.study-list-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid hsl(var(--border)/.5);border-radius:10px}.study-list-modes button{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 9px;border-radius:7px;font-size:11px;color:hsl(var(--muted-foreground))}.study-list-modes button[aria-pressed='true']{background:hsl(var(--primary)/.08);color:hsl(var(--primary))}.study-summary{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px 16px;margin-bottom:12px;padding-inline:12px;font-size:11px;color:hsl(var(--muted-foreground));font-variant-numeric:tabular-nums}
+.study-list-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid hsl(var(--border)/.5);border-radius:10px}.study-list-modes button{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 9px;border-radius:7px;font-size:11px;color:hsl(var(--muted-foreground))}.study-list-modes button[aria-pressed='true']{background:hsl(var(--primary)/.08);color:hsl(var(--primary))}.study-summary{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:hsl(var(--muted-foreground));font-variant-numeric:tabular-nums}
 .study-review-row{display:flex;align-items:center;gap:8px;padding:12px 15px;border-radius:14px;background:hsl(var(--card))}.study-template-group{border:1px solid hsl(var(--border)/.7);border-radius:12px;margin-top:8px;padding:8px 12px}.study-template-group summary{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:3px 0}.study-template-group[open] summary{margin-bottom:8px}.learning-workspace input[type=checkbox]{accent-color:hsl(var(--primary))}@media(max-width:520px){.study-review-row{flex-wrap:wrap}.study-review-row>button:first-child{flex-basis:100%}}
 </style>

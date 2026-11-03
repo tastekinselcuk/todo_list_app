@@ -1,10 +1,7 @@
 <template>
   <div class="workspace-content space-y-4" style="--workspace-default-max: 72rem">
     <div class="workspace-toolbar space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
-        <div class="flex items-center gap-1" role="group" :aria-label="t('finance.title')">
-          <button v-for="view in ['transaction','position'] as const" :key="view" type="button" :aria-pressed="tab===view" :disabled="store.saving" class="inline-flex h-8 items-center gap-1.5 rounded-xl px-3 text-xs font-medium transition-colors" :class="tab===view?'bg-background text-foreground shadow-sm ring-1 ring-border/50':'text-muted-foreground hover:bg-background/40 hover:text-foreground'" @click="changeTab(view)"><component :is="view==='transaction'?ArrowLeftRight:TrendingUp" class="h-3.5 w-3.5" />{{ t(view==='transaction'?'finance.cashflow':'finance.positions') }}</button>
-        </div>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-b border-border/50 pb-2.5">
         <div class="flex max-w-full flex-wrap items-center gap-1.5">
           <button v-if="tab==='transaction'" type="button" class="finance-icon" :disabled="store.saving || store.month==='1900-01'" :aria-label="t('finance.previousMonth')" @click="shiftMonth(-1)"><ChevronLeft class="h-4 w-4" /></button>
           <input v-if="tab==='transaction'" v-model="store.month" type="month" min="1900-01" max="2100-12" :aria-label="t('finance.month')" class="finance-input !h-8 !w-36 !text-xs" :disabled="store.saving" />
@@ -76,7 +73,7 @@
 import { useModuleLoad } from '@/lib/workspaceScope'
 import { computed, inject, ref, watch, nextTick, onDeactivated } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, X, TrendingUp, Pause, Pencil, Play, RefreshCw, Repeat2, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight, X, TrendingUp, Pause, Pencil, Play, RefreshCw, Repeat2, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import FinanceEntryForm from './FinanceEntryForm.vue'
 import FinanceBudgets from './FinanceBudgets.vue'

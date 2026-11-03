@@ -1,7 +1,7 @@
 <template>
  <dialog ref="dialog" class="study-dialog" :class="{'is-wide':wide,'is-workspace':workspace,'note-edit-dialog':workspace}" :aria-labelledby="titleId" @cancel.prevent="dismiss" @dblclick="backdrop">
   <header><div class="study-dialog-heading"><h3 :id="titleId" :class="{'sr-only':Boolean($slots.title)}">{{ title }}</h3><slot name="title" /></div><button type="button" :disabled="busy" :aria-label="t('study.close')" @click="dismiss"><X :size="18" /></button></header>
-  <div class="study-dialog-body"><slot /></div>
+  <div class="study-dialog-body" :class="{'is-contained':contained}"><slot /></div>
   <footer v-if="$slots.footer"><slot name="footer" /></footer>
  </dialog>
 </template>
@@ -10,7 +10,7 @@ import { onMounted,onBeforeUnmount,nextTick,ref,watch } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
-const props=defineProps<{title:string;busy?:boolean;wide?:boolean;workspace?:boolean}>(),emit=defineEmits<{close:[]}>(),{t}=useI18n()
+const props=defineProps<{title:string;busy?:boolean;wide?:boolean;workspace?:boolean;contained?:boolean}>(),emit=defineEmits<{close:[]}>(),{t}=useI18n()
 const dialog=ref<HTMLDialogElement>(),titleId=`study-${crypto.randomUUID()}`
 let overflow='',rootOverflow='',previous:HTMLElement|null=null
 function dismiss(){if(!props.busy)emit('close')}
@@ -27,6 +27,7 @@ onBeforeUnmount(()=>{dialog.value?.close();document.body.style.overflow=overflow
 .study-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid hsl(var(--border)/.6)}.study-dialog h3{font-size:15px;font-weight:550;line-height:1.5;overflow-wrap:anywhere}.study-dialog header button{padding:6px;border-radius:8px;color:hsl(var(--muted-foreground));flex-shrink:0}.study-dialog header button:hover{background:hsl(var(--muted))}
 .study-dialog.is-workspace>.study-dialog-body{flex:1}.study-dialog>header,.study-dialog>footer{flex-shrink:0}
 .study-dialog-body{padding:20px 22px;overflow-y:auto;overscroll-behavior:contain;min-height:0}.study-dialog footer{padding:14px 22px;border-top:1px solid hsl(var(--border)/.6);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+.study-dialog-body.is-contained{display:flex;flex-direction:column;overflow:hidden;padding:0}
 .study-field{display:block;font-size:12px;color:hsl(var(--muted-foreground));margin-bottom:14px}.study-field>span{display:block;margin-bottom:6px}.study-input{width:100%;min-height:40px;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:11px;background:hsl(var(--background)/.5);color:hsl(var(--foreground));font-size:13px;outline:none}.study-input:focus{border-color:hsl(var(--primary)/.45);box-shadow:0 0 0 2px hsl(var(--primary)/.08)}textarea.study-input{resize:vertical;min-height:90px;line-height:1.6}.study-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;min-height:36px;border:1px solid hsl(var(--border));border-radius:10px;font-size:12px;font-weight:500;color:hsl(var(--foreground));transition:background 150ms}.study-btn:hover{background:hsl(var(--muted)/.7)}.study-btn.is-primary{background:hsl(var(--primary));border-color:transparent;color:hsl(var(--primary-foreground))}.study-btn:disabled{opacity:.45;cursor:default}.study-hint{font-size:11px;line-height:1.6;color:hsl(var(--muted-foreground))}.study-empty{padding:28px 12px;text-align:center;font-size:13px;color:hsl(var(--muted-foreground))}
 @keyframes study-dialog-in{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.study-dialog[open]{animation:none}}
 </style>

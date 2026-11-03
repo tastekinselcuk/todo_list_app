@@ -21,10 +21,10 @@ function fixture(){
  deps['@/components/ui/CustomSelect.vue']={default:vue.defineComponent({props:['modelValue','options','disabled','ariaLabel','actionLabel'],emits:['update:modelValue','action'],setup:(props,{emit})=>()=>vue.h('span',[vue.h('select',{'aria-label':props.ariaLabel,value:props.modelValue,disabled:props.disabled,onChange:event=>emit('update:modelValue',event.target.value)},props.options.map(option=>vue.h('option',{value:option.value},option.label))),props.actionLabel?vue.h('button',{type:'button',onClick:()=>emit('action')},props.actionLabel):null])})}
  const compile=name=>evaluate(compileScript(parse(fs.readFileSync(`src/features/finance/components/${name}.vue`,'utf8')).descriptor,{id:name,inlineTemplate:true}).content).default
  for(const name of ['FinanceEntryForm','FinanceBudgets','FinanceTransactions'])deps[`./${name}.vue`]={default:compile(name)}
- const app=renderer.createApp(compile('FinanceTracker'));app.mount(doc.querySelector('main'))
+ const navigation=vue.ref(null),app=renderer.createApp(compile('FinanceTracker'));app.provide(deps['@/lib/workspaceNavigation'].workspaceNavigationKey,navigation);app.mount(doc.querySelector('main'))
  const flush=async()=>{await vue.nextTick();await new Promise(setImmediate);await vue.nextTick()}
  function input(element,value){element.value=value;element.dispatchEvent(new dom.window.Event('input',{bubbles:true}))}
- return {doc,dom,store,actions,flush,input,t,close(){app.unmount();dom.window.close()}}
+ return {doc,dom,store,actions,flush,input,t,navigation,close(){app.unmount();dom.window.close()}}
 }
 test('budget UI shows overspend, filters transactions and preserves zero as an explicit limit',async()=>{
  const f=fixture();try{
@@ -53,5 +53,18 @@ test('editing opens an accessible dialog and saves the category without modifyin
   assert.equal(write[1],'transaction');assert.equal(write[2],'update');assert.equal(write[3],'one');assert.equal(write[4].category_id,'snacks');assert.equal(write[4].amount,1300.25)
   assert.equal(dialog.open,false)
   assert.equal(f.doc.querySelector('main form input[aria-label="Açıklama"]').value,'Unfinished note')
+ }finally{f.close()}
+})
+
+test('finance relies on the upper workspace tabs and still receives investment and cashflow navigation',async()=>{
+ const f=fixture();try{
+  const toolbar=f.doc.querySelector('.workspace-toolbar')
+  assert.equal(toolbar.querySelector('[role="group"]'),null,'there is no second copy of the cashflow and investment tabs')
+  assert.ok(toolbar.querySelector('input[type="month"]'))
+  f.navigation.value={module:'finance',view:'position',sequence:1};await f.flush()
+  assert.equal(toolbar.querySelector('input[type="month"]'),null);assert.ok(f.doc.body.textContent.includes(f.t('finance.emptyPositions')))
+  assert.equal(toolbar.querySelector('[role="group"]'),null)
+  f.navigation.value={module:'finance',view:'transaction',sequence:2};await f.flush()
+  assert.ok(toolbar.querySelector('input[type="month"]'));assert.ok(f.doc.querySelector('select[aria-label="'+f.t('finance.category')+'"]'))
  }finally{f.close()}
 })

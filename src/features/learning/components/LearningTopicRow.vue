@@ -6,7 +6,7 @@
    <div class="study-topic-status" role="group" :aria-label="t('study.statusFor',{name:topic.title})"><button v-for="item in statuses" :key="item.value" type="button" :disabled="busy" :aria-pressed="personal.status===item.value" :aria-label="t('study.status.'+item.value)" :title="t('study.status.'+item.value)" @click="$emit('status',item.value)"><component :is="item.icon" :size="14" :stroke-width="1.6" /></button></div>
    <button v-if="canWrite" type="button" class="study-topic-remove" :disabled="busy" :aria-label="t('study.deleteTopic')" :title="t('study.deleteTopic')" @click="$emit('remove')"><Trash2 :size="14" /></button>
   </div>
-  <LearningTopicDetails :subject-id="subject.id" :topic="topic" :busy="busy" compact @link="$emit('link',$event)" @plan="$emit('plan')" @mistake="$emit('mistake')" @review="$emit('review',$event)" />
+  <LearningTopicDetails :subject-id="subject.id" :topic="topic" :busy="busy" compact @link="$emit('link',$event)" @plan="$emit('plan')" @mistake="$emit('mistake')" />
  </article>
 </template>
 <script setup lang="ts">
@@ -18,7 +18,7 @@ import LearningTopicDetails from './LearningTopicDetails.vue'
 import { useLearningStore,type Subject,type Topic,type StudyStatus } from '../stores/learning'
 import { topicNameLimit } from '../lib/study'
 const props=defineProps<{subject:Subject;topic:Topic;canWrite:boolean;busy:boolean;showSubject?:boolean;saveTitle:(title:string,version?:number)=>Promise<boolean>}>()
-defineEmits<{status:[status:StudyStatus];remove:[];link:[kind:'note'|'deck'|'focus'];plan:[];mistake:[];review:[correct:boolean]}>()
+defineEmits<{status:[status:StudyStatus];remove:[];link:[kind:'note'|'deck'|'focus'];plan:[];mistake:[]}>()
 const {t}=useI18n(),store=useLearningStore(),personal=computed(()=>store.state(props.subject.id,props.topic.id))
 const statuses=[{value:'todo' as const,icon:Circle},{value:'doing' as const,icon:CircleDot},{value:'done' as const,icon:CheckCircle2}]
 </script>

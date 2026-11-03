@@ -1,14 +1,14 @@
 <template>
   <section class="workspace-content space-y-4" style="--workspace-default-max:76rem">
-    <div v-if="view!=='calendar'" class="workspace-toolbar space-y-3">
-      <form class="flex items-center gap-2" @submit.prevent="createTask">
-        <input v-model="draftTitle" maxlength="180" required class="finance-input !h-10 flex-1" :placeholder="t('tasks.placeholder')" :aria-label="t('tasks.title')" :disabled="busy||!store.ready||activeProjectArchived" />
-        <button type="submit" class="workspace-add-button" :disabled="busy||!store.ready||!draftTitle.trim()||activeProjectArchived"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><span v-else>{{ t('tasks.add') }}</span></button>
-      </form>
-      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
+    <div class="workspace-toolbar space-y-3">
+      <div class="task-view-navigation flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
         <div class="flex items-center gap-0.5 rounded-xl bg-muted/35 p-0.5" role="group" :aria-label="t('tasks.view')"><button v-for="item in views" :key="item.id" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :class="view===item.id?'bg-background text-foreground shadow-sm ring-1 ring-border/50':'text-muted-foreground hover:bg-background/40 hover:text-foreground'" :aria-pressed="view===item.id" :disabled="busy" @click="view=item.id"><component :is="item.icon" class="h-3.5 w-3.5" />{{ item.label }}</button></div>
         <div class="flex min-w-0 items-center gap-1.5"><CustomSelect :model-value="store.project" :options="projectOptions" class="w-40 min-w-0 sm:w-48" :disabled="busy||store.loading" size="sm" :aria-label="t('tasks.project')" @update:model-value="store.selectProject" /><button type="button" class="finance-icon" :aria-expanded="projectsOpen" :aria-label="t('tasks.manageProjects')" :title="t('tasks.manageProjects')" @click="projectsOpen=!projectsOpen"><FolderCog class="h-4 w-4" /></button><button type="button" class="finance-icon" :disabled="store.loading||store.calendarLoading||busy" :aria-label="t('tasks.refresh')" :title="t('tasks.refresh')" @click="refresh"><RefreshCw class="h-3.5 w-3.5" :class="(store.loading||store.calendarLoading)&&'animate-spin motion-reduce:animate-none'" /></button></div>
       </div>
+      <form v-if="view!=='calendar'" class="flex items-center gap-2" @submit.prevent="createTask">
+        <input v-model="draftTitle" maxlength="180" required class="finance-input !h-10 flex-1" :placeholder="t('tasks.placeholder')" :aria-label="t('tasks.title')" :disabled="busy||!store.ready||activeProjectArchived" />
+        <button type="submit" class="workspace-add-button" :disabled="busy||!store.ready||!draftTitle.trim()||activeProjectArchived"><Loader2 v-if="store.saving" class="h-4 w-4 animate-spin motion-reduce:animate-none" /><span v-else>{{ t('tasks.add') }}</span></button>
+      </form>
     </div>
 
     <div v-if="projectsOpen" class="workspace-card space-y-3 bg-card/20 p-3">
@@ -31,12 +31,6 @@
       <template v-else>
         <p v-if="store.calendarError" role="alert" class="text-xs text-muted-foreground">{{ t(`tasks.${store.calendarError}`) }}</p>
         <WorkCalendar v-model:task-draft="draftTitle" :can-create-task="store.ready&&!activeProjectArchived" :blocks="store.blocks" :tasks="store.tasks" :deadlines="store.deadlines" :busy="busy" :loading="store.calendarLoading" :failed="!!store.calendarError" :paging="store.paging" :has-more="store.hasMore" :save-move="moveBlock" @range="rangeChanged" @create="createBlock" @edit="editBlock" @task="openTask" @schedule="schedule" @drop-task="dropSchedule" @toggle-task="toggleCalendarTask" @add-task="createTask" @more="store.load(true)">
-          <template #toolbar>
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
-              <div class="flex items-center gap-0.5 rounded-xl bg-muted/35 p-0.5" role="group" :aria-label="t('tasks.view')"><button v-for="item in views" :key="item.id" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :class="view===item.id?'bg-background text-foreground shadow-sm ring-1 ring-border/50':'text-muted-foreground hover:bg-background/40 hover:text-foreground'" :aria-pressed="view===item.id" :disabled="busy" @click="view=item.id"><component :is="item.icon" class="h-3.5 w-3.5" />{{ item.label }}</button></div>
-              <div class="flex min-w-0 items-center gap-1.5"><CustomSelect :model-value="store.project" :options="projectOptions" class="w-36 min-w-0 sm:w-44" :disabled="busy||store.loading" size="sm" :aria-label="t('tasks.project')" @update:model-value="store.selectProject" /><button type="button" class="finance-icon" :aria-expanded="projectsOpen" :aria-label="t('tasks.manageProjects')" :title="t('tasks.manageProjects')" @click="projectsOpen=!projectsOpen"><FolderCog class="h-4 w-4" /></button><button type="button" class="finance-icon" :disabled="store.loading||store.calendarLoading||busy" :aria-label="t('tasks.refresh')" :title="t('tasks.refresh')" @click="refresh"><RefreshCw class="h-3.5 w-3.5" :class="(store.loading||store.calendarLoading)&&'animate-spin motion-reduce:animate-none'" /></button></div>
-            </div>
-          </template>
         </WorkCalendar>
       </template>
       <button v-if="view!=='calendar'&&store.hasMore" type="button" class="w-full rounded-xl border border-border/60 py-2 text-xs text-muted-foreground hover:bg-muted/40 disabled:opacity-40" :disabled="store.loading||store.paging||busy" @click="store.load(true)">{{ t('tasks.more') }}</button>
