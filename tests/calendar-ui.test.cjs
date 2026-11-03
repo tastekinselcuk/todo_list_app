@@ -153,7 +153,7 @@ function calendarFixture(overrides = {}, stored = {}, globals = {}) {
   }
   const Calendar = component('src/features/tasks/components/WorkCalendar.vue', {
     '@/lib/workspaceScope': { useWorkspaceDraft(key, initial) { if (!drafts.has(key)) drafts.set(key, vue.ref(key in stored ? stored[key] : initial)); return drafts.get(key) } },
-    '@fullcalendar/vue3': { default: {} },
+    '@fullcalendar/vue3': { default: {} },'./ExternalCalendars.vue':{},
     '@fullcalendar/daygrid': { default: {} },
     '@fullcalendar/timegrid': { default: {} },
     '@fullcalendar/list': { default: {} },
@@ -478,4 +478,18 @@ test('calendar planning panel creates and disposes its external draggable as the
   await vue.nextTick()
   assert.equal(f.dragInstances.length, 2)
   assert.equal(f.dragInstances[1].destroyed, false)
+})
+
+
+test('Outlook overlays stay read-only, preserve all-day boundaries and open their own details',async()=>{
+ const f=calendarFixture();try{
+  f.range('2026-11-01T00:00:00Z','2026-12-01T00:00:00Z');f.state.chooseDay(new Date('2026-11-04T12:00:00'))
+  const external={id:'outlook:one',source_id:'source',calendar_name:'Work',title:'Meeting',private:false,color:'#3388FF',start:'2026-11-04T09:00:00Z',end:'2026-11-04T10:00:00Z',allDay:false,location:'',url:null},allDay={...external,id:'outlook:day',allDay:true,start:'2026-11-04',end:'2026-11-05'}
+  f.state.externalEvents.value=[external,allDay];assert.equal(f.state.dayExternal.value.length,2)
+  const event=f.state.events.value.find(row=>row.id===external.id);assert.equal(event.editable,false);assert.equal(event.startEditable,false);assert.equal(event.durationEditable,false);assert.equal(f.state.options.value.allDaySlot,true)
+  let opened;f.state.externalCalendar.value={openEvent(value){opened=value}}
+  f.state.options.value.eventClick({event:{start:new Date(external.start),extendedProps:{external}}});assert.equal(opened.id,external.id);assert.equal(f.emitted.length,1,'only the initial range report is emitted; no local editor opens')
+  let reverted=0;await f.state.options.value.eventDrop({event:{start:new Date(external.start),end:new Date(external.end),extendedProps:{external}},revert(){reverted++}});assert.equal(reverted,1);assert.equal(f.moves.length,0)
+  f.state.chooseDay(new Date('2026-11-05T12:00:00'));assert.equal(f.state.dayExternal.value.length,0,'all-day end dates are exclusive')
+ }finally{f.stop()}
 })

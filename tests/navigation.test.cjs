@@ -9,7 +9,7 @@ const vue = require('vue')
 function load(source, dependencies = {}, globals = {}) {
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
   const exports = {}
-  vm.runInNewContext(code, { exports, require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (['@/lib/workspaceTrash','./workspaceTrash'].includes(name) ? load(fs.readFileSync('src/lib/workspaceTrash.ts','utf8'), {'./supabase':dependencies['./supabase']||dependencies['@/lib/supabase']||{supabase:{}}}, globals) : null) || (name === '@/features/finance/lib/finance' ? load(fs.readFileSync('src/features/finance/lib/finance.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), Date, console, ...globals })
+  vm.runInNewContext(code, { exports, require: name => dependencies[name] || (name === '@/features/tasks/lib/connectedCalendars' ? load(fs.readFileSync('src/features/tasks/lib/connectedCalendars.ts','utf8'),{vue},globals) : null) || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (['@/lib/workspaceTrash','./workspaceTrash'].includes(name) ? load(fs.readFileSync('src/lib/workspaceTrash.ts','utf8'), {'./supabase':dependencies['./supabase']||dependencies['@/lib/supabase']||{supabase:{}}}, globals) : null) || (name === '@/features/finance/lib/finance' ? load(fs.readFileSync('src/features/finance/lib/finance.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || (name === '@/lib/storage' ? load(fs.readFileSync('src/lib/storage.ts', 'utf8'), {}, globals) : name === '@/lib/moduleCatalog' ? load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'), {}, globals) : require(name)), Date, console, ...globals })
   return exports
 }
 const scroll = load(fs.readFileSync('src/lib/navigationScroll.ts', 'utf8'))
@@ -869,4 +869,13 @@ test('settings renders preferences, account, workspaces and module controls on t
   assert.ok(h.find(node=>node.props.role==='switch'))
   assert.equal(h.find(node=>node.props['data-workspace-rail']!==undefined),undefined)
  }finally{app.unmount()}
+})
+
+
+test('an Outlook connection return opens the calendar without replacing application authentication',async()=>{
+ const h=harness(),mounts=[],replaced=[],messages=[];h.enabled.value=['tasks'];h.globals.URL=URL;h.window.location={href:'https://app.test/?calendar_connection=connected'};h.window.history={state:null,replaceState(_state,_title,url){replaced.push(url)}}
+ h.dependencies['@/stores/ui']={useUIStore:()=>({clearUndoToasts(){},addToast:(...args)=>messages.push(args)})}
+ h.dependencies['@/views/WorkspaceTabs.vue']={default:{props:['initialTab','initialView'],setup(props){mounts.push({tab:props.initialTab,view:props.initialView});return()=>vue.h('div','Calendar')}}}
+ const app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key
+ try{app.mount(h.root);await settle();assert.equal(mounts[0].tab,'tasks');assert.equal(mounts[0].view,'calendar');assert.deepEqual(replaced,['https://app.test/']);assert.deepEqual(messages[0],['connectedCalendars.return.connected','success'])}finally{app.unmount()}
 })

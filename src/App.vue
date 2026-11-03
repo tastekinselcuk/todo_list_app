@@ -89,6 +89,7 @@ import { usePomodoroStore } from '@/features/pomodoro/stores/pomodoro'
 import WorkspaceCustomizer from '@/views/WorkspaceCustomizer.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ConfirmModal from '@/components/ui/ConfirmModal.vue'
+import { calendarReturn } from '@/features/tasks/lib/connectedCalendars'
 
 const authStore = useAuthStore()
 const initializingAuth = ref(true)
@@ -104,11 +105,13 @@ watch(() => `${authStore.user?.id || ''}:${authStore.sessionPersistent}`, () => 
 })
 
 const isNavbarExpanded = computed({ get: () => settingsStore.isPomodoroDocked, set: value => { settingsStore.isPomodoroDocked = value } })
+const calendarConnectionResult = typeof window !== 'undefined' && window.location?.href ? calendarReturn(window.location.href) : null
+let pendingCalendarReturn=Boolean(calendarConnectionResult)
 const currentView = ref<'workspace' | 'analytics' | 'settings'>('workspace')
 const enabledModules = computed<string[]>(() => moduleCatalog.filter(module => settingsStore.isModuleActive(module.id)).map(module => module.id))
 const workspaceTabs = ref<InstanceType<typeof WorkspaceTabs>>()
 const pendingWorkspaceAction = ref<'search' | 'trash' | null>(null)
-const currentWorkspaceModule = ref('plans')
+const currentWorkspaceModule = ref(calendarConnectionResult?'tasks':'plans')
 const currentWorkspaceView = ref<string>()
 function rememberWorkspaceModule(module:string){
   if(currentWorkspaceModule.value!==module){currentWorkspaceView.value=undefined;targetWorkspaceView.value=undefined}
@@ -124,8 +127,8 @@ function openFinanceAnalysis(month?:string){navigate('analytics');analyticsFinan
 const hasActiveFocus = computed(() => focusTimer.canReset || focusTimer.starting || focusTimer.clearing)
 const showTimerCard = computed(() => currentView.value === 'workspace' && settingsStore.isModuleActive('pomodoro') && ['notes','learning'].includes(workspaceSectionFor(currentWorkspaceModule.value) || ''))
 const isTimerDocked = computed(() => (isNavbarExpanded.value && settingsStore.isModuleActive('pomodoro')) || (hasActiveFocus.value && !showTimerCard.value))
-const targetWorkspaceTab = ref<string | undefined>()
-const targetWorkspaceView = ref<string>()
+const targetWorkspaceTab = ref<string | undefined>(calendarConnectionResult?'tasks':undefined)
+const targetWorkspaceView = ref<string | undefined>(calendarConnectionResult?'calendar':undefined)
 const workspaceNavigationRequest = ref(0)
 const accountFocusRequest = ref(0)
 const workspaceFocusRequest = ref(0)
@@ -214,6 +217,10 @@ async function openFocusTask(wid: string) {
 }
 
 onMounted(async () => {
+  if(calendarConnectionResult){
+    const url=new URL(window.location.href);url.searchParams.delete('calendar_connection');window.history.replaceState(window.history.state,'',url.href)
+    uiStore.addToast(t('connectedCalendars.return.'+calendarConnectionResult),calendarConnectionResult==='connected'?'success':'info')
+  }
   window.addEventListener('scroll', handleScroll, { passive: true })
   window.addEventListener('keydown', handleNavigationKey)
   window.addEventListener('sharing-conflict', handleSharingConflict)
@@ -242,7 +249,7 @@ watch(() => authStore.user?.id, async (id, previous) => {
   pendingWorkspaceAction.value = null
   targetWorkspaceTab.value = undefined
   targetWorkspaceView.value = undefined;currentWorkspaceView.value=undefined
-  if (id) { discardStoredInputDrafts(id);await workspaces.load() }
+  if (id) { discardStoredInputDrafts(id);await workspaces.load();if(pendingCalendarReturn&&authStore.user?.id===id){pendingCalendarReturn=false;goToWorkspace('tasks')} }
 }, { immediate: true, flush: 'sync' })
 watch(() => workspaces.activeId, (id,previous) => {
   pendingWorkspaceAction.value = null
