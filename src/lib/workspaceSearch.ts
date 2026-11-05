@@ -1,6 +1,6 @@
 import { moduleCatalog, type ModuleId } from './moduleCatalog'
 
-export type SearchModule = Exclude<ModuleId, 'secure' | 'finance'>
+export type SearchModule = Exclude<ModuleId, 'secure' | 'finance' | 'quick' | 'pomodoro'>
 export interface SearchHit {
   module: SearchModule
   record_id: string
@@ -10,10 +10,10 @@ export interface SearchHit {
   meta: { period?: string; date?: string }
 }
 export interface SearchGroup { module: SearchModule; total: number; items: SearchHit[] }
-const safeModules = new Set<string>(moduleCatalog.filter(m => m.id !== 'secure' && m.id !== 'finance').map(m => m.id))
+const safeModules = new Set<string>(moduleCatalog.filter(m => m.id !== 'secure' && m.id !== 'finance' && m.id !== 'quick' && m.id !== 'pomodoro').map(m => m.id))
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export function workspaceSearchOptions(enabled:readonly string[]){
-  return moduleCatalog.filter(module=>enabled.includes(module.id)).map(module=>({value:module.id,label:module.id==='learning'?'study.views.topics':module.id==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module.id}Name`,disabled:!safeModules.has(module.id)}))
+  return moduleCatalog.filter(module=>enabled.includes(module.id)&&module.id!=='quick'&&module.id!=='pomodoro').map(module=>({value:module.id,label:module.id==='learning'?'study.views.topics':`workspace.modules.${module.id}Name`,disabled:!safeModules.has(module.id)}))
 }
 export const searchHitKey = (hit: SearchHit) => `${hit.module}:${hit.record_id}:${hit.child_id || ''}`
 

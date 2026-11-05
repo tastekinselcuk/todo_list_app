@@ -15,8 +15,8 @@ const query=ref(''),module=ref(''),loading=ref(false),busy=ref(false),pending=re
 const confirm=ref<TrashItem|'all'|null>(null),asOf=ref('')
 let cursor:{time:string;key:string}|null=null,generation=0,disposed=false,debounce:ReturnType<typeof setTimeout>|undefined
 let previousFocus:HTMLElement|null=null,confirmFocus:HTMLElement|null=null,scrollState:{body:string;root:string;gutter:string}|undefined
-const moduleName=(id:string)=>t(id==='pomodoro'?'pomoNotes.tab':`workspace.modules.${id}Name`)
-const options=computed(()=>[{value:'',label:t('trash.all')},...trashModules.map(id=>({value:id,label:moduleName(id)}))])
+const moduleName=(id:string)=>t(`workspace.modules.${id==='quick'?'plans':id}Name`)
+const options=computed(()=>[{value:'',label:t('trash.all')},...trashModules.filter(id=>id!=='quick'&&id!=='pomodoro').map(id=>({value:id,label:moduleName(id)}))])
 const current=()=>!disposed&&spaces.sessionKey===scope
 function daysLeft(date:string){const days=Math.ceil((new Date(date).getTime()+30*86400000-Date.now())/86400000);return days>0?t('trash.daysLeft',{count:days}):t('trash.today')}
 function dateLabel(date:string){return new Date(date).toLocaleString(locale.value,{dateStyle:'medium',timeStyle:'short'})}

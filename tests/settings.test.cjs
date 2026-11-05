@@ -129,7 +129,7 @@ test('module selections show pending and success feedback and cannot submit twic
   await saving
   assert.equal(f.state.saveStatus.value, 'saved')
   assert.equal(f.state.pendingModuleId.value, '')
-  assert.equal(f.state.enabledCount.value, 3)
+  assert.equal(f.state.enabledCount.value, 2)
   f.close()
 })
 

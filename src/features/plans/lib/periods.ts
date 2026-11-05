@@ -1,12 +1,13 @@
-export const periods = ['daily', 'weekly', 'monthly', 'yearly'] as const
+export const periods = ['timeless', 'daily', 'weekly', 'monthly', 'yearly'] as const
 export type Period = typeof periods[number]
 
 export function firstPopulatedPeriod(plans: { period: Period; period_date: string }[], date = new Date(), timezone?: string): Period {
-  return periods.find(period => plans.some(plan => plan.period === period && plan.period_date === periodStart(period, date, timezone))) || 'daily'
+  return periods.find(period => plans.some(plan => plan.period === period && plan.period_date === periodStart(period, date, timezone))) || 'timeless'
 }
 
 // Shared collections use one calendar across all participants. Weeks start on Monday.
 export function periodStart(period: Period, date = new Date(), timezone?: string): string {
+  if(period==='timeless')return '1970-01-01'
   let start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   if (timezone) {
     const parts = new Intl.DateTimeFormat('en', { timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(date)
@@ -20,6 +21,7 @@ export function periodStart(period: Period, date = new Date(), timezone?: string
 }
 
 export function nextPeriod(period: Period, value: string): string {
+  if(period==='timeless')return '1970-01-01'
   const date = new Date(`${value}T12:00:00`)
   if (period === 'daily') date.setDate(date.getDate() + 1)
   if (period === 'weekly') date.setDate(date.getDate() + 7)

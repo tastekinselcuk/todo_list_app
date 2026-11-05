@@ -1,4 +1,5 @@
 export default {
+  planFocus: { legacySharing: 'Timeless notes sharing' },
   connectedCalendars:{title:'Connected calendars',event:'Outlook event',connect:'Connect Outlook account',disconnect:'Disconnect account',refresh:'Refresh calendars and events',reconnect:'Reconnect',selected:'{count} calendars selected',all:'All',clear:'Clear',personal:'Choose your connected calendars to see them together. These connections and events are visible only to you.',setup:'Outlook connections have not been enabled yet. You can connect your account here after setup.',readOnly:'Outlook events are view only. Make changes in Outlook.',openOutlook:'Open in Outlook',allDay:'All day',privateEvent:'Private event',untitled:'Untitled event',return:{connected:'Your Outlook calendar is connected.',cancelled:'Outlook connection cancelled.',failed:'Could not complete the Outlook connection. Please try connecting again.'},errors:{SETUP_REQUIRED:'Calendar connection setup has not been completed.',REAUTH_REQUIRED:'Please reconnect your Outlook account.',RATE_LIMITED:'Too many refresh requests. Wait a little and try again.',TOO_MANY_EVENTS:'Calendar limit reached. Select up to 10 calendars, or use day or week view for busy calendars.',BUSY:'The calendar connection is refreshing. Try again shortly.',AUTH_REQUIRED:'Sign in again to access your calendars.',UNAVAILABLE:'Could not load Outlook calendars. Check your connection and try again.'}},
   activityLibrary:{
     collections:'Collections',newCollection:'New collection',editCollection:'Edit collection',collectionName:'Collection name',collectionPlaceholder:'Create a collection… Favorites, Science books',create:'Create',color:'Collection color',general:'General',
@@ -548,7 +549,7 @@ app: {
       tasksDesc: 'Tasks, projects and calendar time blocks.',
       calendarName: 'Calendar blocks',
       plansName: 'Plans',
-      plansDesc: 'Daily, weekly, monthly and yearly plans, deferral reasons and period history in one place.',
+      plansDesc: 'Timeless, daily, weekly, monthly and yearly plans, focus sessions and period history.',
       dashboardName: 'Dashboard',
       detailedName: 'Detailed Notes',
       detailedDesc: 'Study notes, summaries, images and tables. Organize your content by category.',
@@ -559,7 +560,7 @@ app: {
       codeName: 'Code Library',
       codeDesc: 'Save and organize reusable code snippets with IDE-like syntax highlighting and formatting.',
       pomodoroName: 'Focus Timer',
-      pomodoroDesc: 'Customizable timer, PomoNotes tasks with session goals and personal focus history.',
+      pomodoroDesc: 'Customizable timer, plans with session goals and personal focus history.',
       learningName: 'Learning Tracker',
       learningDesc: 'Organize personal and professional studies into topics. Track progress and study notes.',
       flashcardsName: 'Flashcards',

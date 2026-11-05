@@ -42,7 +42,7 @@ test('opening chooses the shortest populated current period, excluding old recor
   assert.equal(dates.firstPopulatedPeriod(plans, date), 'weekly')
   plans.push({ period: 'daily', period_date: '2026-10-04' })
   assert.equal(dates.firstPopulatedPeriod(plans, date), 'daily')
-  assert.equal(dates.firstPopulatedPeriod([], date), 'daily')
+  assert.equal(dates.firstPopulatedPeriod([], date), 'timeless')
 })
 
 function fixture(rows) {
@@ -74,7 +74,7 @@ function fixture(rows) {
           return { data: { id } }
         }
         if (inserted) {
-          const row = { ...inserted, id: 'new', completed: false, reason: '', history: [], created_at: new Date().toISOString() }
+          const row = { ...inserted, id: 'new', completed: false, history: [], created_at: new Date().toISOString() }
           rows.push(row)
           return { data: structuredClone(row) }
         }
@@ -110,37 +110,37 @@ function fixture(rows) {
 function oldPlan(extra = {}) {
   const current = new Date()
   current.setMonth(current.getMonth() - 2, 1)
-  return { id: 'one', user_id: 'owner', title: 'A plan', period: 'monthly', period_date: dates.periodStart('monthly', current), completed: false, reason: 'Waiting', history: [], created_at: current.toISOString(), ...extra }
+  return { id: 'one', user_id: 'owner', title: 'A plan', period: 'monthly', period_date: dates.periodStart('monthly', current), completed: false, history: [], created_at: current.toISOString(), ...extra }
 }
-test('unfinished plans carry across every elapsed period with reasons intact', async () => {
+test('unfinished plans carry across every elapsed period without deferral state', async () => {
   const { store, calls } = fixture([oldPlan()])
   assert.equal(await store.load(), true)
   const plan = store.plans[0]
   assert.equal(plan.period_date, dates.periodStart('monthly'))
   assert.equal(plan.history.length, 2)
-  assert.ok(plan.history.every(row => row.completed === false && row.reason === 'Waiting'))
-  assert.equal(plan.reason, 'Waiting')
+  assert.ok(plan.history.every(row => row.completed === false && !('reason' in row)))
+  assert.equal('reason' in plan, false)
   assert.equal(calls.length, 1)
   await store.load()
   assert.equal(store.plans[0].history.length, 2)
   assert.equal(calls.length, 1, 'reloading must not duplicate history')
 })
 test('completed plans stay in their original period', async () => {
-  const row = oldPlan({ completed: true, reason: '' })
+  const row = oldPlan({ completed: true })
   const originalDate = row.period_date
   const { store, calls } = fixture([row])
   await store.load()
   assert.equal(store.plans[0].period_date, originalDate)
   assert.equal(calls.length, 0)
 })
-test('completing a deferred plan removes its current reason and preserves history', async () => {
+test('completing a plan preserves its history', async () => {
   const { store } = fixture([oldPlan()])
   await store.load()
   const plan = store.plans[0]
-  assert.equal(await store.update(plan, { completed: true, reason: '' }), true)
+  assert.equal(await store.update(plan, { completed: true }), true)
   assert.equal(plan.completed, true)
-  assert.equal(plan.reason, '')
-  assert.ok(plan.history.every(row => row.reason === 'Waiting'))
+  assert.equal('reason' in plan, false)
+  assert.ok(plan.history.every(row => !('reason' in row)))
 })
 test('quick add records the selected current period and trims the title', async () => {
   const { store } = fixture([])
@@ -164,15 +164,15 @@ test('completion appears immediately while saving and permits other notes to sav
   const currentDate = dates.periodStart('monthly')
   const { store, pauseWrites } = fixture([
     oldPlan({ period_date: currentDate }),
-    oldPlan({ id: 'two', period_date: currentDate, reason: '' }),
+    oldPlan({ id: 'two', period_date: currentDate }),
   ])
   await store.load()
   const release = pauseWrites()
   const first = store.plans[0]
   const second = store.plans[1]
-  const saveFirst = store.update(first, { completed: true, reason: '' })
+  const saveFirst = store.update(first, { completed: true })
   assert.equal(first.completed, true, 'render completion before the server responds')
-  assert.equal(first.reason, '')
+  assert.equal('reason' in first, false)
   assert.equal(store.isSaving(first.id), true)
   assert.equal(store.busy, false, 'saving one note must not lock the whole list')
   const saveSecond = store.update(second, { completed: true })
@@ -184,26 +184,26 @@ test('completion appears immediately while saving and permits other notes to sav
   assert.equal(store.isSaving(first.id), false)
   assert.equal(store.isSaving(second.id), false)
 })
-test('failed optimistic completion restores both status and deferral reason', async () => {
+test('failed optimistic completion restores its saved status', async () => {
   const { store, pauseWrites, fail } = fixture([oldPlan({ period_date: dates.periodStart('monthly') })])
   await store.load()
   const release = pauseWrites()
   const plan = store.plans[0]
-  const save = store.update(plan, { completed: true, reason: '' })
+  const save = store.update(plan, { completed: true })
   assert.equal(plan.completed, true)
-  assert.equal(plan.reason, '')
+  assert.equal('reason' in plan, false)
   fail()
   release()
   assert.equal(await save, false)
   assert.equal(plan.completed, false)
-  assert.equal(plan.reason, 'Waiting')
+  assert.equal('reason' in plan, false)
   assert.equal(store.isSaving(plan.id), false)
   assert.equal(store.error, 'offline')
 })
 
 test('deleting a plan removes only that owned plan and its period history', async () => {
   const { store, rows, deletions } = fixture([
-    oldPlan({ completed: true, history: [{ date: '2025-01-01', completed: false, reason: 'Waiting' }] }),
+    oldPlan({ completed: true, history: [{ date: '2025-01-01', completed: false }] }),
     oldPlan({ id: 'two', completed: true }),
   ])
   await store.load()

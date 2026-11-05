@@ -34,10 +34,10 @@ begin
      '[PLAN TEST] Portfolyoya yeni bir proje ekle', 'monthly', month_start, false, '', '[]'::jsonb),
     ('f84c81bd-ec7f-4df9-a1d0-800000000003', demo_user,
      '[PLAN TEST] Evdeki çalışma alanını düzenle', 'monthly', month_start, false,
-     'Masa teslimatını bekliyorum.',
+     '',
      jsonb_build_array(
-       jsonb_build_object('date', (month_start - interval '2 months')::date::text, 'completed', false, 'reason', 'Ölçüleri netleştirmem gerekiyor.'),
-       jsonb_build_object('date', (month_start - interval '1 month')::date::text, 'completed', false, 'reason', 'Masa teslimatını bekliyorum.')
+       jsonb_build_object('date', (month_start - interval '2 months')::date::text, 'completed', false),
+       jsonb_build_object('date', (month_start - interval '1 month')::date::text, 'completed', false)
      )),
     ('f84c81bd-ec7f-4df9-a1d0-800000000004', demo_user,
      '[PLAN TEST] Geçen ay fotoğrafları arşivle', 'monthly', (month_start - interval '1 month')::date, true, '', '[]'::jsonb),
@@ -52,10 +52,10 @@ begin
      '[PLAN TEST] Yıl sonuna kadar bir yabancı dilde ilerle', 'yearly', year_start, false, '', '[]'::jsonb),
     ('f84c81bd-ec7f-4df9-a1d0-800000000009', demo_user,
      '[PLAN TEST] Uzun vadeli seyahat planını hazırla', 'yearly', year_start, false,
-     'Uygun tarih ve bütçeyi netleştirmeyi bekliyorum.',
+     '',
      jsonb_build_array(
-       jsonb_build_object('date', (year_start - interval '2 years')::date::text, 'completed', false, 'reason', 'Rota henüz belli değildi.'),
-       jsonb_build_object('date', (year_start - interval '1 year')::date::text, 'completed', false, 'reason', 'Uygun tarih ve bütçeyi netleştirmeyi bekliyorum.')
+       jsonb_build_object('date', (year_start - interval '2 years')::date::text, 'completed', false),
+       jsonb_build_object('date', (year_start - interval '1 year')::date::text, 'completed', false)
      )),
     ('f84c81bd-ec7f-4df9-a1d0-800000000010', demo_user,
      '[PLAN TEST] Geçen yıl tamamlanan eğitim programı', 'yearly', (year_start - interval '1 year')::date, true, '', '[]'::jsonb),

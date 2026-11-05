@@ -12,18 +12,18 @@ function load(source, dependencies = {}, globals = {}) {
 }
 const catalog = load(fs.readFileSync('src/lib/moduleCatalog.ts', 'utf8'))
 const search = load(fs.readFileSync('src/lib/workspaceSearch.ts', 'utf8'), { './moduleCatalog': catalog })
-const hit = (module = 'quick', id = '70000000-0000-0000-0000-000000000007') => ({ module, record_id: id, child_id: null, title: 'Toplantı', preview: 'Kısa açıklama', meta: {} })
+const hit = (module = 'plans', id = '70000000-0000-0000-0000-000000000007') => ({ module, record_id: id, child_id: null, title: 'Toplantı', preview: 'Kısa açıklama', meta: {} })
 
 test('client search projection excludes vaults, disabled modules, malformed targets and unknown fields', () => {
   const item = { ...hit(), password: 'secret', meta: { password: 'secret', date: '2026-10-12' } }
   const parsed = search.parseSearchGroups({ groups: [
     { module: 'secure', total: 1, items: [hit('secure')] },
     { module: 'finance', total: 1, items: [hit('finance')] },
-    { module: 'quick', total: 3, items: [item, { ...hit(), record_id: '<script>' }, { ...hit(), child_id: {} }] },
+    { module: 'plans', total: 3, items: [item, { ...hit(), record_id: '<script>' }, { ...hit(), child_id: {} }] },
     { module: 'detailed', total: 1, items: [hit('detailed')] },
-  ] }, ['secure', 'finance', 'quick'])
+  ] }, ['secure', 'finance', 'plans'])
   assert.equal(parsed.length, 1);assert.equal(parsed[0].items.length, 1)
-  assert.equal(parsed[0].module, 'quick');assert.equal(parsed[0].items[0].password, undefined)
+  assert.equal(parsed[0].module, 'plans');assert.equal(parsed[0].items[0].password, undefined)
   assert.equal(parsed[0].items[0].meta.password, undefined)
 })
 
@@ -113,7 +113,7 @@ function componentFixture() {
   }).default
   const host = () => ({ children: [] })
   const renderer = vue.createRenderer({ createElement: host, createText: host, createComment: host, insert(n, p) { p.children.push(n) }, remove() {}, setText() {}, setElementText() {}, patchProp() {}, parentNode() {}, nextSibling() {} })
-  const props = vue.reactive({ enabled: ['quick', 'detailed'] })
+  const props = vue.reactive({ enabled: ['plans', 'detailed'] })
   const app = renderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit: (...args) => emitted.push(args) });return () => vue.h('div') } })
   app.mount(host())
   state.dialog.value = { open: false, showModal() { this.open = true }, close() { this.open = false }, querySelector() { return null } }
@@ -128,17 +128,17 @@ test('search cancels stale queries and scope responses, pages one group and does
     await s.open();s.query.value = 'Toplantı';await settle()
     const first = s.search();s.query.value = 'İş';await settle();const next = s.search()
     assert.equal(f.requests[0].signal.aborted, true)
-    f.requests[1].resolve({ data: { groups: [{ module: 'quick', total: 8, items: [hit()] }] } });await next
+    f.requests[1].resolve({ data: { groups: [{ module: 'plans', total: 8, items: [hit()] }] } });await next
     f.requests[0].resolve({ data: { groups: [{ module: 'detailed', total: 1, items: [hit('detailed')] }] } });await first
-    assert.equal(s.groups.value[0].module, 'quick')
-    const more = s.search('quick');assert.equal(f.requests[2].args.page_offset, 1)
-    f.requests[2].resolve({ data: { groups: [{ module: 'quick', total: 8, items: [hit('quick','80000000-0000-0000-0000-000000000008')] }] } });await more
+    assert.equal(s.groups.value[0].module, 'plans')
+    const more = s.search('plans');assert.equal(f.requests[2].args.page_offset, 1)
+    f.requests[2].resolve({ data: { groups: [{ module: 'plans', total: 8, items: [hit('plans','80000000-0000-0000-0000-000000000008')] }] } });await more
     assert.equal(s.groups.value[0].items.length, 2)
     s.select(s.groups.value[0].items[1]);assert.equal(f.emitted[0][0], 'select');assert.equal(s.groups.value.length, 0)
     await s.open();s.query.value = 'Eski';await settle();const pending = s.search()
     f.workspaces.sessionKey = 'owner:workspace:two';await settle()
     assert.equal(f.requests[3].signal.aborted, true)
-    f.requests[3].resolve({ data: { groups: [{ module: 'quick', total: 1, items: [hit()] }] } });await pending
+    f.requests[3].resolve({ data: { groups: [{ module: 'plans', total: 1, items: [hit()] }] } });await pending
     assert.equal(s.groups.value.length, 0);assert.equal(s.opened.value, false)
   } finally { f.close() }
 })
@@ -146,12 +146,12 @@ test('search cancels stale queries and scope responses, pages one group and does
 test('module selection restricts the RPC and results, preserves paging and discards responses from another tab',async()=>{
  const f=componentFixture(),s=f.state
  try{
-  f.props.enabled=['learning','quick','code','secure','finance'];await settle();await s.open();s.query.value='Topic';await settle()
+  f.props.enabled=['learning','plans','code','secure','finance'];await settle();await s.open();s.query.value='Topic';await settle()
   assert.equal(s.moduleOptions.value.length,6);assert.equal(s.moduleOptions.value.find(option=>option.value==='learning').label,'study.views.topics')
   const all=s.search();s.selectedModule.value='learning';await settle();assert.equal(f.requests[0].signal.aborted,true);assert.equal(s.query.value,'Topic');assert.equal(s.groups.value.length,0)
   const selected=s.search();assert.equal(f.requests[1].args.only_module,'learning');assert.equal(f.requests[1].args.page_offset,0)
-  f.requests[1].resolve({data:{groups:[{module:'learning',total:2,items:[hit('learning')]},{module:'quick',total:1,items:[hit()]}]}});await selected
-  f.requests[0].resolve({data:{groups:[{module:'quick',total:1,items:[hit()]}]}});await all;assert.equal(s.groups.value.length,1);assert.equal(s.groups.value[0].module,'learning')
+  f.requests[1].resolve({data:{groups:[{module:'learning',total:2,items:[hit('learning')]},{module:'plans',total:1,items:[hit()]}]}});await selected
+  f.requests[0].resolve({data:{groups:[{module:'plans',total:1,items:[hit()]}]}});await all;assert.equal(s.groups.value.length,1);assert.equal(s.groups.value[0].module,'learning')
   const next=s.search('learning');assert.equal(f.requests[2].args.page_offset,1);assert.equal(f.requests[2].args.only_module,'learning')
   f.requests[2].resolve({data:{groups:[{module:'learning',total:2,items:[hit('learning','80000000-0000-0000-0000-000000000008')]}]}});await next;assert.equal(s.groups.value[0].items.length,2)
   const pending=s.search();s.selectedModule.value='code';await settle();assert.equal(f.requests[3].signal.aborted,true)
@@ -174,7 +174,7 @@ test('search distinguishes missing database setup from transient errors and rema
 
 test('navigation reveals the specific child in its own tab without clicking or mutating it, then removes the marker', async () => {
   const { JSDOM } = require('jsdom')
-  const dom = new JSDOM('<body><section id="workspace-panel-quick"><article data-search-record="record"></article></section><section id="workspace-panel-flashcards"><article data-search-record="record" data-search-child="card-a"></article><article data-search-record="record" data-search-child="card-b"></article></section></body>')
+  const dom = new JSDOM('<body><section id="workspace-panel-plans"><article data-search-record="record"></article></section><section id="workspace-panel-flashcards"><article data-search-record="record" data-search-child="card-a"></article><article data-search-record="record" data-search-child="card-b"></article></section></body>')
   const timers = new Map();let timer = 0, clicked = 0, prepared = 0, scrolled = 0
   const target = dom.window.document.querySelector('[data-search-child="card-b"]')
   target.addEventListener('click', () => clicked++)
@@ -206,7 +206,7 @@ test('a late destination prepare cannot reveal a previous selection or report an
     document: { getElementById() { assert.fail('stale navigation must not touch the DOM') } },
   })
   const destination = vue.ref({ ...hit(), sequence: 1 })
-  const child = { setup() { nav.useSearchReveal('quick', async (_hit, current) => { await gate;currentAtEnd = current() });return () => vue.h('div') } }
+  const child = { setup() { nav.useSearchReveal('plans', async (_hit, current) => { await gate;currentAtEnd = current() });return () => vue.h('div') } }
   const host = () => ({ children: [] })
   const renderer = vue.createRenderer({ createElement: host, createText: host, createComment: host, insert(n, p) { p.children.push(n) }, remove() {}, setText() {}, setElementText() {}, patchProp() {}, parentNode() {}, nextSibling() {} })
   const app = renderer.createApp({ setup() { vue.provide(nav.searchDestinationKey, destination);vue.provide(nav.searchRevealErrorKey, () => errors++);return () => vue.h(child) } })
@@ -217,7 +217,7 @@ test('a late destination prepare cannot reveal a previous selection or report an
 
 test('search uses the workspace viewport navigator and respects reduced motion', async () => {
   const {JSDOM}=require('jsdom')
-  const dom=new JSDOM('<section id="workspace-panel-quick"><article data-search-record="record"></article></section>')
+  const dom=new JSDOM('<section id="workspace-panel-plans"><article data-search-record="record"></article></section>')
   const card=dom.window.document.querySelector('article'), calls=[], timers=new Map()
   card.scrollIntoView=()=>assert.fail('nested workspace search must use its single document scroll range')
   const nav=load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'),{vue},{
@@ -225,7 +225,7 @@ test('search uses the workspace viewport navigator and respects reduced motion',
     setTimeout:fn=>{timers.set(1,fn);return 1},clearTimeout:id=>timers.delete(id),
   })
   const destination=vue.ref({...hit(),record_id:'record',sequence:1})
-  const child={setup(){nav.useSearchReveal('quick',async()=>{});return()=>vue.h('div')}}
+  const child={setup(){nav.useSearchReveal('plans',async()=>{});return()=>vue.h('div')}}
   const renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})
   const app=renderer.createApp({setup(){
     vue.provide(nav.searchDestinationKey,destination)

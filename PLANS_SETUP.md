@@ -1,24 +1,36 @@
-# Planlar — kurulum ve davranış
+# Planlar — Zamansız notlar ve odak oturumları
 
-Supabase SQL Editor'da `supabase/migrations/plans.sql` dosyasının tamamını çalıştırın. Bu işlem mevcut görev ve hatırlatma tablolarını değiştirmez. Yeni `plans` tablosu ve her kullanıcının yalnızca kendi kayıtlarına erişmesini sağlayan RLS politikası oluşturulur.
+## Mevcut kurulumun güncellenmesi
 
-Uygulamada **Planlar** sekmesini açın. Yeni ve mevcut kullanıcılar için bu modül varsayılan olarak etkinleştirilir; çalışma alanı ayarlarından kapatılabilir. Türkçe metinler için uygulama dilini Türkçe seçin.
+Supabase SQL Editor'da `supabase/migrations/202611060001_timeless_plans_focus.sql` dosyasının **tamamını** çalıştırın. Ardından uygulamayı yenileyin. Bu dosya mevcut çalışma alanı, paylaşım, analiz, odak oturumları, arama ve çöp kutusu kurulumunun üzerine uygulanır. Yeni bir projede önce bu modüllerin önceki migration dosyaları kurulmalıdır.
 
-- Bir metin ve günlük / haftalık / aylık / yıllık dönem seçip Enter'a veya Ekle'ye basın. Kayıt, ekleme gününün içinde bulunduğu döneme yazılır.
-- Sekme açıldığında güncel dönemde kaydı bulunan en kısa vade seçilir. Hiç kayıt yoksa günlük açılır. Tamamlanmış kayıtlar da dolu liste sayılır.
-- Haftalar pazartesi başlar; aylar ve yıllar takvim sınırlarını izler. Tarayıcının yerel saat dilimi kullanılır.
-- Dönem değiştiğinde tamamlanmayan planlar yeni döneme taşınır. Önceki dönemin durumu ve erteleme nedeni geçmişe kaydedilir. Birden fazla dönem boyunca giriş yapılmasa da aradaki dönemler korunur. Taşıma, sekme açılınca veya açık sekmede tarih değişince gerçekleşir.
-- Erteleme nedeni zorunludur. Plan tamamlanınca güncel erteleme listesinden ve nedeninden temizlenir; önceki dönemlerdeki nedenler tarihsel kayıt olarak korunur. Listeye geri al düğmesi yalnızca güncel erteleme nedenini kaldırır.
-- Geçmişi göster anahtarı kullanıcı bazında bu tarayıcıda hatırlanır. Günlük / haftalık / aylık / yıllık sekmelerin her birinde kendi geçmişi dönemlere göre açılır. Geçmiş kayıtlar salt okunurdur.
+Güncelleme tek transaction içinde uygulanır ve tekrar çalıştırılabilir. Uygulama kodunu yüklemek veritabanındaki dönüşümü kendi başına çalıştırmaz.
 
-Planlar Supabase'de tutulur. Veritabanı kurulmadan veya bağlantı başarısızken uygulama başarı göstermeden hata ve tekrar deneme seçeneği sunar. Mevcut Detaylı Notlar modülündeki kayıtlar otomatik olarak dönüştürülmez; o modülde kalır.
+- Kişisel Hızlı Notlar aynı kimlik, metin, tamamlanma durumu, oluşturulma tarihi ve silinme bilgisiyle Planlar → Zamansız'a taşınır. Çöp kutusundaki kayıtlar da korunur; geri alındıklarında Zamansız'da görünür.
+- Paylaşılan eski Hızlı Notlar aynı listede gösterilir, ancak mevcut erişim izinlerini korumak için kaynak koleksiyonları değiştirilmez. Bir koleksiyonun üyeleri diğer koleksiyonun notlarına erişemez. Eski paylaşım Ayarlar'daki “Zamansız notların paylaşımı” bağlantısından yönetilebilir.
+- Hızlı Notlar ve PomoNotes ayrı sekme olarak kaldırılır. Eski PomoNotes listesi yeni Planlar'a aktarılmaz; bu listenin eski paylaşım bağlantıları ve üyelikleri kapatılır. Odak oturumu altyapısı ve geçmiş süreler korunur. Planların kendisi paylaşılabilir; sayaç bağlantıları ve odak kayıtları kişiseldir.
+- Önceden ertelenmiş planlar normal listeye döner. Erteleme eylemi ve geçmişteki erteleme açıklamaları kaldırılır. Eski migration/RPC uyumluluğu için veritabanındaki `reason` sütunu boş olarak kalır; uygulama bu alanı kullanmaz.
 
-Doğrulama: `npm run build` ve `node --test tests/plans.test.cjs`.
+## Planların davranışı
 
-## Geçici örnek veriler
+- Dönem sırası: **Zamansız, Günlük, Haftalık, Aylık, Yıllık**.
+- Zamansız notlar dönem değişiminden etkilenmez. Tamamlanmış olanlar da siz silene kadar bu listede kalır. “Geçmişi göster” burada bulunmaz.
+- Diğer dönemlerde tamamlanmayan işler yeni döneme taşınır; önceki dönemlerin tamamlanma durumu geçmişte korunur. Tamamlanan işler kendi döneminde kalır. Haftalar pazartesi başlar. Paylaşılan koleksiyonun saat dilimi kullanılır.
+- Giriş alanında dönem seçip Enter'a veya Ekle'ye basın. Kayıt sunucuda doğrulanmadan başarı gösterilmez. Yazılmamış taslaklar sekmeden çıkınca temizlenir.
+- Silme mevcut çöp kutusu akışını kullanır. Zamansız notların **aktif listede** süre sınırı yoktur; çöp kutusunun mevcut saklama süresi değişmez.
 
-`supabase/seeds/plans_demo.sql` dosyasının tamamını Supabase SQL Editor'da çalıştırın. Projede tek kullanıcı varsa hesap otomatik seçilir. Birden fazla kullanıcı varsa `SELECT id, email FROM auth.users;` sorgusuyla uygulamadaki hesabınızı bulup dosyanın başındaki `demo_email text := '';` alanına kayıtlı e-postanızı yazın. Hiç kullanıcı yoksa doğru Supabase projesini açtığınızı kontrol edin ve uygulamadan hesap oluşturun. Tarihler İstanbul saat dilimindeki güncel ay ve yıldan hesaplanır. Sorgu 6 aylık ve 6 yıllık örnek ekler; mevcut planları değiştirmez ve tekrar çalıştırıldığında örnekleri çoğaltmaz.
+## Plan üzerinden odaklanma
 
-Planlar sekmesini yeniden açın veya sayfayı yenileyin. **Aylık** ve **Yıllık** sekmelerinde **Geçmişi göster** anahtarını açıp dönem satırlarına tıklayın. Tamamlanan işler eski dönemlerde kalır; eski tamamlanmamış işler güncele taşınıp önceki durumları arşivlenir. Geçmiş erteleme nedenlerini ve güncel Ertelenenler bölümünü de inceleyebilirsiniz. Yalnızca test verisi varsa, güncel aylık ve yıllık listelerin her birinde 4 plan ve 1/4 tamamlanma görürsünüz.
+Odak Zamanlayıcı etkinse tüm Planlar dönemlerindeki notların yanında oynat simgesi bulunur. Simge o plan için odak başlatır; aktif yerel oturumda duraklatır. Başka bir plan üzerinde devam eden oturum varsa seçilen plan sıraya alınır.
 
-Temizlemek için `supabase/seeds/plans_demo_cleanup.sql` dosyasını çalıştırın. Tek kullanıcı otomatik seçilir; birden fazla kullanıcı varsa dosyanın başındaki `demo_email` alanına örnekleri eklerken kullandığınız e-postayı yazın. Bu sorgu yalnızca seçilen hesabın örneklerine ait bilinen 12 kimliği ve onların geçmişini siler. Temizlikten sonra sayfayı yenileyin. Bu iki dosya test amaçlıdır; migrations klasörüne eklenmemiştir.
+İlk bağlantı mevcut sayaç süresini ve **1 oturum** hedefini kullanır. Sonrasında satırdaki `tamamlanan/hedef` göstergesinden süre ve hedef düzenlenebilir. Süre 1–90 dakika, hedef 1–999 oturum olabilir. Bu değerler ve oturum sayıları kişiseldir; paylaşılan planı görüntüleyenler bağımsız odaklanabilir. Hedefe ulaşmak planı kendiliğinden tamamlamaz.
+
+Sayaç mevcut oturum kaydı, cihazlar arası sahiplik ve analiz altyapısını kullanır. İçeride oluşturulan odak kaydı ikinci bir not olarak listelenmez, aramaya veya plan adetlerine eklenmez. Silinen, tamamlanan ya da erişimi kaldırılan bir planla yeni oturum başlatılamaz; önceden kaydedilmiş süreler kaybolmaz.
+
+## Doğrulama
+
+`npm run build`
+
+`node --test tests/plans.test.cjs tests/plans-focus-ui.test.cjs tests/plans-timeless-sql.test.cjs`
+
+SQL testleri veri dönüşümünü, tekrar uygulamayı, paylaşılan koleksiyon izinlerini, çöp kutusunu, aramayı, dönem devrini, kişisel hedefleri, oturum sayımını ve erişim kaldırılmasını kapsar.

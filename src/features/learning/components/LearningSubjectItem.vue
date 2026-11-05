@@ -38,7 +38,7 @@ import { useLearningStore,type Subject,type Topic,type StudyStatus } from '../st
 import { topicNameLimit,validStudyName,mergeStudyOrder } from '../lib/study'
 import { useStudyOrder } from '../lib/useStudyOrder'
 const props=withDefaults(defineProps<{subject:Subject;topics:Topic[];focused?:boolean;filtered?:boolean;canWrite:boolean;disabled:boolean;canReorder:boolean;saveTitle?:(topic:Topic,title:string,version?:number)=>Promise<boolean>;createTopics:(titles:string[])=>Promise<boolean>;saveOrder:(ids:string[],version?:number)=>Promise<boolean>}>(),{focused:false})
-const emit=defineEmits<{manage:[];delete:[];remove:[topic:Topic];status:[topic:Topic,status:StudyStatus];link:[topic:Topic,kind:'note'|'deck'|'focus'];plan:[topic:Topic];mistake:[topic:Topic]}>()
+const emit=defineEmits<{manage:[];delete:[];remove:[topic:Topic];status:[topic:Topic,status:StudyStatus];link:[topic:Topic,kind:'note'|'deck'];plan:[topic:Topic];mistake:[topic:Topic]}>()
 const {t}=useI18n(),store=useLearningStore(),creating=ref(false),bulkMode=ref(false),singleDraft=ref(''),bulkDraft=ref(''),topicInput=ref<HTMLTextAreaElement>()
 onDeactivated(()=>{singleDraft.value='';bulkDraft.value='';bulkMode.value=false})
 const topicDraft=computed({get:()=>bulkMode.value?bulkDraft.value:singleDraft.value,set:value=>{if(bulkMode.value)bulkDraft.value=value;else singleDraft.value=value}})

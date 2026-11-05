@@ -77,7 +77,8 @@ import { useWorkspacesStore } from '@/stores/workspaces'
 import { startWorkspaceReminders } from '@/lib/workspaceReminders'
 import { useSharingStore } from '@/stores/sharing'
 import { workspaceSectionFor } from '@/lib/workspaceSections'
-import { moduleCatalog } from '@/lib/moduleCatalog'
+import { supabase } from '@/lib/supabase'
+import { navigationModules } from '@/lib/moduleCatalog'
 import { discardStoredInputDrafts } from '@/lib/storage'
 import SharingDialog from '@/components/SharingDialog.vue'
 
@@ -108,7 +109,7 @@ const isNavbarExpanded = computed({ get: () => settingsStore.isPomodoroDocked, s
 const calendarConnectionResult = typeof window !== 'undefined' && window.location?.href ? calendarReturn(window.location.href) : null
 let pendingCalendarReturn=Boolean(calendarConnectionResult)
 const currentView = ref<'workspace' | 'analytics' | 'settings'>('workspace')
-const enabledModules = computed<string[]>(() => moduleCatalog.filter(module => settingsStore.isModuleActive(module.id)).map(module => module.id))
+const enabledModules = computed<string[]>(() => navigationModules.filter(module => settingsStore.isModuleActive(module.id)).map(module => module.id))
 const workspaceTabs = ref<InstanceType<typeof WorkspaceTabs>>()
 const pendingWorkspaceAction = ref<'search' | 'trash' | null>(null)
 const currentWorkspaceModule = ref(calendarConnectionResult?'tasks':'plans')
@@ -176,7 +177,7 @@ function navigate(view: 'workspace' | 'analytics' | 'settings') {
   revealNavigation()
   currentView.value = view
 }
-function restoreTimerCard() {isNavbarExpanded.value=false;if(!showTimerCard.value)goToWorkspace('pomodoro')}
+function restoreTimerCard() {isNavbarExpanded.value=false;if(!showTimerCard.value)goToWorkspace('plans')}
 watch(isNavbarExpanded, revealNavigation)
 watch(currentView, async () => {
   workspacePinned.value = false
@@ -209,11 +210,18 @@ watch([workspaceTabs, pendingWorkspaceAction], async ([tabs, action]) => {
   if (action === 'search') await tabs.openSearch()
   else tabs.openTrash()
 }, { flush: 'post' })
-async function openFocusTask(wid: string) {
-  if (!workspaces.available.some(item => item.id === wid)) return
-  workspaces.switchTo(wid)
-  await nextTick()
-  goToWorkspace('pomodoro')
+async function openFocusTask(wid:string){
+  if(!workspaces.available.some(item=>item.id===wid))return
+  workspaces.switchTo(wid);await nextTick();goToWorkspace('plans')
+  const target=focusTimer.currentTarget
+  const request=workspaceNavigationRequest.value
+  if(!target)return
+  try{
+    const result=await supabase.rpc('plan_focus_target',{wid,tid:target.id})
+    if(!result.error&&result.data&&workspaces.activeId===wid&&currentView.value==='workspace'&&currentWorkspaceModule.value==='plans'&&workspaceNavigationRequest.value===request&&focusTimer.currentTarget?.id===target.id){
+      targetWorkspaceView.value=result.data.period;workspaceNavigationRequest.value++
+    }
+  }catch{/* Plans remains available when the source lookup cannot complete. */}
 }
 
 onMounted(async () => {

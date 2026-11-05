@@ -57,7 +57,7 @@ function harness(authOverride) {
   const frames = new Map()
   let nextId = 1
   let clock = 1_800_000_000_000
-  const enabled = vue.ref(['plans', 'quick', 'pomodoro'])
+  const enabled = vue.ref(['plans', 'detailed', 'pomodoro'])
   const settings = vue.reactive({ isFullScreen: false, isPomodoroDocked:false, pomodoroDurations:{focus:25,shortBreak:5,longBreak:15}, async flushPreferences(){}, isModuleActive: id => enabled.value.includes(id) })
   const workspaces = vue.reactive({ loaded: true, activeId: 'one', sessionKey: 'owner:one', binding() {}, reset() {}, async load() { return true } })
   const theme = vue.reactive({ theme: 'light', initializeTheme() {}, toggleTheme() { this.theme = this.theme === 'light' ? 'dark' : 'light' } })
@@ -191,8 +191,8 @@ test('successful login opens the workspace and logout permits a second login wit
 
 test('workspace changes carry an enabled module and calendar view, otherwise defer to the destination preference',async()=>{
  const h=harness(),spaces=h.dependencies['@/stores/workspaces'].useWorkspacesStore()
- h.enabled.value=['plans','quick','tasks']
- spaces.available=[{id:'one',active_modules:['plans','quick','tasks']},{id:'two',active_modules:['plans','tasks']},{id:'three',active_modules:['quick']}]
+ h.enabled.value=['plans','detailed','tasks']
+ spaces.available=[{id:'one',active_modules:['plans','detailed','tasks']},{id:'two',active_modules:['plans','tasks']},{id:'three',active_modules:['detailed']}]
  let emitPanel;const mounted=[]
  h.dependencies['@/views/WorkspaceTabs.vue']={default:{props:['initialTab','initialView'],emits:['active-module','active-view'],setup(props,{emit}){
   mounted.push({module:props.initialTab,view:props.initialView});emitPanel=emit
@@ -213,9 +213,9 @@ test('workspace changes carry an enabled module and calendar view, otherwise def
   emitPanel('active-module','tasks');emitPanel('active-view','tasks','calendar');await settle()
   spaces.activeId='three';spaces.sessionKey='owner:three';await settle()
   assert.deepEqual(mounted.at(-1),{module:undefined,view:undefined},'the destination restores its own saved module when the current one is unavailable')
-  emitPanel('active-module','quick');await settle()
+  emitPanel('active-module','detailed');await settle()
   spaces.activeId='one';spaces.sessionKey='owner:one';await settle()
-  assert.deepEqual(mounted.at(-1),{module:'quick',view:undefined},'calendar state must not leak into another module')
+  assert.deepEqual(mounted.at(-1),{module:'detailed',view:undefined},'calendar state must not leak into another module')
  }finally{app.unmount()}
 })
 
@@ -304,7 +304,7 @@ test('disabling Pomodoro while docked restores the regular navigation layout', a
   await settle()
   h.click(h.find(node => node.props['aria-label'] === 'pomodoro.expandToNavbar'))
   await settle()
-  h.enabled.value = ['plans', 'quick']
+  h.enabled.value = ['plans', 'detailed']
   await settle()
   assert.ok(h.find(node => node.props['data-workspace-rail'] !== undefined))
   assert.equal(h.find(node => node.props['data-pomodoro-navigation'] !== undefined), undefined)
@@ -313,7 +313,7 @@ test('disabling Pomodoro while docked restores the regular navigation layout', a
 
 test('grouped workspace hides the idle timer outside notes and preserves a running timer through calendar and finance', async () => {
   const h=harness()
-  h.enabled.value=['plans','quick','tasks','finance','pomodoro']
+  h.enabled.value=['plans','detailed','tasks','finance','pomodoro']
   let workspaceEvents
   h.dependencies['@/views/WorkspaceTabs.vue']={default:{emits:['active-module'],setup(_props,{emit}){workspaceEvents=emit;return()=>vue.h('div','Workspace')}}}
   const app=h.renderer.createApp(h.component('src/App.vue'))
@@ -331,7 +331,7 @@ test('grouped workspace hides the idle timer outside notes and preserves a runni
       assert.ok(navigation())
       assert.equal(h.intervals.size,0,'opening another group cannot start a timer')
     }
-    workspaceEvents('active-module','quick');await settle()
+    workspaceEvents('active-module','detailed');await settle()
     assert.notEqual(timerHost().style.display,'none')
     const timer= h.dependencies['@/features/pomodoro/stores/pomodoro'].usePomodoroStore()
     h.click(h.find(node=>node.tag==='button'&&h.text(node)==='pomodoro.start'))
@@ -516,7 +516,7 @@ test('compact dock controls can change session, start, reset and restore the tim
 
 test('content search chooses only enabled safe modules and passes the specific destination without starting a timer', async () => {
   const h = harness()
-  h.enabled.value = ['plans','quick','tasks','periodic','pomodoro','finance']
+  h.enabled.value = ['plans','code','tasks','periodic','pomodoro','finance']
   h.dependencies['@/lib/workspaceScope'] = { useWorkspaceDraft: (key, value) => vue.ref(value) }
   h.dependencies['@/components/ui/WorkspacePicker.vue'] = { default: {} }
   h.dependencies['@/components/ui/WorkspaceModulePane.vue'] = { default: {} }
@@ -527,7 +527,7 @@ test('content search chooses only enabled safe modules and passes the specific d
   const activeModules = []
   const app = h.renderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit(name,value) { if(name==='active-module')activeModules.push(value) } });return () => vue.h('div') } })
   app.mount(h.root)
-  assert.deepEqual(Array.from(state.activeModules.value,tab=>tab.id),['plans','tasks','quick','pomodoro','periodic','finance'],'search keeps enabled modules from every section')
+  assert.deepEqual(Array.from(state.activeModules.value,tab=>tab.id),['plans','tasks','code','periodic','finance'],'search keeps enabled modules from every section')
   state.contentSearch.value = { open() { opened++ },close() {} }
   await state.openTabSearch();assert.equal(opened, 1)
   state.selectSearchHit({module:'secure',record_id:'secret',child_id:null});assert.equal(state.activeTab.value,'plans')
@@ -540,20 +540,20 @@ test('content search chooses only enabled safe modules and passes the specific d
   state.selectModule('tasks')
   assert.deepEqual(JSON.parse(JSON.stringify(state.navigationIntent.value)),{module:'tasks',view:'calendar',sequence:1})
   state.selectModule('tasks');assert.equal(state.navigationIntent.value.sequence,2,'reopening the calendar issues a fresh navigation command')
-  state.selectSearchHit({module:'quick',record_id:'specific-note',child_id:null,title:'Note',preview:'',meta:{}})
+  state.selectSearchHit({module:'code',record_id:'specific-note',child_id:null,title:'Note',preview:'',meta:{}})
   await settle()
-  assert.equal(state.activeTab.value,'quick');assert.equal(state.destination.value.record_id,'specific-note')
+  assert.equal(state.activeTab.value,'code');assert.equal(state.destination.value.record_id,'specific-note')
   state.selectSearchHit({module:'finance',record_id:'private',child_id:null})
-  assert.equal(state.activeTab.value,'quick');assert.equal(state.destination.value.record_id,'specific-note')
-  assert.deepEqual(activeModules,['plans','tasks','quick'],'the parent learns the actual opened module across section changes')
-  props.initialTab='quick';props.navigationRequest++;await settle()
+  assert.equal(state.activeTab.value,'code');assert.equal(state.destination.value.record_id,'specific-note')
+  assert.deepEqual(activeModules,['plans','tasks','code'],'the parent learns the actual opened module across section changes')
+  props.initialTab='code';props.navigationRequest++;await settle()
   state.selectModule('tasks');await settle()
   props.navigationRequest++;await settle()
-  assert.equal(state.activeTab.value,'quick','repeated parent navigation still returns to its target after manual section changes')
+  assert.equal(state.activeTab.value,'code','repeated parent navigation still returns to its target after manual section changes')
   state.selectModuleView('tasks','board');await settle();assert.equal(state.activeTab.value,'tasks');assert.equal(state.activeModuleView.value,'board');assert.equal(state.navigationIntent.value.view,'board')
   state.selectModuleView('tasks','unknown');assert.equal(state.activeModuleView.value,'board')
   state.selectModuleView('learning','mistakes');assert.equal(state.activeTab.value,'tasks','disabled module views remain inaccessible')
-  state.selectModuleView('finance','position');state.selectModule('quick');state.selectModule('finance');assert.equal(state.activeModuleView.value,'transaction','ordinary navigation returns to the module home view')
+  state.selectModuleView('finance','position');state.selectModule('code');state.selectModule('finance');assert.equal(state.activeModuleView.value,'transaction','ordinary navigation returns to the module home view')
   assert.equal(state.navigationIntent.value.view,'transaction');assert.equal(state.destination.value,null,'ordinary navigation clears a previous search destination')
   state.selectModule('tasks');assert.equal(state.activeModuleView.value,'calendar','the planning category immediately reflects its calendar entry point')
   h.enabled.value=['finance'];await settle()
@@ -701,7 +701,7 @@ test('async plans load on first mount and refresh once on reactivation without d
   h.dependencies['@/components/ui/CustomSelect.vue']={default:{setup:()=>()=>vue.h('div')}}
   h.dependencies['../lib/periods']=load(fs.readFileSync('src/features/plans/lib/periods.ts','utf8'))
   let loads=0,release,resolveComponent
-  const store=vue.reactive({plans:[],busy:false,timezone:'Europe/Istanbul',isSaving:()=>false,
+  const store=vue.reactive({plans:[],busy:false,timezone:'Europe/Istanbul',isSaving:()=>false,isFocusing:()=>false,
     async load(){loads++;this.busy=true;await new Promise(resolve=>release=resolve);this.plans=[{
       id:'plan',title:'Loaded plan',period:'daily',period_date:h.dependencies['../lib/periods'].periodStart('daily',new Date(),this.timezone),
       completed:false,reason:'',history:[],
@@ -736,32 +736,32 @@ test('async plans load on first mount and refresh once on reactivation without d
 test('workspace mounting respects the destination saved tab and applies only enabled incoming views',()=>{
  for(const incoming of [undefined,'tasks','secure']){
   const h=harness(),drafts=new Map()
-  h.enabled.value=['plans','quick','tasks']
-  h.dependencies['@/lib/workspaceScope']={useWorkspaceDraft:(key,value)=>{const draft=vue.ref(key==='last-tab'?'quick':value);drafts.set(key,draft);return draft}}
+  h.enabled.value=['plans','detailed','tasks']
+  h.dependencies['@/lib/workspaceScope']={useWorkspaceDraft:(key,value)=>{const draft=vue.ref(key==='last-tab'?'detailed':value);drafts.set(key,draft);return draft}}
   for(const path of ['@/components/ui/WorkspacePicker.vue','@/components/ui/WorkspaceModulePane.vue','@/components/ui/WorkspaceModuleFeedback.vue'])h.dependencies[path]={default:{}}
   const Component=h.component('src/views/WorkspaceTabs.vue',false)
   let state;const props=vue.reactive({initialTab:incoming,initialView:'calendar'})
   const app=h.renderer.createApp({setup(){state=Component.setup(props,{expose(){},emit(){}});return()=>vue.h('div')}})
   try{
    app.mount(h.root)
-   assert.equal(state.activeTab.value,incoming==='tasks'?'tasks':'quick')
+   assert.equal(state.activeTab.value,incoming==='tasks'?'tasks':'detailed')
    assert.equal(state.navigationIntent.value?.view,incoming==='tasks'?'calendar':undefined)
-   assert.equal(drafts.get('last-tab').value,incoming==='tasks'?'tasks':'quick','disabled incoming tabs cannot overwrite a valid destination preference')
+   assert.equal(drafts.get('last-tab').value,incoming==='tasks'?'tasks':'detailed','disabled incoming tabs cannot overwrite a valid destination preference')
   }finally{app.unmount()}
  }
 })
 
 test('module transitions retain each tab instance and its unsaved local state across workspace groups', async () => {
   const h = harness()
-  h.enabled.value=['plans','quick','tasks','pomodoro']
+  h.enabled.value=['plans','detailed','tasks','pomodoro']
   const drafts = new Map()
-  const mounted = { plans: 0, quick: 0, tasks: 0 }
+  const mounted = { plans: 0, detailed: 0, tasks: 0 }
   h.dependencies['@/lib/workspaceScope'] = { moduleLoadKey:Symbol('module-load'), useWorkspaceDraft: (key, value) => { const draft = vue.ref(value); drafts.set(key, draft); return draft } }
   h.dependencies['@/components/ui/WorkspacePicker.vue'] = { default: { setup: () => () => vue.h('div') } }
   h.dependencies['@/components/ui/WorkspaceModulePane.vue'] = { default: h.component('src/components/ui/WorkspaceModulePane.vue') }
   h.dependencies['@/components/ui/WorkspaceModuleFeedback.vue'] = { default: { setup: () => () => vue.h('div', 'Loading') } }
   h.dependencies['@/components/ui/WorkspaceRail.vue']={default:{props:['enabled','modelValue'],emits:['update:modelValue'],setup(props,{emit}){return()=>vue.h('nav',props.enabled.map(id=>vue.h('button',{'data-open-module':id,onClick:()=>emit('update:modelValue',id)},id)))}}}
-  for (const [id, path] of [['plans', '@/features/plans/components/Plans.vue'], ['quick', '@/features/quick_notes/components/QuickNotes.vue'], ['tasks','@/features/tasks/components/Tasks.vue']]) {
+  for (const [id, path] of [['plans', '@/features/plans/components/Plans.vue'], ['detailed', '@/features/todos/components/TodoBoard.vue'], ['tasks','@/features/tasks/components/Tasks.vue']]) {
     h.dependencies[path] = { default: { setup() {
       mounted[id]++
       const value = vue.ref('draft')
@@ -775,10 +775,10 @@ test('module transitions retain each tab instance and its unsaved local state ac
   assert.equal(h.find(node=>node.props['aria-label']==='search.title'),undefined,'search remains in the rail instead of duplicating a header action')
   h.click(h.find(node => node.tag === 'button' && h.text(node) === 'Edit plans'))
   await settle()
-  drafts.get('last-tab').value = 'quick'
+  drafts.get('last-tab').value = 'detailed'
   await settle()
   await settle()
-  assert.ok(h.find(node => node.text === 'quick:draft'))
+  assert.ok(h.find(node => node.text === 'detailed:draft'))
   tabs.value.selectModule('tasks')
   await settle();await settle()
   assert.ok(h.find(node=>node.text==='tasks:draft'))
@@ -795,7 +795,7 @@ test('module transitions retain each tab instance and its unsaved local state ac
   assert.equal(region.props.role,'region')
   assert.equal(region.props['aria-label'],'tasks.calendar','the module has its own accessible name without the removed tab strip')
   assert.equal(region.props['aria-labelledby'],undefined,'no label may point at a removed tab')
-  assert.deepEqual(mounted, { plans: 1, quick: 1, tasks: 1 })
+  assert.deepEqual(mounted, { plans: 1, detailed: 1, tasks: 1 })
   assert.equal(h.intervals.size,0)
   app.unmount()
 })
@@ -855,7 +855,7 @@ test('all analytics report sections render together, including finance, without 
 test('settings renders preferences, account, workspaces and module controls on the same page',async()=>{
  const h=harness()
  h.dependencies['@/lib/themePalettes']=load(fs.readFileSync('src/lib/themePalettes.ts','utf8'))
- h.dependencies['@/lib/sharing']={shareableModules:['plans','quick']}
+ h.dependencies['@/lib/sharing']={shareableModules:['plans','detailed']}
  h.dependencies['@/components/ui/CustomSelect.vue']={default:{}}
  h.dependencies['@/components/AccountSettings.vue']={default:{props:['focusRequest'],setup:(_,{slots})=>()=>vue.h('section',{'data-account-settings':''},slots.preferences?.())}}
  h.dependencies['@/components/WorkspaceManager.vue']={default:{setup:()=>()=>vue.h('section',{'data-workspace-manager':''})}}

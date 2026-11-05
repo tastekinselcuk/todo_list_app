@@ -94,6 +94,19 @@ export function useWorkspaceClient() {
       versions.set(`password_sessions:${sessionId}`, result.data.version)
       return result.data
     },
+    async loadPlanEntries(){
+      assertCurrent()
+      const result=await supabase.rpc('plan_entries_load',{wid:workspaceId})
+      assertCurrent();if(result.error)throw result.error
+      if(!Array.isArray(result.data))throw new Error('Invalid plans response')
+      for(const row of result.data||[])if(row.id&&row.version!==undefined)versions.set(`${row.source==='quick'?'quick_notes':'plans'}:${row.id}`,row.version)
+      return result.data
+    },
+    async preparePlanFocus(source:string,id:string,seconds:number|null,estimate:number|null){
+      assertCurrent()
+      const result=await supabase.rpc('plan_focus_prepare',{wid:workspaceId,source,rid:id,seconds,estimate})
+      assertCurrent();if(result.error)throw result.error;return result.data
+    },
     async rolloverPlans() {
       assertCurrent()
       const cid = capturedBindings.get('plans')?.collection_id

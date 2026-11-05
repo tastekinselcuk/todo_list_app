@@ -24,6 +24,11 @@ function fixture() {
   let counter = 0
   const client = {
     async rpc(name,args) {
+      if(name==='plan_entries_load'){
+        const snapshot=structuredClone((rows.plans||[]).filter(p=>p.workspace_id===args.wid&&p.user_id===auth.user?.id))
+        if(holds.has('plans:select'))await holds.get('plans:select')
+        return {data:snapshot,error:null}
+      }
       if(name==='delete_workspace'){
         requests.push({rpc:name,args});if(holds.has('workspaces:delete'))await holds.get('workspaces:delete')
         if(failures.has('workspaces:delete'))return {data:null,error:{message:'WORKSPACE_SHARED'}}

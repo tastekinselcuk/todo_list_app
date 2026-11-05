@@ -181,7 +181,7 @@ const insights=computed(()=>{
   if (carried.value.length) list.push({key:'carry',target:'plans',text:t('analytics.carryFinding',{count:carried.value.length})})
   return list.slice(0,3)
 })
-const moduleLabel=(module:string)=>t(module==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module}Name`)
+const moduleLabel=(module:string)=>t(`workspace.modules.${module==='quick'?'plans':module}Name`)
 function scroll(panel?:HTMLElement) {panel?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'})}
 async function chooseMetric(key:string) {
  if(key!=='focus' && !reportPanels.includes(key as ReportPanel))return
@@ -191,12 +191,12 @@ async function chooseMetric(key:string) {
  await nextTick();scroll(key==='focus'?focusPanel.value:reportPanelElements.value[key as ReportPanel])
 }
 async function selectDay(day:string) {selectedDay.value=selectedDay.value===day ? null : day;await nextTick();scroll(reportPanelElements.value.daily)}
-function canOpen(item:AnalyticsItem) {return workspaces.available.some(w=>w.id===(item.workspace_id || workspace.value) && w.active_modules.includes(item.module))}
+function canOpen(item:AnalyticsItem) {return workspaces.available.some(w=>w.id===(item.workspace_id || workspace.value) && w.active_modules.includes(item.module==='quick'?'plans':item.module))}
 function openItem(item:AnalyticsItem) {
   if(!canOpen(item))return
   const wid=item.workspace_id || workspace.value
   if(wid!==workspaces.activeId)workspaces.switchTo(wid)
-  emit('enter-workspace',item.module)
+  emit('enter-workspace',item.module==='quick'?'plans':item.module)
 }
 function exportReport() {
   if(!report.value)return

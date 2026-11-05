@@ -4,7 +4,6 @@
   <div class="study-topic-tools">
    <button v-if="settings.isModuleActive('detailed')" type="button" class="study-btn" :disabled="busy" @click="$emit('link','note')"><FileText :size="14" />{{ t('study.note') }}</button>
    <button v-if="settings.isModuleActive('flashcards')" type="button" class="study-btn" :disabled="busy" @click="$emit('link','deck')"><Layers :size="14" />{{ t('study.cards') }}</button>
-   <button v-if="settings.isModuleActive('pomodoro')" type="button" class="study-btn" :disabled="busy||(timer.isRunning&&timer.currentTarget?.id===personal.pomo_task_id)" @click="$emit('link','focus')"><Timer :size="14" />{{ t('study.focus') }}</button>
    <button v-if="settings.isModuleActive('tasks')" type="button" class="study-btn" :disabled="busy" @click="$emit('plan')"><CalendarDays :size="14" />{{ t('study.plan') }}</button>
    <button type="button" class="study-btn" :disabled="busy" @click="$emit('mistake')"><Plus :size="14" />{{ t('study.addMistake') }}</button>
   </div>
@@ -14,13 +13,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CalendarDays,FileText,Layers,Plus,Timer } from 'lucide-vue-next'
+import { CalendarDays,FileText,Layers,Plus } from 'lucide-vue-next'
 import { useLearningStore,type Topic } from '../stores/learning'
 import { useSettingsStore } from '@/stores/settings'
-import { usePomodoroStore } from '@/features/pomodoro/stores/pomodoro'
 const props=defineProps<{subjectId:string;topic:Topic;busy:boolean;compact?:boolean}>()
-defineEmits<{link:[kind:'note'|'deck'|'focus'];plan:[];mistake:[]}>()
-const store=useLearningStore(),settings=useSettingsStore(),timer=usePomodoroStore(),{t}=useI18n()
+defineEmits<{link:[kind:'note'|'deck'];plan:[];mistake:[]}>()
+const store=useLearningStore(),settings=useSettingsStore(),{t}=useI18n()
 const personal=computed(()=>store.state(props.subjectId,props.topic.id))
 </script>
 

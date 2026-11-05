@@ -1,234 +1,87 @@
 <script setup lang="ts">
-import { useSearchReveal } from '@/lib/searchNavigation'
-import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { computed, ref, nextTick, onMounted, onActivated, onDeactivated, onUnmounted, watch } from 'vue'
+import { computed,inject,ref,onMounted,onActivated,onDeactivated,onUnmounted,watch,nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUpRight, Check, Clock3, Copy, History, Trash2, X } from 'lucide-vue-next'
+import { ArrowUpRight,Check,Copy,History,Trash2,Play,Pause,Loader2,X } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
-import { usePlansStore, type Plan } from '../stores/plans'
-import { firstPopulatedPeriod, periodStart, periods, type Period } from '../lib/periods'
+import { useSearchReveal } from '@/lib/searchNavigation'
+import { useModuleAccess,useModuleLoad } from '@/lib/workspaceScope'
+import { workspaceNavigationKey,workspaceActiveViewKey } from '@/lib/workspaceNavigation'
+import { isDialogBackdropDoubleClick } from '@/lib/utils'
+import { usePomodoroStore } from '@/features/pomodoro/stores/pomodoro'
+import { useSettingsStore } from '@/stores/settings'
 import { useUIStore } from '@/stores/ui'
-
-const { canWrite } = useModuleAccess('plans')
-
-const store = usePlansStore()
-const ui = useUIStore()
-const { locale } = useI18n()
-const tr = computed(() => locale.value === 'tr')
-const copy = computed(() => tr.value ? {
-  daily: 'Günlük', weekly: 'Haftalık', monthly: 'Aylık', yearly: 'Yıllık',
-  placeholder: 'Aklında ne var?', add: 'Ekle', archive: 'Geçmişi göster', current: 'Bu dönem',
-  done: 'tamamlandı', pending: 'yapılacak', deferred: 'Ertelenenler', defer: 'Ertele',
-  reason: 'Neden erteliyorsun?', reasonHint: 'Örn. Önce teklifin gelmesini bekliyorum.',
-  save: 'Nedeni kaydet', cancel: 'Vazgeç', carried: 'Önceki dönemden', resume: 'Listeye geri al',
-  history: 'Geçmiş dönemler', historyEmpty: 'Henüz geçmiş bir dönem yok.',
-  setup: 'Planlar yüklenemedi. Bağlantıyı kontrol et; ilk kurulumda PLANS_SETUP.md dosyasındaki veritabanı adımını tamamla.',
-  retry: 'Tekrar dene', complete: 'Tamamla', undo: 'Tamamlanmadı olarak işaretle',
-  copy: 'Kopyala', copied: 'Kopyalandı', copyFailed: 'Kopyalama başarısız', delete: 'Sil', deleted: 'Plan silindi', deleteFailed: 'Plan silinemedi',
-} : {
-  daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',
-  placeholder: 'What’s on your mind?', add: 'Add', archive: 'Show history', current: 'This period',
-  done: 'completed', pending: 'to do', deferred: 'Deferred', defer: 'Defer',
-  reason: 'Why are you deferring this?', reasonHint: 'e.g. Waiting for the proposal first.',
-  save: 'Save reason', cancel: 'Cancel', carried: 'Carried forward', resume: 'Return to list',
-  history: 'Past periods', historyEmpty: 'No past periods yet.',
-  setup: 'Could not load plans. Check your connection; for first-time setup, complete the database step in PLANS_SETUP.md.',
-  retry: 'Retry', complete: 'Complete', undo: 'Mark incomplete',
-  copy: 'Copy', copied: 'Copied', copyFailed: 'Could not copy', delete: 'Delete', deleted: 'Plan deleted', deleteFailed: 'Could not delete plan',
+import { usePlansStore,type Plan } from '../stores/plans'
+import { firstPopulatedPeriod,periodStart,periods,type Period } from '../lib/periods'
+const {canWrite}=useModuleAccess('plans'),store=usePlansStore(),timer=usePomodoroStore(),settings=useSettingsStore(),ui=useUIStore(),{locale,t}=useI18n()
+const copy=computed(()=>locale.value==='tr'?{
+ timeless:'Zamansız',daily:'Günlük',weekly:'Haftalık',monthly:'Aylık',yearly:'Yıllık',placeholder:'Aklında ne var?',add:'Ekle',archive:'Geçmişi göster',current:'Bu dönem',done:'tamamlandı',pending:'yapılacak',carried:'Önceki dönemden',history:'Geçmiş dönemler',historyEmpty:'Henüz geçmiş bir dönem yok.',setup:'Planlar yüklenemedi. Bağlantıyı kontrol et; yeni kurulumda PLANS_SETUP.md dosyasındaki güncellemeyi tamamla.',retry:'Tekrar dene',complete:'Tamamla',undo:'Tamamlanmadı olarak işaretle',copy:'Kopyala',copied:'Kopyalandı',copyFailed:'Kopyalama başarısız',delete:'Sil',deleteFailed:'Plan silinemedi',focus:'Odaklan',pause:'Duraklat',next:'Sıradaki odak',goals:'Odak hedefi',sessions:'Oturum hedefi',minutes:'Oturum süresi (dakika)',save:'Kaydet',cancel:'Vazgeç',focusFailed:'Odak başlatılamadı. Veritabanı güncellemesini ve bağlantını kontrol et.',goalHint:'Hedefe ulaşmak planı otomatik tamamlamaz.'
+}:{timeless:'Timeless',daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly',placeholder:'What’s on your mind?',add:'Add',archive:'Show history',current:'This period',done:'completed',pending:'to do',carried:'Carried forward',history:'Past periods',historyEmpty:'No past periods yet.',setup:'Could not load plans. Check your connection and complete the update in PLANS_SETUP.md.',retry:'Retry',complete:'Complete',undo:'Mark incomplete',copy:'Copy',copied:'Copied',copyFailed:'Could not copy',delete:'Delete',deleteFailed:'Could not delete plan',focus:'Focus',pause:'Pause',next:'Next focus',goals:'Focus goal',sessions:'Session goal',minutes:'Session duration (minutes)',save:'Save',cancel:'Cancel',focusFailed:'Could not start focus. Check the database update and your connection.',goalHint:'Reaching the goal does not complete the plan automatically.'})
+const selected=ref<Period>('timeless'),inputPeriod=ref<Period>('timeless'),title=ref(''),showHistory=ref(false),today=ref(new Date())
+let periodChosen=false
+const periodOptions=computed(()=>periods.map(value=>({value,label:copy.value[value]})))
+const inPeriod=(plan:Plan,period:Period)=>plan.period===period&&(period==='timeless'||plan.period_date===periodStart(period,today.value,store.timezone))
+const currentPlans=computed(()=>store.plans.filter(plan=>inPeriod(plan,selected.value)))
+const active=computed(()=>currentPlans.value.filter(plan=>!plan.completed).sort((a,b)=>b.history.length-a.history.length))
+const completed=computed(()=>currentPlans.value.filter(plan=>plan.completed))
+const emptyMessage=computed(()=>locale.value==='tr'?`Henüz ${copy.value[selected.value].toLocaleLowerCase('tr-TR')} plan eklenmedi.`:`No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
+const archived=computed(()=>{
+ if(selected.value==='timeless')return []
+ const groups=new Map<string,{id:string;title:string;completed:boolean}[]>()
+ for(const plan of store.plans.filter(plan=>plan.period===selected.value))for(const entry of [...plan.history,{date:plan.period_date,completed:plan.completed}]){
+  if(entry.date>=periodStart(selected.value,today.value,store.timezone))continue
+  const rows=groups.get(entry.date)||[];rows.push({id:plan.id,title:plan.title,completed:entry.completed});groups.set(entry.date,rows)
+ }
+ return [...groups.entries()].sort(([a],[b])=>b.localeCompare(a))
 })
-const selected = ref<Period>('daily')
-let periodChosen = false
-const emptyMessage = computed(() => tr.value
-  ? `Henüz ${copy.value[selected.value].toLocaleLowerCase('tr-TR')} plan eklenmedi.`
-  : `No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
-const inputPeriod = ref<Period>(selected.value)
-const periodOptions = computed(() => periods.map(value => ({ value, label: copy.value[value] })))
-const title = ref('')
-const showHistory = ref(false)
-const editing = ref<Plan | null>(null)
-const dialog = ref<HTMLDialogElement | null>(null)
-watch(editing, async value => {
-  if (value) { await nextTick(); if (editing.value===value&&!dialog.value?.open) dialog.value?.showModal() }
-})
-const reason = ref('')
-const today = ref(new Date())
-const currentPlans = computed(() => store.plans.filter(p => p.period === selected.value && p.period_date === periodStart(p.period, today.value, store.timezone)))
-const active = computed(() => currentPlans.value.filter(p => !p.reason && !p.completed).sort((a, b) => b.history.length - a.history.length))
-const completed = computed(() => currentPlans.value.filter(p => p.completed))
-const deferred = computed(() => currentPlans.value.filter(p => p.reason && !p.completed))
-const archived = computed(() => {
-  const groups = new Map<string, { id: string; title: string; completed: boolean; reason: string }[]>()
-  for (const plan of store.plans.filter(p => p.period === selected.value)) {
-    const entries = [...plan.history, { date: plan.period_date, completed: plan.completed, reason: plan.reason }]
-    for (const entry of entries) {
-      if (entry.date >= periodStart(selected.value, today.value, store.timezone)) continue
-      const rows = groups.get(entry.date) || []
-      rows.push({ id: plan.id, title: plan.title, completed: entry.completed, reason: entry.reason })
-      groups.set(entry.date, rows)
-    }
-  }
-  return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a))
-})
-function formatDate(value: string, period = selected.value) {
-  const date = new Date(`${value}T12:00:00`)
-  const language = tr.value ? 'tr-TR' : 'en-GB'
-  if (period === 'yearly') return String(date.getFullYear())
-  if (period === 'monthly') return date.toLocaleDateString(language, { month: 'long', year: 'numeric' })
-  const start = date.toLocaleDateString(language, { day: 'numeric', month: 'long', year: 'numeric' })
-  if (period !== 'weekly') return start
-  date.setDate(date.getDate() + 6)
-  return `${start} – ${date.toLocaleDateString(language, { day: 'numeric', month: 'long' })}`
-}
-function count(period: Period) { return store.plans.filter(p => p.period === period && p.period_date === periodStart(period, today.value, store.timezone)).length }
-async function refresh(choose = false) {
-  today.value = new Date()
-  if (await store.load() && choose && !periodChosen) {
-    selected.value = firstPopulatedPeriod(store.plans, today.value, store.timezone)
-    inputPeriod.value = selected.value
-    periodChosen = true
-  }
-}
-async function add() {
-  // Refresh boundaries before a mutation, including a tab left open overnight.
-  if (!await store.load()) return
-  if (await store.add(title.value, inputPeriod.value)) {
-    selected.value = inputPeriod.value
-    title.value = ''
-    today.value = new Date()
-  }
-}
-async function toggle(plan: Plan) {
-  if (store.isSaving(plan.id)) return
-  if (periodStart('daily', new Date(), store.timezone) !== periodStart('daily', today.value, store.timezone) && !await store.load()) return
-  const current = store.plans.find(p => p.id === plan.id)
-  if (current) await store.update(current, { completed: !current.completed, reason: '' })
-  today.value = new Date()
-}
-function startDefer(plan: Plan) { editing.value = plan; reason.value = plan.reason }
-async function copyPlan(plan: Plan) {
-  try {
-    await navigator.clipboard.writeText(plan.title)
-    ui.addToast(copy.value.copied, 'success')
-  } catch {
-    ui.addToast(copy.value.copyFailed, 'error')
-  }
-}
-async function deletePlan(plan: Plan) {
-  if (store.busy || store.isSaving(plan.id)) return
-  if (await store.remove(plan.id)) {
-    if (editing.value?.id === plan.id) editing.value = null
-  } else {
-    ui.addToast(copy.value.deleteFailed, 'error')
-  }
-}
-async function saveReason() {
-  if (!editing.value || !reason.value.trim() || !await store.load()) return
-  const current = store.plans.find(p => p.id === editing.value?.id)
-  if (current && await store.update(current, { reason: reason.value.trim(), completed: false })) editing.value = null
-  today.value = new Date()
-}
-async function resume(plan: Plan) {
-  if (!await store.load()) return
-  const current = store.plans.find(p => p.id === plan.id)
-  if (current && await store.update(current, { reason: '' })) editing.value = null
-  today.value = new Date()
-}
-watch(selected, value => { inputPeriod.value = value; periodChosen = true })
-let timer: ReturnType<typeof setInterval> | undefined
-function watchDay() { clearInterval(timer); timer = setInterval(() => { if (periodStart('daily', new Date(), store.timezone) !== periodStart('daily', today.value, store.timezone)) void refresh() }, 30000) }
-onMounted(watchDay)
-onActivated(watchDay)
-useModuleLoad(() => refresh(true))
-onDeactivated(() => { title.value='';reason.value=''; clearInterval(timer); editing.value = null; dialog.value?.close(); showHistory.value=false; selected.value='daily'; inputPeriod.value='daily'; periodChosen=false })
-onUnmounted(() => clearInterval(timer))
-useSearchReveal('plans', async (hit, isCurrent) => {
-  if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period
-  periodChosen=true;today.value=new Date()
-  showHistory.value=Boolean(hit.meta.date&&hit.meta.date<periodStart(selected.value,today.value,store.timezone))
-  await store.load(hit.record_id)
-  if(!isCurrent())return
-  const plan=store.plans.find(p=>p.id===hit.record_id)
-  if(plan){selected.value=plan.period;showHistory.value=plan.period_date<periodStart(plan.period,today.value,store.timezone)}
-})
+function formatDate(value:string,period=selected.value){const date=new Date(value+'T12:00:00'),language=locale.value==='tr'?'tr-TR':'en-GB';if(period==='yearly')return String(date.getFullYear());if(period==='monthly')return date.toLocaleDateString(language,{month:'long',year:'numeric'});const start=date.toLocaleDateString(language,{day:'numeric',month:'long',year:'numeric'});if(period!=='weekly')return start;date.setDate(date.getDate()+6);return start+' – '+date.toLocaleDateString(language,{day:'numeric',month:'long'})}
+const count=(period:Period)=>store.plans.filter(plan=>inPeriod(plan,period)).length
+const editable=(plan:Plan)=>plan.can_write??canWrite.value
+async function refresh(choose=false){today.value=new Date();if(await store.load()&&choose&&!periodChosen){selected.value=firstPopulatedPeriod(store.plans,today.value,store.timezone);inputPeriod.value=selected.value;periodChosen=true}}
+async function add(){if(!await store.load())return;if(await store.add(title.value,inputPeriod.value)){selected.value=inputPeriod.value;title.value='';today.value=new Date()}}
+async function toggle(plan:Plan){if(!editable(plan)||store.isSaving(plan.id))return;if(periodStart('daily',new Date(),store.timezone)!==periodStart('daily',today.value,store.timezone)&&!await store.load())return;const current=store.plans.find(p=>p.id===plan.id&&p.source===plan.source);if(current&&await store.update(current,{completed:!current.completed})){if(current.completed&&current.focus)timer.completedTask(current.focus.id);else if(current.focus&&timer.currentTarget?.id===current.focus.id)timer.updateTarget({...timer.currentTarget,completed:false})}today.value=new Date()}
+async function copyPlan(plan:Plan){try{await navigator.clipboard.writeText(plan.title);ui.addToast(copy.value.copied,'success')}catch{ui.addToast(copy.value.copyFailed,'error')}}
+async function deletePlan(plan:Plan){if(!editable(plan)||store.busy||store.isSaving(plan.id))return;if(plan.focus?.id===timer.currentTarget?.id){await timer.clearFocus();if(timer.error)return}if(await store.remove(plan.id,plan.source||'plans')){if(plan.focus)timer.forgetTask(plan.focus.id)}else ui.addToast(copy.value.deleteFailed,'error')}
+const isSelected=(plan:Plan)=>Boolean(plan.focus&&timer.currentTarget?.id===plan.focus.id)
+const isQueued=(plan:Plan)=>Boolean(plan.focus&&timer.queuedTarget?.id===plan.focus.id)
+const isRunning=(plan:Plan)=>isSelected(plan)&&timer.isRunning&&timer.modeKey==='focus'
+async function focus(plan:Plan){if(plan.completed||store.isFocusing(plan)||timer.starting||timer.clearing)return;if(isRunning(plan)&&!timer.remote){timer.pauseTimer();return}const target=await store.prepareFocus(plan,plan.focus?undefined:timer.durations.focus*60);if(!target){ui.addToast(copy.value.focusFailed,'error');return}await timer.focusOn(target);if(timer.error)ui.addToast(t(timer.errorMessageKey),'error')}
+const goalPlan=ref<Plan|null>(null),goalDialog=ref<HTMLDialogElement>(),estimate=ref(1),minutes=ref(25)
+async function openGoal(plan:Plan){goalPlan.value=plan;estimate.value=plan.focus?.estimated_sessions||1;minutes.value=(plan.focus?.focus_seconds||timer.durations.focus*60)/60;await nextTick();goalDialog.value?.showModal()}
+function dismissGoal(){goalDialog.value?.close();goalPlan.value=null}
+function closeGoal(){if(goalPlan.value&&store.isFocusing(goalPlan.value))return;dismissGoal()}
+async function saveGoal(){if(!goalPlan.value||!Number.isInteger(estimate.value)||estimate.value<1||estimate.value>999||!Number.isInteger(minutes.value)||minutes.value<1||minutes.value>90)return;const target=await store.prepareFocus(goalPlan.value,minutes.value*60,estimate.value);if(target){timer.updateTarget(target);closeGoal()}else ui.addToast(copy.value.focusFailed,'error')}
+const navigation=inject(workspaceNavigationKey,null),reportView=inject(workspaceActiveViewKey,()=>{})
+watch(()=>navigation?.value,intent=>{if(intent?.module==='plans'&&periods.includes(intent.view as Period)){selected.value=intent.view as Period;inputPeriod.value=selected.value;periodChosen=true}},{immediate:true})
+watch(selected,value=>{inputPeriod.value=value;periodChosen=true;if(value==='timeless')showHistory.value=false;reportView('plans',value)})
+watch(()=>timer.taskStatsSequence,()=>{void refresh()})
+let clock:ReturnType<typeof setInterval>|undefined
+function watchDay(){clearInterval(clock);clock=setInterval(()=>{if(periodStart('daily',new Date(),store.timezone)!==periodStart('daily',today.value,store.timezone))void refresh()},30000)}
+onMounted(watchDay);onActivated(watchDay);useModuleLoad(()=>refresh(true));onDeactivated(()=>{title.value='';clearInterval(clock);dismissGoal();showHistory.value=false;selected.value='timeless';inputPeriod.value='timeless';periodChosen=false});onUnmounted(()=>{clearInterval(clock);dismissGoal()})
+useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period;periodChosen=true;today.value=new Date();await store.load(hit.record_id);if(!isCurrent())return;const plan=store.plans.find(p=>p.id===hit.record_id);if(plan){selected.value=plan.period;showHistory.value=plan.period!=='timeless'&&plan.period_date<periodStart(plan.period,today.value,store.timezone)}})
 </script>
-
 <template>
-  <section class="plans-shell" :aria-busy="store.busy">
-    <div class="workspace-toolbar">
-      <form v-if="canWrite" class="capture" @submit.prevent="add">
-        <div class="capture-field">
-          <input v-model="title" type="text" :aria-label="copy.placeholder" :placeholder="copy.placeholder" maxlength="1000" />
-          <div class="period-select">
-            <CustomSelect
-              :model-value="inputPeriod"
-              @update:model-value="inputPeriod = $event as Period"
-              :options="periodOptions"
-              variant="ghost"
-              size="sm"
-              :aria-label="copy.current"
-            />
-          </div>
-        </div>
-        <button class="add-button" :disabled="!title.trim() || store.busy">{{ copy.add }}</button>
-      </form>
-
-      <div v-if="store.error" role="alert" class="error-message"><p>{{ copy.setup }}</p><button :disabled="store.busy" @click="refresh(true)">{{ copy.retry }}</button></div>
-      <div class="period-toolbar">
-        <nav class="period-tabs" :aria-label="copy.current"><button v-for="period in periods" :key="period" :class="{ selected: selected === period }" :aria-pressed="selected === period" @click="selected = period">{{ copy[period] }}<span v-if="count(period)">{{ count(period) }}</span></button></nav>
-        <button class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory = !showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{ on: showHistory }"><i></i></span></button>
-      </div>
-
-    </div>
-
-    <div v-if="!currentPlans.length && !store.busy && !store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
-    <div class="task-list">
-      <article v-for="plan in [...active, ...completed]" :key="plan.id" :data-search-record="plan.id" class="workspace-card task-row" :class="{ completed: plan.completed }" @click="canWrite && toggle(plan)">
-        <button :disabled="!canWrite" class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="plan.completed ? copy.undo : copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
-        <button :disabled="!canWrite" class="task-content" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.history.length && !plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
-        <div class="task-actions" @click.stop>
-          <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
-          <button v-if="canWrite" type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
-          <button v-if="canWrite" type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
-        </div>
-      </article>
-    </div>
-
-    <section v-if="deferred.length" class="deferred-section"><h3><Clock3 :size="15" />{{ copy.deferred }}<span>{{ deferred.length }}</span></h3>
-      <article v-for="plan in deferred" :key="plan.id" class="workspace-card task-row deferred-row" @click="canWrite && toggle(plan)">
-        <button :disabled="!canWrite" class="task-check" :aria-disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.complete" @click.stop="toggle(plan)"></button>
-        <div class="task-content"><button :disabled="!canWrite" class="task-title" :aria-disabled="store.busy || store.isSaving(plan.id)" @click.stop="toggle(plan)">{{ plan.title }}</button><button :disabled="!canWrite" class="reason-text" @click.stop="startDefer(plan)">{{ plan.reason }}</button></div>
-        <div class="task-actions" @click.stop>
-          <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
-          <button v-if="canWrite" type="button" class="task-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.defer" :title="copy.defer" @click.stop="startDefer(plan)"><Clock3 :size="15" /></button>
-          <button v-if="canWrite" type="button" class="task-action delete-action" :disabled="store.busy || store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
-        </div>
-      </article>
-    </section>
-
-    <section v-if="showHistory" class="archive-section"><h3><History :size="16" />{{ copy.history }}</h3>
-      <p v-if="!archived.length" class="archive-empty">{{ copy.historyEmpty }}</p>
-      <details v-for="[date, rows] in archived" :key="date" class="workspace-card archive-group"><summary>{{ formatDate(date) }}<span>{{ rows.filter(r => r.completed).length }} / {{ rows.length }} {{ copy.done }}</span></summary><div v-for="row in rows" :key="row.id" :data-search-record="row.id" class="archive-row"><Check v-if="row.completed" :size="15" /><Clock3 v-else :size="15" /><div><span :class="{ 'past-done': row.completed }">{{ row.title }}</span><small>{{ row.reason || (row.completed ? copy.done : copy.pending) }}</small></div></div></details>
-    </section>
-
-    <Teleport to="body"><dialog v-if="editing" ref="dialog" aria-labelledby="defer-title" class="plan-native-dialog" @cancel.prevent="editing = null" @click.self="editing = null">
-      <section class="defer-dialog"><button class="close-dialog" :aria-label="copy.cancel" @click="editing = null"><X :size="18" /></button><Clock3 :size="23" /><h2 id="defer-title">{{ copy.reason }}</h2><p>{{ editing.title }}</p><form @submit.prevent="saveReason"><textarea v-model="reason" :aria-label="copy.reason" :placeholder="copy.reasonHint" rows="3" maxlength="1000" autofocus required></textarea><button v-if="canWrite && (editing.reason)" type="button" class="resume-button" :disabled="store.busy || store.isSaving(editing.id)" @click="resume(editing)">{{ copy.resume }}</button><div class="dialog-actions"><button type="button" @click="editing = null">{{ copy.cancel }}</button><button class="add-button" :disabled="!reason.trim() || store.busy">{{ copy.save }}</button></div></form></section>
-    </dialog></Teleport>
-  </section>
+ <section class="plans-shell" :aria-busy="store.busy">
+  <div class="workspace-toolbar">
+   <form v-if="canWrite" class="capture" @submit.prevent="add"><div class="capture-field"><input v-model="title" type="text" :aria-label="copy.placeholder" :placeholder="copy.placeholder" maxlength="1000" /><div class="period-select"><CustomSelect :model-value="inputPeriod" @update:model-value="inputPeriod=$event as Period" :options="periodOptions" variant="ghost" size="sm" :aria-label="copy.current" popover /></div></div><button class="add-button" :disabled="!title.trim()||store.busy">{{ copy.add }}</button></form>
+   <div v-if="store.error" role="alert" class="error-message"><p>{{ copy.setup }}</p><button :disabled="store.busy" @click="refresh(true)">{{ copy.retry }}</button></div>
+   <div class="period-toolbar"><nav class="period-tabs" :aria-label="copy.current"><button v-for="period in periods" :key="period" :class="{selected:selected===period}" :aria-pressed="selected===period" @click="selected=period">{{ copy[period] }}<span v-if="count(period)">{{ count(period) }}</span></button></nav><button v-if="selected!=='timeless'" class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory=!showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{on:showHistory}"><i /></span></button></div>
+  </div>
+  <div v-if="!currentPlans.length&&!store.busy&&!store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
+  <div class="task-list"><article v-for="plan in [...active,...completed]" :key="(plan.source||'plans')+plan.id" :data-search-record="plan.id" class="workspace-card task-row" :class="{completed:plan.completed}" @click="editable(plan)&&toggle(plan)">
+   <button :disabled="!editable(plan)" class="task-check" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-label="plan.completed?copy.undo:copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
+   <button :disabled="!editable(plan)" class="task-content" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.period!=='timeless'&&plan.history.length&&!plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
+   <div class="task-actions" @click.stop>
+    <button v-if="plan.focus" type="button" class="focus-goal" :disabled="plan.completed||store.isFocusing(plan)" :aria-label="copy.goals" :title="copy.goals" @click.stop="openGoal(plan)">{{ plan.focus.sessions }}/{{ plan.focus.estimated_sessions }}</button>
+    <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
+    <button v-if="settings.isModuleActive('pomodoro')" type="button" class="task-action focus-action" :class="{'is-focused':isSelected(plan)||isQueued(plan)}" :disabled="plan.completed||store.busy||store.isSaving(plan.id)||store.isFocusing(plan)||timer.starting||timer.clearing" :aria-label="isRunning(plan)?copy.pause:isQueued(plan)?copy.next:copy.focus" :title="isRunning(plan)?copy.pause:isQueued(plan)?copy.next:copy.focus" @click.stop="focus(plan)"><Loader2 v-if="store.isFocusing(plan)" :size="15" class="animate-spin" /><Pause v-else-if="isRunning(plan)" :size="15" /><Play v-else :size="15" /></button>
+    <button v-if="editable(plan)" type="button" class="task-action delete-action" :disabled="store.busy||store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
+   </div>
+  </article></div>
+  <section v-if="selected!=='timeless'&&showHistory" class="archive-section"><h3><History :size="16" />{{ copy.history }}</h3><p v-if="!archived.length" class="archive-empty">{{ copy.historyEmpty }}</p><details v-for="[date,rows] in archived" :key="date" class="workspace-card archive-group"><summary>{{ formatDate(date) }}<span>{{ rows.filter(row=>row.completed).length }} / {{ rows.length }} {{ copy.done }}</span></summary><div v-for="row in rows" :key="row.id" :data-search-record="row.id" class="archive-row"><Check v-if="row.completed" :size="15" /><History v-else :size="15" /><div><span :class="{'past-done':row.completed}">{{ row.title }}</span><small>{{ row.completed?copy.done:copy.pending }}</small></div></div></details></section>
+  <Teleport to="body"><dialog v-if="goalPlan" ref="goalDialog" class="plan-focus-dialog" :aria-label="copy.goals" @cancel.prevent="closeGoal" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))closeGoal()}"><form @submit.prevent="saveGoal"><header><strong>{{ copy.goals }}</strong><button type="button" :disabled="store.isFocusing(goalPlan)" :aria-label="copy.cancel" @click="closeGoal"><X :size="17" /></button></header><p>{{ goalPlan.title }}</p><label>{{ copy.sessions }}<input v-model.number="estimate" type="number" min="1" max="999" required /></label><label>{{ copy.minutes }}<input v-model.number="minutes" type="number" min="1" max="90" required /></label><small>{{ copy.goalHint }}</small><footer><button type="button" :disabled="store.isFocusing(goalPlan)" @click="closeGoal">{{ copy.cancel }}</button><button type="submit" :disabled="store.isFocusing(goalPlan)||estimate<1||estimate>999||minutes<1||minutes>90">{{ copy.save }}</button></footer></form></dialog></Teleport>
+ </section>
 </template>
-
 <style scoped>
-.plan-native-dialog {
-  --plan-accent:hsl(var(--primary));
-  background:transparent;
-  border:0;
-  padding:0;
-  max-width:calc(100% - 40px);
-  color:hsl(var(--foreground))
-}
-.plan-native-dialog::backdrop {
-  background:#0006;
-  backdrop-filter:blur(4px)
-}
 .plans-shell {
   --plan-accent:hsl(var(--primary));
   padding:0;
@@ -419,12 +272,6 @@ useSearchReveal('plans', async (hit, isCurrent) => {
   text-align:left;
   cursor:pointer
 }
-.task-title {
-  display:block;
-  width:100%;
-  text-align:left;
-  overflow-wrap:anywhere
-}
 .task-content small {
   display:flex;
   align-items:center;
@@ -465,49 +312,109 @@ useSearchReveal('plans', async (hit, isCurrent) => {
 .task-action:disabled {
   opacity:.4
 }
-.resume-button {
-  font-size:11px;
+.focus-action.is-focused {
   color:var(--plan-accent);
-  margin-top:8px
+  background:color-mix(in srgb,var(--plan-accent) 9%,transparent)
 }
-.resume-button:hover:not(:disabled) {
-  text-decoration:underline
+.focus-goal {
+  padding:4px 7px;
+  border-radius:7px;
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+  color:hsl(var(--muted-foreground));
+  transition:background .18s,color .18s
 }
-.deferred-section {
-  margin-top:18px;
-  padding:14px 16px;
-  background:color-mix(in srgb,var(--plan-accent) 5%,transparent);
-  border:1px solid hsl(var(--border)/.7);
-  border-radius:12px
+.focus-goal:hover:not(:disabled) {
+  color:var(--plan-accent);
+  background:color-mix(in srgb,var(--plan-accent) 8%,transparent)
 }
-.deferred-section h3,.archive-section>h3 {
+.plan-focus-dialog {
+  --plan-accent:hsl(var(--primary));
+  margin:auto;
+  width:380px;
+  max-width:calc(100vw - 32px);
+  max-height:calc(100dvh - 40px);
+  padding:24px;
+  overflow:auto;
+  color:hsl(var(--foreground));
+  background:hsl(var(--card));
+  border:1px solid hsl(var(--border));
+  border-radius:20px;
+  box-shadow:0 24px 80px #0002
+}
+.plan-focus-dialog::backdrop {
+  background:#0005;
+  backdrop-filter:blur(5px)
+}
+.plan-focus-dialog header,.plan-focus-dialog footer {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px
+}
+.plan-focus-dialog header strong {
+  font-size:14px;
+  font-weight:500
+}
+.plan-focus-dialog header button {
+  color:hsl(var(--muted-foreground));
+  border-radius:8px;
+  padding:5px
+}
+.plan-focus-dialog p {
+  margin:8px 0 22px;
+  font-size:12px;
+  color:hsl(var(--muted-foreground));
+  overflow-wrap:anywhere
+}
+.plan-focus-dialog label {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-top:12px;
+  font-size:12px
+}
+.plan-focus-dialog input {
+  width:90px;
+  padding:8px 10px;
+  font-size:13px;
+  font-variant-numeric:tabular-nums;
+  background:hsl(var(--muted)/.3);
+  border:1px solid hsl(var(--border));
+  border-radius:10px
+}
+.plan-focus-dialog small {
+  display:block;
+  margin-top:20px;
+  font-size:11px;
+  color:hsl(var(--muted-foreground))
+}
+.plan-focus-dialog footer {
+  justify-content:flex-end;
+  margin-top:24px
+}
+.plan-focus-dialog footer button {
+  padding:9px 14px;
+  font-size:12px;
+  border:1px solid hsl(var(--border));
+  border-radius:10px
+}
+.plan-focus-dialog footer button[type=submit] {
+  border-color:transparent;
+  background:var(--plan-accent);
+  color:hsl(var(--primary-foreground))
+}
+.plan-focus-dialog button:disabled {
+  opacity:.5
+}
+.archive-section>h3 {
   font-size:12px;
   display:flex;
   gap:8px;
   align-items:center;
   font-weight:500;
   color:hsl(var(--muted-foreground))
-}
-.deferred-section h3 span {
-  margin-left:auto;
-  font-size:11px
-}
-.deferred-row:last-child {
-  margin-bottom:0
-}
-.deferred-row {
-  margin-top:8px
-}
-.reason-text {
-  display:block;
-  text-align:left;
-  font-size:11px;
-  color:hsl(var(--muted-foreground));
-  margin-top:5px;
-  overflow-wrap:anywhere
-}
-.reason-text:hover {
-  text-decoration:underline
 }
 .empty-state {
   text-align:center;
@@ -580,52 +487,6 @@ useSearchReveal('plans', async (hit, isCurrent) => {
   margin-top:8px;
   text-decoration:underline
 }
-.defer-dialog {
-  position:relative;
-  background:hsl(var(--background));
-  border:1px solid hsl(var(--border));
-  border-radius:20px;
-  width:440px;
-  max-width:100%;
-  padding:28px;
-  box-shadow:0 24px 80px #0002
-}
-.defer-dialog>svg {
-  color:var(--plan-accent)
-}
-.defer-dialog h2 {
-  font-size:20px;
-  margin:16px 0 8px
-}
-.defer-dialog p {
-  font-size:12px;
-  color:hsl(var(--muted-foreground));
-  overflow-wrap:anywhere
-}
-.defer-dialog textarea {
-  width:100%;
-  background:hsl(var(--muted)/.4);
-  border:1px solid hsl(var(--border));
-  border-radius:10px;
-  padding:12px;
-  font-size:13px;
-  margin-top:20px;
-  resize:vertical
-}
-.close-dialog {
-  position:absolute;
-  top:20px;
-  right:20px;
-  color:hsl(var(--muted-foreground))
-}
-.dialog-actions {
-  display:flex;
-  justify-content:flex-end;
-  gap:16px;
-  align-items:center;
-  margin-top:16px;
-  font-size:12px
-}
 button:focus-visible,summary:focus-visible,textarea:focus-visible {
   outline:2px solid var(--plan-accent);
   outline-offset:4px
@@ -653,9 +514,6 @@ button:disabled {
     float:none;
     display:block;
     margin-top:6px
-  }
-  .deferred-section {
-    padding:12px
   }
 }
 @media(max-width:380px) {

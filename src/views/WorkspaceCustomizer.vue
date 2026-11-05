@@ -107,6 +107,7 @@
         </div>
       </div>
       <p class="mt-3 text-xs leading-5 text-muted-foreground">{{ t('settingsPage.toolsHint') }}</p>
+      <button v-if="workspaces.binding('quick')?.shared" type="button" class="mt-3 text-xs text-muted-foreground hover:text-foreground" @click="sharing.showManage('quick')">{{ t('planFocus.legacySharing') }}</button>
     </section>
 
   </div>
@@ -160,7 +161,7 @@ function handlePaletteChange(value: string) {
   if (isThemePaletteId(value)) themeStore.palette = value
 }
 const moduleIcons = { ListTodo, CalendarDays, CheckSquare, Zap, ShieldCheck, Code2, Timer, Target, Layers, Dumbbell, Repeat, Clapperboard, Wallet }
-const availableModules = moduleCatalog.map(module=>({ ...module, icon:moduleIcons[module.icon],isRequired:module.required }))
+const availableModules = moduleCatalog.filter(module=>module.id!=='quick').map(module=>({ ...module, icon:moduleIcons[module.icon],isRequired:module.required }))
 const enabledCount = computed(() => availableModules.filter(module => settingsStore.isModuleActive(module.id)).length)
 
 function handleLanguageChange(language: string) {

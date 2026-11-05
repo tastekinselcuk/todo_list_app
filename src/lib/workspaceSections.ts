@@ -3,7 +3,7 @@ import { moduleCatalog, type ModuleId } from './moduleCatalog'
 export type WorkspaceSectionId = 'notes' | 'planning' | 'learning' | 'life' | 'finance'
 
 export const workspaceSections = [
-  { id: 'notes', icon: 'NotebookPen', modules: ['plans', 'detailed', 'quick', 'secure', 'code', 'pomodoro'] },
+  { id: 'notes', icon: 'NotebookPen', modules: ['plans', 'detailed', 'secure', 'code'] },
   { id: 'planning', icon: 'CalendarDays', modules: ['tasks', 'periodic'] },
   { id: 'learning', icon: 'BookOpen', modules: ['learning', 'flashcards'] },
   { id: 'life', icon: 'Heart', modules: ['workout', 'activities'] },
@@ -47,6 +47,6 @@ export function getWorkspaceModuleOptions(enabled:readonly string[],activeModule
   }
   return section.modules.flatMap((module):WorkspaceModuleOption[]=>{
     if(views[module])return views[module]!.map(view=>({value:`${module}:${view.view}`,module,...view}))
-    return [{value:module,module,label:module==='tasks'?'tasks.calendar':module==='pomodoro'?'pomoNotes.tab':`workspace.modules.${module}Name`,icon:moduleCatalog.find(item=>item.id===module)!.icon}]
+    return [{value:module,module,label:module==='tasks'?'tasks.calendar':`workspace.modules.${module}Name`,icon:moduleCatalog.find(item=>item.id===module)!.icon}]
   })
 }

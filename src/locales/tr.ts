@@ -1,4 +1,5 @@
 export default {
+  planFocus: { legacySharing: 'Zamansız notların paylaşımı' },
   connectedCalendars:{title:'Bağlı takvimler',event:'Outlook etkinliği',connect:'Outlook hesabı bağla',disconnect:'Hesap bağlantısını kaldır',refresh:'Takvimleri ve etkinlikleri yenile',reconnect:'Yeniden bağla',selected:'{count} takvim seçili',all:'Tümü',clear:'Temizle',personal:'Bağladığın takvimleri seçerek aynı görünümde takip et. Bu bağlantılar ve etkinlikler yalnızca sana görünür.',setup:'Outlook bağlantısı henüz etkinleştirilmemiş. Kurulum tamamlandığında hesabını buradan bağlayabilirsin.',readOnly:'Outlook etkinlikleri görüntüleme amaçlıdır. Değişiklikleri Outlook üzerinden yapabilirsin.',openOutlook:'Outlook’ta aç',allDay:'Tüm gün',privateEvent:'Özel etkinlik',untitled:'Başlıksız etkinlik',return:{connected:'Outlook takvimin bağlandı.',cancelled:'Outlook bağlantısı iptal edildi.',failed:'Outlook bağlantısı tamamlanamadı. Tekrar bağlamayı deneyebilirsin.'},errors:{SETUP_REQUIRED:'Takvim bağlantısı kurulumu henüz tamamlanmamış.',REAUTH_REQUIRED:'Outlook hesabını yeniden bağlaman gerekiyor.',RATE_LIMITED:'Çok sık yenileme yapıldı. Biraz bekleyip tekrar dene.',TOO_MANY_EVENTS:'Takvim sınırına ulaşıldı. En fazla 10 takvim seçebilir, yoğun takvimlerde gün veya hafta görünümünü kullanabilirsin.',BUSY:'Takvim bağlantısı yenileniyor. Birazdan tekrar dene.',AUTH_REQUIRED:'Takvimlerine erişmek için tekrar giriş yap.',UNAVAILABLE:'Outlook takvimleri yüklenemedi. Bağlantını kontrol edip tekrar dene.'}},
   activityLibrary:{
     collections:'Koleksiyonlar',newCollection:'Yeni koleksiyon',editCollection:'Koleksiyonu düzenle',collectionName:'Koleksiyon adı',collectionPlaceholder:'Koleksiyon oluştur… Örn. Favorilerim, Bilim kitapları',create:'Oluştur',color:'Koleksiyon rengi',general:'Genel',
@@ -552,7 +553,7 @@ app: {
       tasksDesc: 'Görevler, projeler ve takvimde çalışma planı.',
       calendarName: 'Takvim blokları',
       plansName: 'Planlar',
-      plansDesc: 'Günlük, haftalık, aylık ve yıllık planların; erteleme nedenlerin ve geçmiş dönemlerin tek yerde.',
+      plansDesc: 'Zamansız, günlük, haftalık, aylık ve yıllık planlar; odak oturumları ve dönem geçmişi.',
       dashboardName: 'Ana Pano',
       detailedName: 'Detaylı Notlar',
       detailedDesc: 'Çalışma notları, özetler, resimler ve tablolar. İçeriklerini kategorilerle düzenle.',
@@ -563,7 +564,7 @@ app: {
       codeName: 'Kod Kütüphanesi',
       codeDesc: 'IDE benzeri sözdizimi vurgulama ve biçimlendirme ile yeniden kullanılabilir kod parçacıklarını kaydedin ve düzenleyin.',
       pomodoroName: 'Odak Zamanlayıcı',
-      pomodoroDesc: 'Özelleştirilebilir sayaç, oturum hedefli PomoNotes görevleri ve kişisel odak geçmişi.',
+      pomodoroDesc: 'Özelleştirilebilir sayaç, oturum hedefli planlar ve kişisel odak geçmişi.',
       learningName: 'Öğrenme Takipçisi',
       learningDesc: 'Kişisel ve mesleki çalışmalarınızı konulara ayırın; ilerlemenizi ve çalışma notlarınızı takip edin.',
       flashcardsName: 'Bilgi Kartları',

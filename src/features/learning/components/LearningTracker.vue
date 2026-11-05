@@ -103,10 +103,9 @@ async function removeTopic(s:Subject,topic:Topic){
  ui.addUndoToast(()=>t('study.topicDeleted'),t('study.undo'),async()=>{try{await store.mutate('topic.restore',s.id,topic.id,{},version)}catch(error){errorToast(error);throw error}},'learning-topics',undefined,'deleted')
 }
 async function deleteSubject(s:Subject){if(!canWrite.value)return;if(await run(async()=>{if(!await store.deleteSubject(s.id))throw Error(store.error)})){if(selectedSubject.value===s.id)closePanel()}}
-async function link(kind:'note'|'deck'|'focus'){
- await run(async()=>{const data=await store.mutate('link.'+kind,selectedSubject.value,selectedTopic.value,kind==='focus'?{seconds:timer.durations.focus*60}:{})
-  if(kind==='focus'){const target=data.link.target;await timer.focusOn({...target,title:target.title,workspace_id:target.workspace_id,collection_id:target.collection_id,estimated_sessions:target.estimated_sessions||1,focus_seconds:target.focus_seconds||timer.durations.focus*60});if(timer.error)throw Error(timer.error);ui.addToast(t(timer.queuedTarget?.id===target.id?'study.queued':'study.focusStarted'),'success')}
-  else{closePanel(true);openItem({module:kind==='note'?'detailed':'flashcards',record_id:data.link.id,child_id:null,title:topic.value?.title||'',preview:'',meta:{}})}
+async function link(kind:'note'|'deck'){
+ await run(async()=>{const data=await store.mutate('link.'+kind,selectedSubject.value,selectedTopic.value,{})
+  closePanel(true);openItem({module:kind==='note'?'detailed':'flashcards',record_id:data.link.id,child_id:null,title:topic.value?.title||'',preview:'',meta:{}})
  })
 }
 function withTopic(s:Subject,topic:Topic,action:()=>unknown){if(disabled.value||panelBusy.value)return;selectedSubject.value=s.id;selectedTopic.value=topic.id;void action()}

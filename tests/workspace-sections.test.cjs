@@ -16,10 +16,10 @@ const navigation = load(fs.readFileSync('src/lib/workspaceSections.ts', 'utf8'),
 const copy = value => JSON.parse(JSON.stringify(value))
 
 test('every registered module has exactly one section and keeps its catalog order', () => {
-  const ids = registry.moduleCatalog.map(module => module.id)
+  const ids = registry.navigationModules.map(module => module.id)
   const groups = copy(navigation.getWorkspaceSections(ids))
   assert.deepEqual(groups.map(group => group.id), ['notes', 'planning', 'learning', 'life', 'finance'])
-  assert.equal(navigation.workspaceSectionFor('pomodoro'),'notes')
+  assert.equal(navigation.workspaceSectionFor('pomodoro'),undefined)
   const grouped = groups.flatMap(group => group.modules)
   assert.deepEqual([...grouped].sort(), [...ids].sort())
   assert.equal(new Set(grouped).size, ids.length)
@@ -30,29 +30,29 @@ test('every registered module has exactly one section and keeps its catalog orde
 })
 
 test('disabled and unknown modules never create navigation entries or empty sections', () => {
-  const enabled = ['finance', 'quick', 'quick', 'unknown', 'tasks', 'plans']
+  const enabled = ['finance', 'detailed', 'detailed', 'unknown', 'tasks', 'plans']
   const original = [...enabled]
   const groups = navigation.getWorkspaceSections(enabled)
   assert.deepEqual(copy(groups.map(group => [group.id, group.modules])), [
-    ['notes', ['plans', 'quick']], ['planning', ['tasks']], ['finance', ['finance']],
+    ['notes', ['plans', 'detailed']], ['planning', ['tasks']], ['finance', ['finance']],
   ])
   assert.deepEqual(enabled, original)
   assert.deepEqual(copy(navigation.getWorkspaceSections([])), [])
   groups[0].modules.push('secure')
-  assert.deepEqual(copy(navigation.getWorkspaceSections(enabled)[0].modules), ['plans', 'quick'])
+  assert.deepEqual(copy(navigation.getWorkspaceSections(enabled)[0].modules), ['plans', 'detailed'])
 })
 
 test('category entry returns to an enabled remembered module and otherwise uses its default', () => {
-  const groups = navigation.getWorkspaceSections(registry.moduleCatalog.map(module => module.id))
+  const groups = navigation.getWorkspaceSections(registry.navigationModules.map(module => module.id))
   const notes = groups.find(group => group.id === 'notes'), planning = groups.find(group => group.id === 'planning')
-  assert.equal(navigation.chooseWorkspaceSectionModule(notes, 'quick'), 'quick')
+  assert.equal(navigation.chooseWorkspaceSectionModule(notes, 'detailed'), 'detailed')
   assert.equal(navigation.chooseWorkspaceSectionModule(notes, 'tasks'), 'plans')
   assert.equal(navigation.chooseWorkspaceSectionModule(planning), 'tasks')
   assert.equal(navigation.chooseWorkspaceSectionModule(planning, 'periodic'), 'periodic')
   assert.equal(navigation.chooseWorkspaceSectionModule(navigation.getWorkspaceSections(['periodic'])[0], 'tasks'), 'periodic')
 })
 
-function fixture({ selected = 'quick', enabled = registry.moduleCatalog.map(module => module.id), finePointer = true, savedMode = 'auto', activePage = 'workspace' } = {}) {
+function fixture({ selected = 'detailed', enabled = registry.navigationModules.map(module => module.id), finePointer = true, savedMode = 'auto', activePage = 'workspace' } = {}) {
   const events = [], mounted = [], unmounted = [], listeners = new Map(), mediaListeners = new Map()
   const focus = { isConnected: true, focused: 0, focus() { this.focused++; document.activeElement = this } }
   const document = {
@@ -107,12 +107,12 @@ test('hover keeps the active section; category clicks remember selection and dee
   assert.equal(s.activeSection.value, 'notes')
   s.focusEnter({target:{}})
   assert.equal(s.activeSection.value,'notes','keyboard focus on another category cannot change the active section')
-  assert.equal(f.props.modelValue, 'quick')
+  assert.equal(f.props.modelValue, 'detailed')
   assert.deepEqual(f.events, [])
   s.selectSection(s.sections.value.find(section => section.id === 'planning'))
   assert.deepEqual(f.events.pop(), ['update:modelValue', 'tasks'])
   s.selectSection(s.sections.value.find(section => section.id === 'notes'))
-  assert.deepEqual(f.events.pop(), ['update:modelValue', 'quick'])
+  assert.deepEqual(f.events.pop(), ['update:modelValue', 'detailed'])
   f.props.modelValue = 'code'
   await vue.nextTick()
   assert.equal(s.activeSection.value, 'notes')
@@ -156,7 +156,7 @@ test('outside pointer and Escape-style closing collapse the rail without changin
   assert.equal(s.expanded.value, true)
   s.closeDesktop()
   assert.equal(s.expanded.value, false)
-  assert.equal(f.props.modelValue, 'quick')
+  assert.equal(f.props.modelValue, 'detailed')
   assert.deepEqual(f.events, [])
   f.close()
   assert.equal(f.listeners.size, 0)
@@ -208,7 +208,7 @@ test('an open workspace picker keeps a temporary rail expanded until it closes w
   assert.equal(s.expanded.value,true);assert.equal(s.pinned.value,false)
   f.listeners.get('pointerdown')({target:{}});assert.equal(s.workspacePickerOpen.value,true,'the picker handles its own teleported popup boundary')
   s.closeDesktop();assert.equal(s.expanded.value,false);assert.equal(s.workspacePickerOpen.value,false)
-  assert.equal(f.props.modelValue,'quick');assert.deepEqual(f.events,[])
+  assert.equal(f.props.modelValue,'detailed');assert.deepEqual(f.events,[])
   f.close()
 })
 
@@ -247,13 +247,13 @@ test('mobile drawer traps focus, restores scroll and focus, and footer actions c
 
 test('the content picker exposes enabled sibling modules and existing views without mixing sections', () => {
   const enabled=registry.moduleCatalog.map(module=>module.id)
-  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'quick').map(item=>item.value)),['plans','detailed','quick','secure','code','pomodoro'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'detailed').map(item=>item.value)),['plans','detailed','secure','code'])
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'finance').map(item=>item.value)),['finance:transaction','finance:position'])
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'learning').map(item=>item.value)),['learning:topics','learning:mistakes','flashcards'])
   assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(enabled,'tasks').map(item=>item.value)),['tasks','periodic'])
   assert.equal(navigation.getWorkspaceModuleOptions(enabled,'tasks')[0].label,'tasks.calendar')
-  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['quick','finance'],'quick').map(item=>item.value)),['quick'])
-  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['quick'],'finance')),[])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['detailed','finance'],'detailed').map(item=>item.value)),['detailed'])
+  assert.deepEqual(copy(navigation.getWorkspaceModuleOptions(['detailed'],'finance')),[])
 })
 
 test('a failed native drawer open does not leave page scroll locked', async () => {

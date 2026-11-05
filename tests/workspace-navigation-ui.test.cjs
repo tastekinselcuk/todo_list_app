@@ -12,7 +12,7 @@ function fixture({mobile=false}={}){
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')}
  dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')}
  const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),createText:text=>doc.createTextNode(text),createComment:text=>doc.createComment(text),querySelector:selector=>doc.querySelector(selector),insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]}})
- const events=[],drafts=new Map(),props=vue.reactive({module:'quick',view:'',page:'workspace'})
+ const events=[],drafts=new Map(),props=vue.reactive({module:'plans',view:'',page:'workspace'})
  const workspaces=vue.reactive({activeId:'personal',available:[{id:'personal',name:'Kişisel'},{id:'team',name:'Ürün ekibi'}],get active(){return this.available.find(item=>item.id===this.activeId)},switchTo(id){if(this.available.some(item=>item.id===id)){this.activeId=id;events.push(['workspace',id])}}})
  const deps={vue:{...vue,Transition:(props,{slots})=>vue.h(vue.BaseTransition,{...props,onLeave(_element,done){queueMicrotask(done)}},slots)},'vue-i18n':{useI18n:()=>({t:key=>key})},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'@/lib/workspaceScope':{useWorkspaceDraft:(key,value)=>{if(!drafts.has(key))drafts.set(key,vue.ref(value));return drafts.get(key)}}}
  const evaluate=source=>{const exports={};vm.compileFunction(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,['exports','require','document','window','HTMLElement','Node','navigator'])(exports,name=>deps[name]||require(name),doc,dom.window,dom.window.HTMLElement,dom.window.Node,dom.window.navigator);return exports}
@@ -52,8 +52,8 @@ test('all workspace sections expose direct sibling tabs with consistent active s
   const tabs=()=>f.doc.querySelector('.workspace-module-tabs'),items=()=>Array.from(tabs().querySelectorAll('[role="tab"]'))
   const choose=async label=>{tabs().querySelector(`[aria-label="${label}"]`).click();await f.flush()}
   const active=()=>items().filter(item=>item.getAttribute('aria-selected')==='true')
-  assert.equal(items().length,6);assert.equal(f.doc.querySelector('.workspace-module-picker'),null)
-  assert.equal(active().length,1);assert.equal(active()[0].getAttribute('aria-label'),'workspace.modules.quickName')
+  assert.equal(items().length,4);assert.equal(f.doc.querySelector('.workspace-module-picker'),null)
+  assert.equal(active().length,1);assert.equal(active()[0].getAttribute('aria-label'),'workspace.modules.plansName')
   await choose('workspace.modules.detailedName');assert.equal(f.props.module,'detailed');assert.equal(active()[0].getAttribute('aria-label'),'workspace.modules.detailedName')
   assert.equal(f.doc.querySelector('.workspace-rail [data-section="notes"]').getAttribute('aria-current'),'page')
   f.doc.querySelector('.workspace-rail [data-section="finance"]').click();await f.flush();assert.equal(items().length,2)
@@ -71,18 +71,18 @@ test('all workspace sections expose direct sibling tabs with consistent active s
   await press('End');assert.equal(f.props.module,'flashcards')
   f.enabled.value=['learning'];f.props.module='learning';await f.flush();assert.equal(items().length,2);assert.equal(tabs().querySelector('[aria-label="study.views.today"]'),null)
   f.enabled.value=['flashcards'];f.props.module='flashcards';await f.flush();assert.equal(items().length,1)
-  f.enabled.value=['tasks','periodic','quick','learning','flashcards'];await f.flush()
+  f.enabled.value=['tasks','periodic','plans','learning','flashcards'];await f.flush()
   f.doc.querySelector('.workspace-rail [data-section="planning"]').click();await f.flush();assert.equal(items().length,2)
   assert.equal(tabs().textContent.includes('tasks.board'),false);assert.equal(tabs().textContent.includes('tasks.list'),false)
   await choose('tasks.calendar');assert.deepEqual(f.events.at(-1),['module','tasks']);assert.equal(active()[0].getAttribute('aria-label'),'tasks.calendar')
-  f.enabled.value=['quick'];f.props.module='quick';f.props.view='';await f.flush();assert.equal(items().length,1);assert.equal(active().length,1)
+  f.enabled.value=['plans'];f.props.module='plans';f.props.view='';await f.flush();assert.equal(items().length,1);assert.equal(active().length,1)
   f.enabled.value=[];await f.flush();assert.equal(tabs(),null)
  }finally{f.close()}
 })
 
 test('mobile sibling tabs remain directly selectable with accessible names',async()=>{
  const f=fixture({mobile:true});try{
-  const tabs=f.doc.querySelector('.workspace-module-tabs');assert.equal(tabs.querySelectorAll('[role="tab"]').length,6)
+  const tabs=f.doc.querySelector('.workspace-module-tabs');assert.equal(tabs.querySelectorAll('[role="tab"]').length,4)
   tabs.querySelector('[aria-label="workspace.modules.codeName"]').click();await f.flush();assert.equal(f.props.module,'code');assert.equal(tabs.querySelector('[aria-selected="true"]').getAttribute('aria-label'),'workspace.modules.codeName')
   assert.equal(f.doc.querySelector('.select-menu'),null);assert.equal(tabs.querySelectorAll('[aria-selected="true"]').length,1)
  }finally{f.close()}

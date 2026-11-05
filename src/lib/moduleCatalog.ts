@@ -17,3 +17,6 @@ export const moduleCatalog = [
 export type ModuleId = typeof moduleCatalog[number]['id']
 export const moduleTableOwners: Record<string,string> = Object.fromEntries(moduleCatalog.flatMap(module => Object.entries(module.tables)))
 export const moduleTables: Record<string,ModuleId> = Object.fromEntries(moduleCatalog.flatMap(module => Object.keys(module.tables).map(table => [table,module.id])))
+
+// Storage IDs stay stable for existing collections, search and trash receipts.
+export const navigationModules = moduleCatalog.filter(module=>module.id!=='quick'&&module.id!=='pomodoro')

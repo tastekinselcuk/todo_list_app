@@ -1,5 +1,5 @@
 import { moduleCatalog, moduleTables, type ModuleId } from './moduleCatalog'
-export const shareableModules = moduleCatalog.filter(module => module.id !== 'finance' && module.id !== 'tasks').map(module => module.id)
+export const shareableModules = moduleCatalog.filter(module => module.id !== 'finance' && module.id !== 'tasks' && module.id !== 'pomodoro').map(module => module.id)
 export type ShareableModule = Exclude<ModuleId, 'finance' | 'tasks'>
 export type InviteRole = 'viewer' | 'editor'
 export const tableModules = moduleTables

@@ -62,7 +62,7 @@ import type { SearchHit } from '@/lib/workspaceSearch'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import WorkspaceModulePane from '@/components/ui/WorkspaceModulePane.vue'
 import WorkspaceModuleFeedback from '@/components/ui/WorkspaceModuleFeedback.vue'
-import { moduleCatalog } from '@/lib/moduleCatalog'
+import { moduleCatalog, navigationModules } from '@/lib/moduleCatalog'
 import { openFinanceAnalysisKey } from '@/features/finance/lib/finance'
 import { createWorkspaceScroll } from '@/lib/workspaceScroll'
 import { changeTrash, onTrashMove, onTrashChange, trashUndoKey, trashError } from '@/lib/workspaceTrash'
@@ -72,10 +72,8 @@ const loaders = {
   plans: () => import('@/features/plans/components/Plans.vue'),
   tasks: () => import('@/features/tasks/components/Tasks.vue'),
   detailed: () => import('@/features/todos/components/TodoBoard.vue'),
-  quick: () => import('@/features/quick_notes/components/QuickNotes.vue'),
   secure: () => import('@/features/secure_notes/components/SecureNotes.vue'),
   code: () => import('@/features/code_snippets/components/CodeSnippets.vue'),
-  pomodoro: () => import('@/features/pomodoro/components/PomoNotes.vue'),
   learning: () => import('@/features/learning/components/LearningTracker.vue'),
   flashcards: () => import('@/features/flashcards/components/Flashcards.vue'),
   workout: () => import('@/features/workout/components/WorkoutTracker.vue'),
@@ -106,8 +104,8 @@ const props = defineProps<{
 
 const emit=defineEmits<{ 'manage-workspaces': []; 'open-finance-analysis': [month?:string]; 'active-module': [module:string]; 'active-view':[module:string,view:string]; pinned: [pinned:boolean]; 'header-offset': [offset:number] }>()
 provide(openFinanceAnalysisKey,(month)=>emit('open-finance-analysis',month))
-const activeTab = useWorkspaceDraft('last-tab', props.initialTab || 'plans')
-if (props.initialTab && settingsStore.isModuleActive(props.initialTab)) activeTab.value = props.initialTab
+const activeTab = useWorkspaceDraft('last-tab', (['quick','pomodoro'].includes(props.initialTab||'')?'plans':props.initialTab) || 'plans')
+if (props.initialTab && !['quick','pomodoro'].includes(props.initialTab) && settingsStore.isModuleActive(props.initialTab)) activeTab.value = props.initialTab
 const navigationIntent = ref<WorkspaceNavigationIntent|null>(null)
 let navigationSequence = 0
 provide(workspaceNavigationKey,navigationIntent)
@@ -115,7 +113,7 @@ const moduleViews=shallowReactive<Record<string,string>>({})
 const activeModuleView=computed(()=>moduleViews[activeTab.value]||'')
 provide(workspaceActiveViewKey,(module,view)=>{moduleViews[module]=view;emit('active-view',module,view)})
 function applyInitialView(){
-  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','mistakes']}
+  const allowed:Record<string,string[]>={plans:['timeless','daily','weekly','monthly','yearly'],tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','mistakes']}
   if(allowed[activeTab.value]?.includes(props.initialView||'')){moduleViews[activeTab.value]=props.initialView!;navigationIntent.value={module:activeTab.value,view:props.initialView!,sequence:++navigationSequence}}
 }
 applyInitialView()
@@ -129,7 +127,7 @@ function selectModule(module:string) {
 }
 function selectModuleView(module:string,view:string) {
   if(!activeModules.value.some(tab=>tab.id===module))return
-  const allowed:Record<string,string[]>={tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','mistakes']}
+  const allowed:Record<string,string[]>={plans:['timeless','daily','weekly','monthly','yearly'],tasks:['list','board','calendar'],finance:['transaction','position'],learning:['topics','mistakes']}
   if(!allowed[module]?.includes(view))return
   destination.value=null
   activeTab.value=module
@@ -159,7 +157,7 @@ watch(activeTab, () => {
   void nextTick(() => workspaceScroll?.refresh())
 })
 
-const allTabs = moduleCatalog.map(module => ({id:module.id}))
+const allTabs = navigationModules.map(module => ({id:module.id}))
 
 const activeModules = computed(() => {
   return allTabs.filter(tab => settingsStore.isModuleActive(tab.id))

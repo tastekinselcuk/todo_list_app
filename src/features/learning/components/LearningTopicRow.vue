@@ -18,7 +18,7 @@ import LearningTopicDetails from './LearningTopicDetails.vue'
 import { useLearningStore,type Subject,type Topic,type StudyStatus } from '../stores/learning'
 import { topicNameLimit } from '../lib/study'
 const props=defineProps<{subject:Subject;topic:Topic;canWrite:boolean;busy:boolean;showSubject?:boolean;saveTitle:(title:string,version?:number)=>Promise<boolean>}>()
-defineEmits<{status:[status:StudyStatus];remove:[];link:[kind:'note'|'deck'|'focus'];plan:[];mistake:[]}>()
+defineEmits<{status:[status:StudyStatus];remove:[];link:[kind:'note'|'deck'];plan:[];mistake:[]}>()
 const {t}=useI18n(),store=useLearningStore(),personal=computed(()=>store.state(props.subject.id,props.topic.id))
 const statuses=[{value:'todo' as const,icon:Circle},{value:'doing' as const,icon:CircleDot},{value:'done' as const,icon:CheckCircle2}]
 </script>

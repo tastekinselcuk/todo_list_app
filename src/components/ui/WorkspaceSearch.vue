@@ -89,8 +89,8 @@ defineExpose({ open, close })
       <p v-else-if="!query.trim()" class="px-4 py-8 text-center text-xs text-muted-foreground">{{ t('search.hint') }}</p>
       <p v-else-if="!busy && !hits.length" role="status" class="px-4 py-8 text-center text-xs text-muted-foreground">{{ t('search.empty') }}</p>
       <template v-else>
-        <div v-for="group in groups" :key="group.module" role="group" :aria-label="t(group.module === 'pomodoro' ? 'pomoNotes.tab' : `workspace.modules.${group.module}Name`)" class="mb-1 last:mb-0">
-          <div class="flex items-center gap-2 px-3 pb-1 pt-3 text-[10px] font-medium text-muted-foreground"><span>{{ t(group.module === 'pomodoro' ? 'pomoNotes.tab' : `workspace.modules.${group.module}Name`) }}</span><span class="tabular-nums text-muted-foreground/60">{{ group.total }}</span></div>
+        <div v-for="group in groups" :key="group.module" role="group" :aria-label="t(`workspace.modules.${group.module}Name`)" class="mb-1 last:mb-0">
+          <div class="flex items-center gap-2 px-3 pb-1 pt-3 text-[10px] font-medium text-muted-foreground"><span>{{ t(`workspace.modules.${group.module}Name`) }}</span><span class="tabular-nums text-muted-foreground/60">{{ group.total }}</span></div>
           <button v-for="hit in group.items" :id="`workspace-search-result-${indexOf(hit)}`" :key="searchHitKey(hit)" type="button" role="option" :aria-selected="indexOf(hit) === highlighted" :disabled="busy" class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors disabled:opacity-60" :class="indexOf(hit) === highlighted ? 'bg-muted/60' : 'hover:bg-muted/40'" @pointermove="highlighted = indexOf(hit)" @click="select(hit)">
             <div class="min-w-0 flex-1"><p class="truncate text-xs font-medium">{{ hit.title || t('search.untitled') }}</p><p v-if="hit.preview" class="mt-1 line-clamp-2 break-words text-[11px] leading-relaxed text-muted-foreground">{{ hit.preview }}</p></div><ArrowUpRight class="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
           </button>

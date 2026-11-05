@@ -16,6 +16,6 @@ const loading = ref(0)
 provide(moduleLoadKey, delta => { loading.value = Math.max(0, loading.value + delta) })
 const workspaces = useWorkspacesStore()
 const { t } = useI18n()
-const moduleLabel = computed(() => t(props.tabId === 'pomodoro' ? 'pomoNotes.tab' : props.tabId === 'tasks' ? 'tasks.calendar' : `workspace.modules.${props.tabId}Name`))
+const moduleLabel = computed(() => t(props.tabId === 'tasks' ? 'tasks.calendar' : `workspace.modules.${props.tabId}Name`))
 const binding = computed(() => workspaces.binding(props.tabId))
 </script>

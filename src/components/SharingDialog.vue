@@ -3,7 +3,7 @@
     <div class="flex items-start justify-between gap-3 border-b border-border/40 px-5 py-4">
       <div class="min-w-0">
         <h2 id="sharing-title" class="flex items-center gap-2 text-sm font-semibold"><Link2 class="h-4 w-4 text-primary" />{{ sharing.mode === 'join' ? t('sharing.joinTitle') : t('sharing.title') }}</h2>
-        <p v-if="sharing.mode === 'manage'" class="mt-1 truncate text-xs text-muted-foreground">{{ workspaceName }} · {{ t(`workspace.modules.${sharing.moduleId}Name`) }}</p>
+        <p v-if="sharing.mode === 'manage'" class="mt-1 truncate text-xs text-muted-foreground">{{ workspaceName }} · {{ t(sharing.moduleId==='quick'?'planFocus.legacySharing':`workspace.modules.${sharing.moduleId}Name`) }}</p>
         <p v-else class="mt-1 text-xs text-muted-foreground">{{ t('sharing.joinHint') }}</p>
       </div>
       <button type="button" class="sharing-icon" :aria-label="t('common.cancel')" @click="sharing.close()"><X class="h-4 w-4" /></button>
@@ -20,7 +20,7 @@
           <CustomSelect v-model="sharing.workspaceId" :options="workspaceOptions" :aria-label="t('sharing.targetWorkspace')" :disabled="sharing.busy" />
         </form>
         <div v-if="sharing.preview" class="space-y-3 rounded-xl border border-primary/15 bg-primary/5 p-3.5">
-          <div class="flex items-center gap-2"><Users class="h-4 w-4 shrink-0 text-primary" /><span class="min-w-0 flex-1 truncate text-sm font-medium">{{ sharing.preview.name }} · {{ t(`workspace.modules.${sharing.preview.module}Name`) }}</span></div>
+          <div class="flex items-center gap-2"><Users class="h-4 w-4 shrink-0 text-primary" /><span class="min-w-0 flex-1 truncate text-sm font-medium">{{ sharing.preview.name }} · {{ t(sharing.preview.module==='quick'?'planFocus.legacySharing':`workspace.modules.${sharing.preview.module}Name`) }}</span></div>
           <p class="text-xs text-muted-foreground">{{ t('sharing.invitedBy', { name: sharing.preview.owner_label, role: t(`sharing.${sharing.preview.invite_role || 'editor'}`) }) }}</p>
           <p class="text-xs leading-5 text-muted-foreground">{{ t(sharing.preview.invite_role === 'viewer' ? 'sharing.joinReadOnly' : 'sharing.joinScope') }}</p>
           <p class="text-xs leading-5 text-muted-foreground">{{ t('sharing.personalKept') }}</p>
