@@ -1,14 +1,11 @@
 <template>
   <div class="relative z-10 w-full">
-    <div style="--workspace-default-max:72rem" class="workspace-content mx-auto space-y-4">
+    <VaultNotice><div style="--workspace-default-max:72rem" class="workspace-content mx-auto space-y-4">
       <template v-if="!isAuthenticated">
-        <form v-if="canWrite" class="workspace-toolbar vault-create-form" @submit.prevent="handleInlineAddSession">
+        <form v-if="isOwner" class="workspace-toolbar vault-create-form" @submit.prevent="handleInlineAddSession">
           <input v-model="inlineSessionName" type="text" maxlength="100" :placeholder="$t('secure.sessionNamePlaceholder')" :aria-label="$t('secure.sessionNamePlaceholder')" class="vault-field" :disabled="isLoading" />
-          <div class="relative min-w-0">
-            <input v-model="inlineSessionPassword" :type="showInlinePassword?'text':'password'" :placeholder="$t('secure.sessionPasswordPlaceholder')" :aria-label="$t('secure.sessionPasswordPlaceholder')" autocomplete="new-password" class="vault-field pr-11" :disabled="isLoading" />
-            <button type="button" class="vault-icon absolute right-1.5 top-1/2 -translate-y-1/2" :aria-label="$t(showInlinePassword?'secure.hidePassword':'secure.showPassword')" @click="showInlinePassword=!showInlinePassword"><Eye v-if="showInlinePassword" class="h-3.5 w-3.5" /><EyeOff v-else class="h-3.5 w-3.5" /></button>
-          </div>
-          <button type="submit" class="workspace-add-button" :disabled="!inlineSessionName.trim() || !inlineSessionPassword.trim() || isLoading"><Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{{ $t('common.add') }}</button>
+          <button type="submit" class="workspace-add-button" :disabled="!inlineSessionName.trim() || isLoading"><Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{{ $t('common.add') }}</button>
+          <button v-if="isOwner" type="button" class="text-xs text-muted-foreground hover:text-foreground" @click="manager?.open('import')">{{ $t('vault.import') }}</button>
         </form>
         <div v-if="passwordSessions.length" class="vault-grid">
           <button v-for="session in passwordSessions" :key="session.id" type="button" class="workspace-card vault-session" @click="promptSessionUnlock(session)">
@@ -28,21 +25,27 @@
           </form>
           <div class="flex flex-wrap items-center gap-2 border-b border-border/50 pb-2.5">
             <CustomSelect :model-value="currentSession?.id || ''" @update:model-value="switchVault" :options="vaultOptions" :aria-label="$t('secure.chooseVault')" variant="ghost" size="sm" class="max-w-[200px] flex-1 sm:flex-none" :disabled="isLoading" />
-            <span class="text-[11px] tabular-nums text-muted-foreground">{{ $t('secure.recordCount',{count:secureNotes.length}) }}</span>
+            <span class="text-[11px] tabular-nums text-muted-foreground">{{ $t('secure.recordCount',{count:visibleNotes.length}) }}</span>
+            <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="showDeleted=!showDeleted">{{ $t(showDeleted?'vault.active':'vault.deleted') }}</button>
             <div class="ml-auto flex items-center gap-1">
               <button v-if="canWrite" type="button" class="vault-icon" :disabled="isLoading" :aria-label="$t('secure.editSession')" :title="$t('secure.editSession')" @click="editSession(currentSession!)"><Edit class="h-3.5 w-3.5" /></button>
-              <button v-if="canWrite" type="button" class="vault-icon hover:!bg-destructive/10 hover:!text-destructive" :disabled="isLoading" :aria-label="$t('secure.deleteSession')" :title="$t('secure.deleteSession')" @click="deleteCurrentSession"><Trash2 class="h-3.5 w-3.5" /></button>
+              <button v-if="isOwner" type="button" class="vault-icon" :disabled="isLoading" :aria-label="$t('vault.manage')" :title="$t('vault.manage')" @click="openManagement"><ShieldCheck class="h-3.5 w-3.5" /></button>
               <button type="button" class="vault-icon" :aria-label="$t('secure.lockVault')" :title="$t('secure.lockVault')" @click="logout"><Lock class="h-3.5 w-3.5" /></button>
             </div>
           </div>
         </div>
 
-        <div v-if="secureNotes.length" class="vault-grid">
-          <SecureNoteItem v-for="note in secureNotes" :key="note.id" :note="note" @edit="editNote" @delete="deleteNote" />
+        <p class="text-[11px] leading-5 text-muted-foreground">{{ $t(showDeleted?'vault.trashHint':'vault.idle') }}</p>
+        <div v-if="visibleNotes.length" class="vault-grid">
+          <template v-for="note in visibleNotes" :key="note.id">
+            <div v-if="showDeleted" class="workspace-card flex items-center justify-between gap-3 rounded-2xl p-4"><span class="truncate text-xs">{{ note.title }}</span><button v-if="canWrite" class="vault-primary" :disabled="isLoading" @click="restoreNote(note)">{{ $t('vault.restore') }}</button></div>
+            <SecureNoteItem v-else :note="note" @edit="editNote" @delete="deleteNote" />
+          </template>
         </div>
         <p v-else class="py-9 text-center text-xs text-muted-foreground">{{ $t('secure.noNotesShort') }}</p>
       </template>
-    </div>
+    </div></VaultNotice>
+    <VaultManager ref="manager" @changed="vaultChanged"/>
 
     <dialog @cancel.prevent="closeUnlockDialog" :aria-label="$t('secure.accessSessionTitle',{name:selectedSessionForUnlock?.name})" ref="unlockDialog" class="w-[90vw] max-w-sm vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
       <div class="text-center space-y-2 mb-2">
@@ -74,6 +77,7 @@
             <span v-else>{{ $t('secure.accessSessionBtn') }}</span>
           </button>
         </div>
+        <button v-if="isOwner" type="button" class="block w-full text-center text-xs text-muted-foreground hover:text-foreground" @click="recoverSelected">{{ $t('vault.recover') }}</button>
       </form>
     </dialog>
 
@@ -87,7 +91,7 @@
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-1.5 col-span-2 sm:col-span-1">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.title') }}</label>
-            <input v-model="editingNote.title" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
+            <input v-model="editingNote.title" type="text" maxlength="160" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
           </div>
           <div class="space-y-1.5 col-span-2 sm:col-span-1">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.type') }}</label>
@@ -103,19 +107,19 @@
         
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.descriptionOptional') }}</label>
-          <input v-model="editingNote.description" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
+          <input v-model="editingNote.description" type="text" maxlength="2000" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
         </div>
         
         <div v-if="editingNote.type === 'password'" class="space-y-4 p-5 rounded-2xl bg-muted/30 border border-border/40">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.username') }}</label>
-              <input v-model="editingNote.username" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
+              <input v-model="editingNote.username" type="text" maxlength="500" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.password') }}</label>
               <div class="relative">
-                <input v-model="editingNote.password_encrypted" :type="showDialogPassword ? 'text' : 'password'" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-10 text-sm font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="new-password" />
+                <input v-model="editingNote.password_encrypted" :type="showDialogPassword ? 'text' : 'password'" maxlength="1024" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-10 text-sm font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="new-password" />
                 <button type="button" @click="showDialogPassword = !showDialogPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
                   <Eye v-if="showDialogPassword" class="h-3.5 w-3.5" />
                   <EyeOff v-else class="h-3.5 w-3.5" />
@@ -125,15 +129,20 @@
           </div>
           <div class="space-y-1.5">
             <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.urlOptional') }}</label>
-            <input v-model="editingNote.url" type="url" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
+            <input v-model="editingNote.url" type="url" maxlength="2048" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
           </div>
+          <button type="button" class="text-xs text-muted-foreground hover:text-foreground" @click="editingNote.password_encrypted=generateVaultPassword()">{{ $t('vault.generate') }}</button>
         </div>
         
         <div v-else class="space-y-1.5">
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.content') }}</label>
-          <textarea v-model="editingNote.content" class="secure-field w-full rounded-xl border border-border/50 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-none font-mono" required></textarea>
+          <textarea v-model="editingNote.content" maxlength="100000" class="secure-field w-full rounded-xl border border-border/50 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-none font-mono" required></textarea>
         </div>
         
+        <div v-if="editingNote.id" class="space-y-2 border-t border-border/50 pt-3">
+          <button type="button" class="text-xs text-muted-foreground hover:text-foreground" @click="loadHistory">{{ $t('vault.history') }}</button>
+          <template v-if="historyOpen"><p class="text-[11px] leading-5 text-muted-foreground">{{ $t('vault.historyHint') }}</p><p v-if="!noteHistory.length" class="text-xs text-muted-foreground">{{ $t('vault.noHistory') }}</p><button v-for="version in noteHistory" :key="version.id" type="button" class="flex w-full justify-between rounded-lg border border-border/60 px-3 py-2 text-xs" :disabled="isLoading" @click="restoreHistory(version.id)"><span>{{ new Date(version.saved_at).toLocaleString() }}</span><span>{{ $t('vault.restore') }}</span></button></template>
+        </div>
         <div class="flex justify-end gap-3 pt-4">
           <button type="button" :disabled="isLoading" @click="closeNoteDialog" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted transition-colors">{{ $t('secure.cancel') }}</button>
           <button type="submit" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
@@ -168,6 +177,7 @@
             </button>
           </div>
         </div>
+        <p v-if="verificationError" role="alert" class="text-xs text-destructive">{{ verificationError }}</p>
         <div class="flex justify-end gap-3 pt-4">
           <button type="button" @click="closePasswordVerification" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
           <button @click="verifyPassword" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isVerifyingPassword">
@@ -189,16 +199,6 @@
           <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionName') }}</label>
           <input v-model="editingSession.name" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
         </div>
-        <div class="space-y-1.5">
-          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionPasswordLabel') }}</label>
-          <div class="relative">
-            <input v-model="editingSession.password" :placeholder="$t('secure.keepPassword')" :type="showEditSessionPassword ? 'text' : 'password'" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono tracking-wide transition-all" autocomplete="new-password" />
-            <button v-if="canWrite" type="button" @click="showEditSessionPassword = !showEditSessionPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground transition-colors">
-              <Eye v-if="showEditSessionPassword" class="h-4 w-4" />
-              <EyeOff v-else class="h-4 w-4" />
-            </button>
-          </div>
-        </div>
         <div class="flex justify-end gap-3 pt-4">
           <button type="button" :disabled="isLoading" @click="closeSessionDialog" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
           <button type="submit" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
@@ -214,34 +214,43 @@
 <script setup lang="ts">
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
-import { ref, shallowRef, computed, onBeforeUnmount, onDeactivated, watch } from 'vue'
-import { Lock, Eye, EyeOff, Edit, Trash2, X, Loader2, ChevronRight } from 'lucide-vue-next'
+import { ref, shallowRef, computed, onBeforeUnmount, onDeactivated, onMounted, onActivated, watch } from 'vue'
+import { Lock, Eye, EyeOff, Edit, X, Loader2, ChevronRight, ShieldCheck } from 'lucide-vue-next'
 import { useWorkspaceClient } from '@/lib/workspaceScope'
-import { createVaultKey, unlockVaultKey, encryptVaultValue, decryptVaultValue, isSealedVault, vaultKeyId } from '@/lib/vaultCrypto'
+import { unlockVaultKey, encryptVaultValue, decryptVaultValue, isSealedVault, isRecoverableVault, vaultKeyId, generateVaultPassword } from '@/lib/vaultCrypto'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import SecureNoteItem from './SecureNoteItem.vue'
+import VaultNotice from './VaultNotice.vue'
+import VaultManager from './VaultManager.vue'
 
 interface SecureNote {
   id: string; title: string; description?: string; type: 'password' | 'secret'; username?: string
   password_encrypted?: string; url?: string; content?: string; created_at: string; updated_at: string
-  session_id: string; version?: number; encrypted_payload?: Awaited<ReturnType<typeof encryptVaultValue>> & { key_id?: string }
+  session_id: string; version?: number; deleted_at?:string|null; encrypted_payload?: Awaited<ReturnType<typeof encryptVaultValue>> & { key_id?: string }
 }
 interface PasswordSession { id: string; name: string; password_hash: string; created_at: string; updated_at?: string; version?: number }
 const { canWrite } = useModuleAccess('secure')
 
 const { t } = useI18n()
 const authStore = useAuthStore(), supabase = useWorkspaceClient(), uiStore = useUIStore()
+const isOwner=computed(()=>supabase.isOwner('secure'))
+const manager=ref<InstanceType<typeof VaultManager>>()
+const showDeleted=ref(false),historyOpen=ref(false),noteHistory=ref<{id:string;saved_at:string}[]>([])
+const visibleNotes=computed(()=>secureNotes.value.filter(note=>showDeleted.value?note.deleted_at&&Date.parse(note.deleted_at)>Date.now()-30*86400000:!note.deleted_at))
+function openManagement(){if(currentSession.value&&isOwner.value)manager.value?.open(isRecoverableVault(currentSession.value.password_hash)?'password':'upgrade',currentSession.value)}
+function recoverSelected(){const session=selectedSessionForUnlock.value;if(!session)return;closeUnlockDialog();manager.value?.open(isRecoverableVault(session.password_hash)?'recover':'upgrade',session)}
+async function vaultChanged(){lockVault(false);inlineSessionName.value='';await loadPasswordSessions()}
 const noteTypeOptions = computed(() => [
   { value: 'password', label: t('secure.typePassword') }, { value: 'secret', label: t('secure.typeSecret') }
 ])
 const isAuthenticated = ref(false), currentSession = ref<PasswordSession | null>(null)
 const passwordSessions = ref<PasswordSession[]>([]), secureNotes = ref<SecureNote[]>([])
 const vaultKey = shallowRef<CryptoKey | null>(null)
-let lockEpoch = 0
-const showInlinePassword = ref(false), showUnlockPassword = ref(false), showDialogPassword = ref(false)
+let lockEpoch = 0, noteLoad=0
+const showUnlockPassword = ref(false), showDialogPassword = ref(false)
 const showVerificationPassword = ref(false), showEditSessionPassword = ref(false)
 const inlineSessionName = ref(''), inlineSessionPassword = ref('')
 const unlockDialog = ref<HTMLDialogElement | null>(null), selectedSessionForUnlock = ref<PasswordSession | null>(null), unlockPassword = ref('')
@@ -261,23 +270,29 @@ const sensitive = (note: Partial<SecureNote>) => ({
 const payloadFor = async (key: CryptoKey, note: Partial<SecureNote>, session: PasswordSession, metadata = session.password_hash) => ({
   ...await encryptVaultValue(key, sensitive(note), session.id + ':' + note.id), key_id: vaultKeyId(metadata)
 })
-const lockVault = () => {
+const lockVault = (closeManager=true) => {
   noteDraftTitle.value='';noteDraftType.value='password'
+  inlineSessionName.value='';showUnlockPassword.value=false;showDialogPassword.value=false;showVerificationPassword.value=false;showEditSessionPassword.value=false;verificationError.value=''
   lockEpoch++; vaultKey.value = null; isAuthenticated.value = false; currentSession.value = null; secureNotes.value = []
   editingNote.value = { title: '', type: 'password' }; editingSession.value = { name: '', password: '' }
   inlineSessionPassword.value = ''; unlockPassword.value = ''; verificationPassword.value = ''
   selectedSessionForUnlock.value = null; unlockDialog.value?.close()
   showAddNoteDialog.value = false; showSessionDialog.value = false; showPasswordVerification.value = false
+  showDeleted.value=false;historyOpen.value=false;noteHistory.value=[]
+  if(closeManager)manager.value?.close(true)
 }
 const showFailure = (err: unknown) => {
   const message = (err as Error)?.message || ''
   uiStore.addToast(t(message.includes('SHARING_CONFLICT') ? 'sharing.conflict'
-    : message.includes('VAULT_HTTPS_REQUIRED') ? 'secure.httpsRequired' : 'sharing.errors.SAVE_FAILED'), 'error')
+    : message.includes('VAULT_HTTPS_REQUIRED') ? 'secure.httpsRequired' : message.includes('VAULT_ACK_REQUIRED')?'vault.errors.VAULT_ACK_REQUIRED':'sharing.errors.SAVE_FAILED'), 'error')
 }
 const fetchRows = async (sessionId: string): Promise<SecureNote[]> => {
-  const { data, error } = await supabase.from('secure_notes').select('*').eq('session_id', sessionId).order('created_at', { ascending: false })
-  if (error) throw error
-  return data || []
+  const rows:SecureNote[]=[]
+  for(let start=0;;start+=500){
+    const {data,error}=await supabase.from('secure_notes').select('*').eq('session_id',sessionId).order('created_at',{ascending:false}).order('id').range(start,start+499)
+    if(error)throw error
+    rows.push(...(data||[]));if((data||[]).length<500)return rows
+  }
 }
 const loadPasswordSessions = async () => {
   const epoch = lockEpoch
@@ -295,35 +310,18 @@ const loadPasswordSessions = async () => {
   } catch (err) { showFailure(err) }
 }
 const loadSecureNotes = async () => {
-  const session = currentSession.value, key = vaultKey.value, epoch = lockEpoch
+  const session = currentSession.value, key = vaultKey.value, epoch = lockEpoch,ticket=++noteLoad
   if (!session) return
   const rows = await fetchRows(session.id)
   const decoded = key ? await Promise.all(rows.map(async row => {
     if (!row.encrypted_payload) throw new Error('VAULT_INVALID_DATA')
     return { ...row, ...await decryptVaultValue<ReturnType<typeof sensitive>>(key, row.encrypted_payload, session.id + ':' + row.id) }
   })) : rows
-  if (epoch === lockEpoch && currentSession.value?.id === session.id) secureNotes.value = decoded
+  if (epoch === lockEpoch && ticket===noteLoad && currentSession.value?.id === session.id) secureNotes.value = decoded
 }
-const handleInlineAddSession = async () => {
-  if (isLoading.value || !inlineSessionName.value.trim() || !inlineSessionPassword.value.trim()) return
-  if (!supabase.collection('secure')) { uiStore.addToast(t('sharing.errors.SETUP_REQUIRED'), 'error'); return }
-  const name = inlineSessionName.value.trim(), password = inlineSessionPassword.value, epoch = lockEpoch
-  isLoading.value = true
-  try {
-    if (passwordSessions.value.some(s => s.name.toLowerCase().trim() === name.toLowerCase())) {
-      uiStore.addToast(t('secure.sessionExists', { name }), 'error'); return
-    }
-    const { metadata } = await createVaultKey(password)
-    if (epoch !== lockEpoch) return
-    const { data, error } = await supabase.from('password_sessions').insert([{ created_by: authStore.user?.id, name, password_hash: metadata }]).select()
-    if (error) throw error
-    if (epoch !== lockEpoch) return
-    if (data?.[0]) passwordSessions.value.unshift(data[0])
-    if (inlineSessionName.value.trim() === name && inlineSessionPassword.value === password) {
-      inlineSessionName.value = ''; inlineSessionPassword.value = ''; showInlinePassword.value = false
-    }
-    uiStore.addToast(t('secure.sessionCreated'), 'success')
-  } catch (err) { showFailure(err) } finally { isLoading.value = false }
+const handleInlineAddSession = () => {
+  if (isLoading.value || !inlineSessionName.value.trim() || !isOwner.value) return
+  manager.value?.open('create',null,inlineSessionName.value.trim())
 }
 const promptSessionUnlock = (session: PasswordSession) => {
   selectedSessionForUnlock.value = session; unlockPassword.value = ''; showUnlockPassword.value = false; unlockDialog.value?.showModal()
@@ -339,15 +337,8 @@ const authenticate = async () => {
     if (isSealedVault(session.password_hash)) key = await unlockVaultKey(password, session.password_hash)
     else {
       if (session.password_hash !== password.trim()) { uiStore.addToast(t('secure.invalidPassword'), 'error'); return }
-      if (supabase.collection('secure')) {
-        const sealed = await createVaultKey(password.trim()), rows = await fetchRows(session.id)
-        const notes = await Promise.all(rows.map(async row => ({
-          id: row.id, version: row.version, encrypted_payload: await payloadFor(sealed.key, row, session, sealed.metadata)
-        })))
-        if (epoch !== lockEpoch) return
-        session = await supabase.sealVault(session.id, session.password_hash, sealed.metadata, notes, session.version!, session.name)
-        key = sealed.key
-      }
+      if (!isOwner.value) { uiStore.addToast(t('vault.ownerOnly'),'info'); return }
+      closeUnlockDialog(); manager.value?.open('upgrade',session); return
     }
     if (epoch !== lockEpoch || selectedSessionForUnlock.value?.id !== session.id) return
     currentSession.value = session; vaultKey.value = key; isAuthenticated.value = true
@@ -375,23 +366,9 @@ const saveSession = async () => {
   try {
     let updated: PasswordSession
     let nextKey = vaultKey.value
-    if (editingSession.value.password) {
-      const sealed = await createVaultKey(editingSession.value.password)
-      const rows = await fetchRows(session.id)
-      const decoded = await Promise.all(rows.map(async row => ({
-        ...row, ...await decryptVaultValue<ReturnType<typeof sensitive>>(vaultKey.value!, row.encrypted_payload!, session.id + ':' + row.id)
-      })))
-      const notes = await Promise.all(decoded.map(async row => ({
-        id: row.id, version: row.version, encrypted_payload: await payloadFor(sealed.key, row, session, sealed.metadata)
-      })))
-      if (epoch !== lockEpoch) return
-      updated = await supabase.sealVault(session.id, session.password_hash, sealed.metadata, notes, editingSession.value.version!, editingSession.value.name)
-      nextKey = sealed.key
-    } else {
-      const { data, error } = await supabase.from('password_sessions').update({ name: editingSession.value.name, version: editingSession.value.version }).eq('id', session.id).select().single()
-      if (error) throw error
-      updated = data
-    }
+    const { data, error } = await supabase.from('password_sessions').update({ name: editingSession.value.name, version: editingSession.value.version }).eq('id', session.id).select().single()
+    if (error) throw error
+    updated = data
     if (epoch !== lockEpoch) return
     vaultKey.value = nextKey
     const index = passwordSessions.value.findIndex(s => s.id === session.id)
@@ -400,18 +377,7 @@ const saveSession = async () => {
     uiStore.addToast(t('secure.sessionUpdated'), 'success')
   } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
-const deleteCurrentSession = async () => {
-  const session = currentSession.value
-  if (!session || !canWrite.value || isLoading.value) return
-  isLoading.value = true
-  try {
-    const { error } = await supabase.from('password_sessions').delete().eq('id', session.id)
-    if (error) throw error
-    passwordSessions.value = passwordSessions.value.filter(s => s.id !== session.id)
-    logout()
-  } catch (err) { showFailure(err) } finally { isLoading.value = false }
-}
-const editNote = (note: SecureNote) => { editingNote.value = { ...note }; showDialogPassword.value = false; showAddNoteDialog.value = true }
+const editNote = (note: SecureNote) => { historyOpen.value=false;noteHistory.value=[];editingNote.value = { ...note }; showDialogPassword.value = false; showAddNoteDialog.value = true }
 const editSession = (session: PasswordSession) => {
   editingSession.value = { ...session, password: '' }; showEditSessionPassword.value = false
   verificationPassword.value = ''; verificationError.value = ''; showPasswordVerification.value = true
@@ -452,12 +418,27 @@ const deleteNote = async (id: string) => {
   if (!canWrite.value || isLoading.value) return
   isLoading.value = true
   try {
-    const { error } = await supabase.from('secure_notes').delete().eq('id', id)
-    if (error) throw error
-    secureNotes.value = secureNotes.value.filter(n => n.id !== id)
+    const note=secureNotes.value.find(n=>n.id===id)
+    if(!note?.version)return
+    await supabase.vaultRecordAction(id,note.version,'trash')
+    await loadSecureNotes()
   } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }
 
+async function restoreNote(note:SecureNote){
+  if(!canWrite.value||isLoading.value||!note.version)return
+  isLoading.value=true
+  try{await supabase.vaultRecordAction(note.id,note.version,'restore');await loadSecureNotes()}catch(err){showFailure(err)}finally{isLoading.value=false}
+}
+async function loadHistory(){
+  const id=editingNote.value.id,epoch=lockEpoch;if(!id)return
+  try{const data=await supabase.vaultHistory(id);if(epoch!==lockEpoch||editingNote.value.id!==id)return;noteHistory.value=data||[];historyOpen.value=true}catch(err){showFailure(err)}
+}
+async function restoreHistory(id:string){
+  const note=editingNote.value,epoch=lockEpoch;if(!note.id||!note.version||isLoading.value)return
+  isLoading.value=true
+  try{await supabase.vaultRecordAction(note.id,note.version,'history',id);if(epoch!==lockEpoch)return;await loadSecureNotes();closeNoteDialog()}catch(err){showFailure(err)}finally{isLoading.value=false}
+}
 watch(showAddNoteDialog, show => { if (show) noteDialog.value?.showModal(); else noteDialog.value?.close() })
 watch(showSessionDialog, show => { if (show) sessionDialog.value?.showModal(); else sessionDialog.value?.close() })
 watch(showPasswordVerification, show => { if (show) passwordVerificationDialog.value?.showModal(); else passwordVerificationDialog.value?.close() })
@@ -466,12 +447,25 @@ supabase.listen({
   secure_notes: async () => { try { await loadSecureNotes() } catch (err) { lockVault(); showFailure(err) } }
 }, () => isLoading.value || isVerifyingPassword.value)
 useModuleLoad(loadPasswordSessions)
-onDeactivated(lockVault)
-onBeforeUnmount(lockVault)
+// Check elapsed wall time on return too: background tabs can throttle timers.
+let lastActivity=Date.now(),hiddenAt=0,active=true,lockTimer:ReturnType<typeof setInterval>|undefined
+const touch=()=>{lastActivity=Date.now()}
+const checkLock=()=>{if(active&&(Date.now()-lastActivity>=300000||(hiddenAt>0&&Date.now()-hiddenAt>=60000))){lockVault();lastActivity=Date.now()}}
+const visibility=()=>{if(document.hidden){hiddenAt=Date.now()}else{checkLock();hiddenAt=0}}
+onMounted(()=>{
+  document.addEventListener('pointerdown',touch,{passive:true});document.addEventListener('keydown',touch);document.addEventListener('visibilitychange',visibility)
+  document.addEventListener('wheel',touch,{passive:true});window.addEventListener('pagehide',pageHide)
+  hiddenAt=document.hidden?Date.now():0
+  lockTimer=setInterval(checkLock,1000)
+})
+onActivated(()=>{active=true;lastActivity=Date.now()})
+onDeactivated(()=>{active=false;lockVault()})
+const pageHide=()=>lockVault()
+onBeforeUnmount(()=>{active=false;if(lockTimer)clearInterval(lockTimer);document.removeEventListener('pointerdown',touch);document.removeEventListener('keydown',touch);document.removeEventListener('visibilitychange',visibility);document.removeEventListener('wheel',touch);window.removeEventListener('pagehide',pageHide);lockVault()})
 </script>
 
 <style scoped>
-.vault-create-form,.vault-entry-form { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:center; gap:8px; }
+.vault-create-form,.vault-entry-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:8px; }
 .vault-entry-form { grid-template-columns:minmax(0,1fr) 140px auto; }
 .vault-field { @apply h-10 w-full min-w-0 rounded-xl border border-border/70 bg-card/65 px-3 text-[13px] text-foreground shadow-[0_1px_3px_rgb(15,23,42,0.025)] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/10 disabled:opacity-50 dark:bg-muted/[0.08]; }
 .vault-create-form .vault-primary,.vault-entry-form .vault-primary { height:40px; }

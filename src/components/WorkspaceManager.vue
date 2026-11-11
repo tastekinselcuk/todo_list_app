@@ -107,7 +107,7 @@ async function confirmDelete() {
         : store.error?.includes('WORKSPACE_FOCUS_ACTIVE') ? 'deleteFocus'
         : store.error?.includes('WORKSPACE_CHANGED') ? 'deleteChanged'
         : /PGRST202|42883|Could not find the function/.test(store.error || '') ? 'deleteSetup' : 'deleteFailed'
-      deleteError.value = t('workspaces.' + key)
+      deleteError.value = store.error?.includes('VAULT_EMAIL_REQUIRED') ? t('vault.errors.VAULT_EMAIL_REQUIRED') : t('workspaces.' + key)
     }
   } catch { deleteError.value = t('workspaces.deleteFailed') }
   finally { removing.value = false }

@@ -105,6 +105,35 @@ export function useWorkspaceClient() {
       return result.data
     },
     timezone(module: string) { return workspaces.binding(module, workspaceId)?.timezone },
+    isOwner(module: string) { return workspaces.binding(module, workspaceId)?.role === 'owner' },
+    async vaultHistoryPayloads(ids:string[]) {
+      assertCurrent()
+      const cid=workspaces.binding('secure',workspaceId)?.collection_id
+      if(!cid)throw Error('ACCESS_DENIED')
+      const rows:any[]=[]
+      for(let index=0;index<ids.length;index+=50){
+        const result=await supabase.from('vault_note_history').select('id,note_id,encrypted_payload').eq('collection_id',cid).in('note_id',ids.slice(index,index+50))
+        assertCurrent();if(result.error)throw result.error;rows.push(...(result.data||[]))
+      }
+      return rows
+    },
+    async vaultHistory(id:string) {
+      assertCurrent()
+      const cid=workspaces.binding('secure',workspaceId)?.collection_id
+      if(!cid)throw Error('ACCESS_DENIED')
+      const result=await supabase.from('vault_note_history').select('id,saved_at').eq('collection_id',cid).eq('note_id',id).order('saved_at',{ascending:false})
+      assertCurrent();if(result.error)throw result.error;return result.data
+    },
+    async vaultRecordAction(id:string,version:number,operation:string,historyId:string|null=null) {
+      assertWritable('secure')
+      const result=await supabase.rpc('vault_record_action',{nid:id,expected_version:version,operation,hid:historyId})
+      assertCurrent();if(result.error)throw result.error
+    },
+    async importVault(name:string,metadata:string,notes:Record<string,unknown>[]) {
+      assertWritable('secure')
+      const result=await supabase.rpc('vault_import',{wid:workspaceId,new_name:name,metadata,notes})
+      assertCurrent();if(result.error)throw result.error;return result.data
+    },
     async sealVault(sessionId: string, previousHash: string, metadata: string, notes: Record<string, unknown>[], version: number, name: string) {
       assertWritable('secure')
       const result = await supabase.rpc('seal_vault', { sid: sessionId, previous_hash: previousHash, metadata, notes, expected_version: version, new_name: name })

@@ -42,7 +42,7 @@ function vaultView() {
   const calls=[],toasts=[], listeners={}
   let fail=false,gate,entered
   const client={
-    collection(){return 'secure-collection'},
+    collection(){return 'secure-collection'},isOwner(){return true},
     listen(callbacks){Object.assign(listeners,callbacks)},
     async sealVault(id,previousHash,metadata,encryptedNotes,version,name){
       calls.push(['seal',previousHash,metadata,encryptedNotes]); entered?.()
@@ -56,11 +56,11 @@ function vaultView() {
     from(table){
       let op='select',payload,single=false,id
       const rows=table==='password_sessions'?sessions:notes
-      const q={select(){return q},order(){return q},eq(key,value){if(key==='id')id=value;return q},
+      const q={select(){return q},order(){return q},range(){return q},eq(key,value){if(key==='id')id=value;return q},
         update(value){op='update';payload=value;return q},insert(value){op='insert';payload=value;return q},single(){single=true;return q},
         then(resolve,reject){return (async()=>{
           if(fail&&op!=='select')return {data:null,error:{message:'Offline'}}
-          if(op==='update'){Object.assign(rows.find(row=>row.id===id),payload);calls.push(['update',payload])}
+          if(op==='update'){entered?.();if(gate)await gate;Object.assign(rows.find(row=>row.id===id),payload);calls.push(['update',payload])}
           if(op==='insert'){rows.push(...payload);calls.push(['insert',payload])}
           const data=structuredClone(id?rows.filter(row=>row.id===id):rows)
           return {data:single?data[0]:data,error:null}
@@ -74,7 +74,7 @@ function vaultView() {
   const quietConsole={...console,warn(){}}
   const dependencies={vue,'lucide-vue-next':{},'@/lib/workspaceScope':{useModuleLoad:callback=>vue.onMounted(callback),useWorkspaceClient:()=>client,useModuleAccess:()=>({canWrite:vue.ref(true)})},'@/lib/vaultCrypto':cryptoApi,
     '@/stores/auth':{useAuthStore:()=>({user:{id:'owner'}})},'@/stores/ui':{useUIStore:()=>({addToast:(...args)=>toasts.push(args),showConfirm:async()=>true})},
-    'vue-i18n':{useI18n:()=>({t:key=>key})},'@/components/ui/CustomSelect.vue':{default:{}},'./SecureNoteItem.vue':{default:{}}}
+    'vue-i18n':{useI18n:()=>({t:key=>key})},'@/components/ui/CustomSelect.vue':{default:{}},'./SecureNoteItem.vue':{default:{}},'./VaultManager.vue':{default:{}},'./VaultNotice.vue':{default:{}}}
   vm.runInNewContext(code,{exports,require:name=>dependencies[name]||(name==='@/lib/utils'?sharedUtils:require(name)),console:quietConsole,crypto:webcrypto,Date})
   const scope=vue.effectScope()
   let state
@@ -85,11 +85,16 @@ function vaultView() {
     holdSeal(){let release,start;gate=new Promise(resolve=>release=resolve);const started=new Promise(resolve=>start=resolve);entered=start;return {release,started}}}
 }
 async function openLegacy(f) {
+  const sealed=await cryptoApi.createVaultKey('old-password')
+  f.sessions[0].password_hash=sealed.metadata
+  f.notes[0].encrypted_payload={...await cryptoApi.encryptVaultValue(sealed.key,{title:'Original',type:'secret',content:'Private content'},'vault:note'),key_id:cryptoApi.vaultKeyId(sealed.metadata)}
+  f.notes[0].title='Encrypted note';f.notes[0].content=null
   f.state.promptSessionUnlock(structuredClone(f.sessions[0]))
   f.state.unlockPassword.value='old-password'
   await f.state.authenticate()
 }
-test('vault screen upgrades a legacy vault on unlock and retains the draft when an encrypted save fails', async () => {
+
+test('vault screen reads existing v1 encryption and retains the draft when an encrypted save fails', async () => {
   const f=vaultView()
   try {
     await openLegacy(f)
@@ -126,17 +131,17 @@ test('vault quick entry prefills the protected form and switching vaults clears 
     assert.equal(f.state.selectedSessionForUnlock.value.id,'another')
   }finally{f.close()}
 })
-test('a completed password rotation cannot put a key back into a vault that was locked meanwhile', async () => {
+test('a delayed rename cannot put a key back into a vault that was locked meanwhile', async () => {
   const f=vaultView()
   try {
     await openLegacy(f)
-    f.state.editingSession.value={...f.state.currentSession.value,password:'new-password'}
+    f.state.editingSession.value={...f.state.currentSession.value,name:'Renamed',password:''}
     const held=f.holdSeal(),saving=f.state.saveSession()
     await held.started
     f.state.lockVault();held.release();await saving
     assert.equal(f.state.vaultKey.value,null)
     assert.equal(f.state.currentSession.value,null)
-    const key=await cryptoApi.unlockVaultKey('new-password',f.sessions[0].password_hash)
+    const key=await cryptoApi.unlockVaultKey('old-password',f.sessions[0].password_hash)
     assert.equal((await cryptoApi.decryptVaultValue(key,f.notes[0].encrypted_payload,'vault:note')).content,'Private content')
   } finally { f.close() }
 })

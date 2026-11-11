@@ -1,3 +1,4 @@
+import { vaultTr } from '@/features/secure_notes/lib/messages'
 export default {
   planFocusSettings: {title:'Pomodoro ayarları',sessions:'Oturum hedefi',minutes:'Süre (dakika)',remove:'Bağlantıyı kaldır',hint:'Hedefe ulaşmak notu otomatik tamamlamaz.',runningHint:'Süre değişikliği sonraki oturumda uygulanır. Mevcut oturum devam eder.',loadFailed:'Not bilgisi yüklenemedi. Kapatıp yeniden dene.',saveFailed:'Odak başlatılamadı veya ayarlar kaydedilemedi. Yeniden dene.',removeFailed:'Bağlantı kaldırılamadı. Bağlantını ve veritabanı güncellemesini kontrol edip yeniden dene.'},
   planFocus: { legacySharing: 'Hızlı notların paylaşımı' },
@@ -718,6 +719,7 @@ app: {
       'extended': 'Uzun'
     }
   },
+  vault: vaultTr,
   secure: {
     passwordProtected:'Şifreyle korumalı',
     newVault:'Yeni kasa', chooseVault:'Kasa seç', lockVault:'Kasayı kilitle', recordCount:'{count} kayıt', noVaultsShort:'Henüz kasa eklenmedi.', noNotesShort:'Bu kasada henüz kayıt yok.', noteTitlePlaceholder:'Kayıt başlığı…', showDetails:'Ayrıntıları göster', copyFailed:'Kopyalama başarısız',

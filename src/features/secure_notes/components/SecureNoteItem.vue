@@ -41,7 +41,7 @@
 </template>
 <script setup lang="ts">
 import { useModuleAccess } from '@/lib/workspaceScope'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { Edit, Trash2, Copy, Eye, EyeOff, Globe, ChevronDown, Lock } from 'lucide-vue-next'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
@@ -61,6 +61,9 @@ const uiStore = useUIStore()
 const { t } = useI18n()
 
 const isExpanded=ref(false),showPassword=ref(false)
+let maskTimer:ReturnType<typeof setTimeout>|undefined
+watch(showPassword,visible=>{if(maskTimer)clearTimeout(maskTimer);if(visible)maskTimer=setTimeout(()=>showPassword.value=false,30000)})
+onBeforeUnmount(()=>{if(maskTimer)clearTimeout(maskTimer)})
 watch(isExpanded,open=>{if(!open)showPassword.value=false})
 watch(()=>props.note,()=>{showPassword.value=false},{deep:true})
 

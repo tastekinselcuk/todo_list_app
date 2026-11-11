@@ -1,3 +1,4 @@
+import { vaultEn } from '@/features/secure_notes/lib/messages'
 export default {
   planFocusSettings: {title:'Pomodoro settings',sessions:'Session goal',minutes:'Duration (minutes)',remove:'Remove connection',hint:'Reaching the goal does not complete the note automatically.',runningHint:'Duration changes apply to the next session. The current session continues.',loadFailed:'Could not load the note. Close and retry.',saveFailed:'Could not start focus or save the settings. Please retry.',removeFailed:'Could not remove the connection. Check your connection and database update, then retry.'},
   planFocus: { legacySharing: 'Quick notes sharing' },
@@ -714,6 +715,7 @@ app: {
       'extended': 'Extended'
     }
   },
+  vault: vaultEn,
   secure: {
     passwordProtected:'Password protected',
     newVault:'New vault', chooseVault:'Choose vault', lockVault:'Lock vault', recordCount:'{count} records', noVaultsShort:'No vaults yet.', noNotesShort:'No records in this vault yet.', noteTitlePlaceholder:'Record title…', showDetails:'Show details', copyFailed:'Could not copy',

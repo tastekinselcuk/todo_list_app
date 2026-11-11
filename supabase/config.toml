@@ -1,3 +1,7 @@
 [functions.outlook-calendar]
 # Microsoft/Google callbacks have no Supabase JWT. All POST actions validate it in the handler.
 verify_jwt = false
+
+[functions.vault-security]
+# The handler verifies every JWT with Auth, including verified email and MFA assurance.
+verify_jwt = false
