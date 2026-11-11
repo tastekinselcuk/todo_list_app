@@ -73,7 +73,7 @@ Güvenlik olayları 180 gün, kod kayıtları en fazla bir gün; silinen kayıtl
 
 ## Yayın durumu
 
-Kod/migration hazırlanmıştır. Üretimde eski arayüz ile yeni veritabanı kuralları koordineli yayınlanmalıdır. Projede `RESEND_API_KEY`, `VAULT_FROM_EMAIL`, `VAULT_OTP_SECRET` tanımlı bulunmadı; gerçek e-posta teslimatı doğrulanamadı. [Kurulum ve yayın sırası](SECURE_VAULT_SETUP.md).
+12 Kasım 2026'da yeni arayüz, migration, kasa güvenlik servisi ve temizlik servisi yayınlandı. Projedeki altı Resend/kasa ayarı doğrulandı; tek gerçek test e-postası için Resend teslim durumu `delivered` olarak görüldü. `VAULT_MAIL_MODE=test` olduğundan güvenlik e-postaları yalnızca yapılandırılmış test hesabına gönderilir. Bu, tüm kullanıcılara üretim gönderiminin açıldığı anlamına gelmez. [Yayın kaydı](SECURE_VAULT_RELEASE_2026_11_12.md), [kurulum ve üretime geçiş](SECURE_VAULT_SETUP.md).
 
 Bağımsız denetim, gerçek mobil Safari testi, e-posta teslimatı ve hukuki belgeler tamamlanmadan “hatasız”, “Apple kadar güvenli”, “denetlenmiş sıfır bilgi” veya “tüm hukuki sorumluluk kaldırıldı” denmemelidir.
 

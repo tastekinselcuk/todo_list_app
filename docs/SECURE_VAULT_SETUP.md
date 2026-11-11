@@ -1,6 +1,8 @@
 # Güvenli Kasa v2 kurulumu
 
-Bu sürüm kaynak kodunda hazırdır. Mevcut canlı veriler değiştirilmedi. Yeni migration eski arayüzün kasa yazımlarını bilgilendirme/step-up eksikliği nedeniyle engeller; **yalnızca SQL'i üretimde önce çalıştırıp eski arayüzü uzun süre açık bırakmayın**. Önce staging, ardından koordineli kısa yayın penceresinde ilerleyin. Bütün bekleyen migration'ları körlemesine `db push` ile uygulamayın.
+12 Kasım 2026: Bu sürüm Netlify ve Supabase üzerinde **test e-posta modunda yayınlandı**. Gerçek test e-postasının Resend teslim durumu `delivered` olarak doğrulandı. Mevcut kasa içerikleri açılmadı veya dönüştürülmedi. Aşağıdaki adımlar yeni kurulumlar ve üretim göndericisine geçiş için korunmuştur. [Yayın doğrulama kaydı](SECURE_VAULT_RELEASE_2026_11_12.md).
+
+Yeni migration eski arayüzün kasa yazımlarını bilgilendirme/step-up eksikliği nedeniyle engeller; **yalnızca SQL'i önce çalıştırıp eski arayüzü uzun süre açık bırakmayın**. Bütün bekleyen migration'ları körlemesine `db push` ile uygulamayın.
 
 ## E-posta sağlayıcısı
 
