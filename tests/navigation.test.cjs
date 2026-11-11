@@ -106,6 +106,7 @@ function harness(authOverride) {
   dependencies['@/components/ui/UserProfileMenu.vue'] = { default: component('src/components/ui/UserProfileMenu.vue') }
   dependencies['./PomodoroViewIcon.vue'] = { default: component('src/features/pomodoro/components/PomodoroViewIcon.vue') }
   dependencies['../lib/focusEnvironment'] = focusEnvironment
+  dependencies['./PlanFocusSettings.vue'] = { default: placeholder('Plan focus settings') }
   dependencies['./PomodoroFocus.vue'] = { default: component('src/features/pomodoro/components/PomodoroFocus.vue') }
   dependencies['@/features/pomodoro/components/PomodoroTimer.vue'] = { default: component('src/features/pomodoro/components/PomodoroTimer.vue') }
   const host = tag => ({ tag, tagName: tag.toUpperCase(), children: [], props: {}, parent: null, style: {}, offsetLeft: 4, offsetWidth: 80,
@@ -242,11 +243,11 @@ test('profile editing and logout remain available with and without the Pomodoro 
    assert.ok(h.find(node=>node.props['data-user-profile']!==undefined))
    h.click(h.find(node=>node.props['aria-label']==='account.menuLabel'));await settle()
    h.click(h.find(node=>node.props.role==='menuitem'&&h.text(node)==='account.editProfile'));await settle()
-   assert.ok(h.find(node=>node.text==='Settings'));assert.equal(h.find(node=>node.props.role==='menu'),undefined)
+   assert.ok(h.find(node=>node.text==='Settings'));assert.equal(h.find(node=>node.props.role==='menu'&&node.props.id!=='pomodoro-options'),undefined)
   }
   h.click(h.find(node=>node.props['aria-label']==='account.menuLabel'));await settle()
   h.click(h.find(node=>node.props.role==='menuitem'&&h.text(node)==='app.signOut'));await settle()
-  assert.equal(h.find(node=>node.props.role==='menu'),undefined)
+  assert.equal(h.find(node=>node.props.role==='menu'&&node.props.id!=='pomodoro-options'),undefined)
  }finally{app.unmount()}
  assert.equal(h.documentListeners.size,0)
 })
@@ -285,7 +286,7 @@ test('the fixed sidebar survives page changes while the docked timer keeps runni
    assert.equal(h.find(node=>node.props['aria-label']==='workspaceNav.sections.notes').props['aria-current'],undefined)
    assert.equal(h.intervals.size,1);h.advance(5_000);await settle()
   }
-  assert.ok(h.find(node=>node.tag==='button'&&h.text(node)==='24:45'))
+  assert.ok(h.find(node=>node.props.role==='timer'&&h.text(node)==='24:45'))
   h.scrollTo(300);await settle();assert.equal(h.find(node=>node.props['data-pomodoro-navigation']!==undefined).props.inert,true)
   assert.equal(rail.props.inert,undefined,'sidebar stays usable while the dock hides')
   h.scrollTo(290);await settle();assert.equal(h.find(node=>node.props['data-pomodoro-navigation']!==undefined).props.inert,false)
@@ -479,39 +480,20 @@ test('analytics and settings use the shared sidebar-aware layout in both width m
   }finally{app.unmount()}
 })
 
-test('compact dock controls can change session, start, reset and restore the timer card', async () => {
-  const h = harness()
-  const app = h.renderer.createApp(h.component('src/App.vue'))
-  app.config.globalProperties.$t = key => key
-  app.mount(h.root)
-  await settle()
-  h.click(h.find(node => node.props['aria-label'] === 'pomodoro.expandToNavbar'))
-  await settle()
-  const menu = h.find(node => node.props.id === 'pomodoro-dock-controls')
-  const menuButton = label => {
-    const visit = node => node.tag === 'button' && h.text(node).includes(label) ? node : node.children.map(visit).find(Boolean)
-    return visit(menu)
-  }
-  let closed = 0
-  menu.hidePopover = () => closed++
-  h.click(menuButton('pomodoro.shortBreak'))
-  await settle()
-  assert.ok(h.find(node => node.tag === 'button' && h.text(node) === '05:00'))
-  h.click(menuButton('pomodoro.start'))
-  h.advance(5_000)
-  await settle()
-  assert.ok(menuButton('pomodoro.pause'))
-  assert.ok(h.find(node => node.tag === 'button' && h.text(node) === '04:55'))
-  h.click(menuButton('pomodoro.reset'))
-  await settle()
-  assert.equal(h.intervals.size, 0)
-  assert.ok(h.find(node => node.tag === 'button' && h.text(node) === '05:00'))
-  h.click(menuButton('pomodoro.collapse'))
-  await settle()
-  assert.equal(closed, 4)
-  assert.equal(h.find(node => node.props['data-pomodoro-navigation'] !== undefined), undefined)
-  assert.ok(h.find(node => node.props['aria-label'] === 'pomodoro.expandToNavbar'))
-  app.unmount()
+test('the shared timer options move the card and the centered dock keeps session controls together',async()=>{
+ const h=harness(),app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key;app.mount(h.root);await settle()
+ const menu=h.find(node=>node.props.id==='pomodoro-options')
+ const menuButton=label=>{const visit=node=>node.tag==='button'&&h.text(node).includes(label)?node:node.children.map(visit).find(Boolean);return visit(menu)}
+ let closed=0;menu.hidePopover=()=>closed++
+ h.click(menuButton('pomodoro.expandToNavbar'));await settle()
+ const controls=h.find(node=>node.props['data-pomodoro-controls']!==undefined);assert.ok(controls)
+ h.click(menuButton('pomodoro.shortBreak'));await settle();assert.ok(h.find(node=>node.props.role==='timer'&&h.text(node)==='05:00'))
+ const byClass=value=>h.find(node=>node.tag==='button'&&String(node.props.class||'').split(' ').includes(value))
+ h.click(byClass('dock-toggle'));h.advance(5_000);await settle();assert.ok(h.find(node=>node.props.role==='timer'&&h.text(node)==='04:55'))
+ h.click(byClass('dock-reset'));await settle();assert.equal(h.intervals.size,0);assert.ok(h.find(node=>node.props.role==='timer'&&h.text(node)==='05:00'))
+ h.click(menuButton('pomodoro.collapse'));await settle();assert.ok(closed>=3)
+ assert.equal(h.find(node=>node.props['data-pomodoro-navigation']!==undefined),undefined)
+ assert.ok(h.find(node=>node.props['aria-label']==='pomodoro.controls'));app.unmount()
 })
 
 test('content search chooses only enabled safe modules and passes the specific destination without starting a timer', async () => {

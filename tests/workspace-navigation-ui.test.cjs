@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript')
 const {parse,compileScript}=require('@vue/compiler-sfc'),vue=require('vue')
 
-function fixture({mobile=false}={}){
+function fixture({mobile=false,cache=new Map(),storageFailed=false}={}){
  const {JSDOM}=require('jsdom'),dom=new JSDOM('<main></main><button id="outside">Outside</button>',{url:'http://localhost/'}),doc=dom.window.document,runtime=require('@vue/runtime-dom')
  const previous=new Map(['Document','ShadowRoot'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));for(const key of previous.keys())globalThis[key]=dom.window[key]
  dom.window.matchMedia=query=>({matches:query.includes('min-width')?!mobile:true,addEventListener(){},removeEventListener(){}})
@@ -13,10 +13,16 @@ function fixture({mobile=false}={}){
  dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')}
  const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),createText:text=>doc.createTextNode(text),createComment:text=>doc.createComment(text),querySelector:selector=>doc.querySelector(selector),insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]}})
  const events=[],drafts=new Map(),props=vue.reactive({module:'plans',view:'',page:'workspace'})
- const workspaces=vue.reactive({activeId:'personal',available:[{id:'personal',name:'Kişisel'},{id:'team',name:'Ürün ekibi'}],get active(){return this.available.find(item=>item.id===this.activeId)},switchTo(id){if(this.available.some(item=>item.id===id)){this.activeId=id;events.push(['workspace',id])}}})
+ const workspaces=vue.reactive({userId:'owner',activeId:'personal',available:[{id:'personal',name:'Kişisel'},{id:'team',name:'Ürün ekibi'}],get active(){return this.available.find(item=>item.id===this.activeId)},switchTo(id){if(this.available.some(item=>item.id===id)){this.activeId=id;events.push(['workspace',id])}}})
  const deps={vue:{...vue,Transition:(props,{slots})=>vue.h(vue.BaseTransition,{...props,onLeave(_element,done){queueMicrotask(done)}},slots)},'vue-i18n':{useI18n:()=>({t:key=>key})},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'@/lib/workspaceScope':{useWorkspaceDraft:(key,value)=>{if(!drafts.has(key))drafts.set(key,vue.ref(value));return drafts.get(key)}}}
+ const drag={}
+ deps['vuedraggable']={default:{inheritAttrs:false,props:['modelValue','itemKey','tag'],emits:['start','end','update:modelValue'],setup(props,{attrs,slots,emit}){
+  drag.start=()=>emit('start');drag.end=()=>emit('end');drag.update=ids=>emit('update:modelValue',ids.map(id=>props.modelValue.find(item=>item.value===id)||{value:id}))
+  return()=>vue.h('div',attrs,props.modelValue.map(element=>slots.item({element})))
+ }}}
+ deps['@/lib/storage']={readStoredJSON(key,fallback,valid){try{const value=JSON.parse(cache.get(key));return valid(value)?value:fallback}catch{return fallback}},writeStoredJSON(key,value){if(storageFailed)return false;cache.set(key,JSON.stringify(value));return true}}
  const evaluate=source=>{const exports={};vm.compileFunction(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,['exports','require','document','window','HTMLElement','Node','navigator'])(exports,name=>deps[name]||require(name),doc,dom.window,dom.window.HTMLElement,dom.window.Node,dom.window.navigator);return exports}
- deps['./moduleCatalog']=evaluate(fs.readFileSync('src/lib/moduleCatalog.ts','utf8'));deps['@/lib/workspaceSections']=evaluate(fs.readFileSync('src/lib/workspaceSections.ts','utf8'))
+ deps['./moduleCatalog']=evaluate(fs.readFileSync('src/lib/moduleCatalog.ts','utf8'));deps['@/lib/moduleCatalog']=deps['./moduleCatalog'];deps['@/lib/workspaceTabOrder']=evaluate(fs.readFileSync('src/lib/workspaceTabOrder.ts','utf8'));deps['@/lib/workspaceSections']=evaluate(fs.readFileSync('src/lib/workspaceSections.ts','utf8'))
  const compile=name=>evaluate(compileScript(parse(fs.readFileSync(`src/components/ui/${name}.vue`,'utf8')).descriptor,{id:name,inlineTemplate:true}).content).default
  deps['./CustomSelect.vue']={default:compile('CustomSelect')};deps['./WorkspacePicker.vue']={default:compile('WorkspacePicker')}
  const Rail=compile('WorkspaceRail'),Picker=compile('WorkspaceModulePicker'),enabled=vue.ref(deps['./moduleCatalog'].moduleCatalog.map(item=>item.id))
@@ -27,7 +33,7 @@ function fixture({mobile=false}={}){
  ])})
  app.mount(doc.querySelector('main'))
  const flush=async()=>{await vue.nextTick();await new Promise(setImmediate);await vue.nextTick()}
- return {dom,doc,props,enabled,events,workspaces,flush,get nativeMenus(){return nativeMenus},
+ return {dom,doc,props,enabled,events,workspaces,flush,drag,cache,get nativeMenus(){return nativeMenus},
   async hover(type='pointerenter'){const event=new dom.window.Event(type);Object.defineProperty(event,'pointerType',{value:'mouse'});doc.querySelector('.workspace-rail').dispatchEvent(event);await flush()},
   close(){app.unmount();dom.window.close();for(const[key,value]of previous){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key]}}
  }
@@ -128,5 +134,55 @@ test('mobile analytics and settings actions close the drawer and highlight the c
    assert.equal(drawer.querySelectorAll('[aria-current="page"]').length,1)
    assert.equal(button.getAttribute('aria-current'),'page')
   }
+ }finally{f.close()}
+})
+
+
+test('every main section can reorder sibling tabs by dragging without changing selection and restores each saved order',async()=>{
+ const cache=new Map(),f=fixture({cache})
+ const orders={notes:['plans','detailed','secure','code'],planning:['tasks','periodic'],learning:['learning:topics','learning:mistakes','flashcards'],life:['workout','activities'],finance:['finance:transaction','finance:position']}
+ try{
+  for(const [section,original]of Object.entries(orders)){
+   f.props.module=original[0].split(':')[0];f.props.view=original[0].split(':')[1]||'';await f.flush()
+   const selected=f.props.module,view=f.props.view,ids=()=>Array.from(f.doc.querySelectorAll('.workspace-module-tabs [role=tab]')).map(tab=>tab.dataset.tabValue)
+   assert.deepEqual(ids(),original)
+   f.drag.start();f.drag.update([...original].reverse());f.drag.end();await f.flush()
+   assert.deepEqual(ids(),[...original].reverse());assert.equal(f.props.module,selected);assert.equal(f.props.view,view)
+   f.doc.querySelector('.workspace-module-tabs [role=tab]').click();await f.flush();assert.equal(f.props.module,selected,'a release click must not select the dragged tab')
+   assert.deepEqual(JSON.parse(cache.get(`workspace:owner:personal:section-tab-order:${section}:v1`)),[...original].reverse())
+  }
+ }finally{f.close()}
+ const reopened=fixture({cache});try{
+  for(const original of Object.values(orders)){
+   reopened.props.module=original[0].split(':')[0];await reopened.flush()
+   assert.deepEqual(Array.from(reopened.doc.querySelectorAll('.workspace-module-tabs [role=tab]')).map(tab=>tab.dataset.tabValue),[...original].reverse())
+  }
+ }finally{reopened.close()}
+})
+
+test('keyboard reordering preserves focus and activation; hidden modules retain their slots and workspace/account orders stay separate',async()=>{
+ const f=fixture();try{
+  const ids=()=>Array.from(f.doc.querySelectorAll('.workspace-module-tabs [role=tab]')).map(tab=>tab.dataset.tabValue)
+  const press=async(id,key)=>{const tab=f.doc.querySelector(`[data-tab-value="${id}"]`);tab.focus();tab.dispatchEvent(new f.dom.window.KeyboardEvent('keydown',{key,altKey:true,bubbles:true,cancelable:true}));await f.flush();assert.equal(f.doc.activeElement.dataset.tabValue,id)}
+  await press('plans','ArrowRight');assert.deepEqual(ids(),['detailed','plans','secure','code']);assert.equal(f.props.module,'plans')
+  await press('code','ArrowRight');assert.deepEqual(ids(),['detailed','plans','secure','code'])
+  f.enabled.value=f.enabled.value.filter(id=>id!=='secure');await f.flush()
+  f.drag.start();f.drag.update(['code','plans','detailed']);f.drag.end();await f.flush();assert.deepEqual(ids(),['code','plans','detailed'])
+  f.enabled.value.push('secure');await f.flush();assert.deepEqual(ids(),['code','plans','secure','detailed'])
+  f.workspaces.activeId='team';await f.flush();assert.deepEqual(ids(),['plans','detailed','secure','code'])
+  f.workspaces.activeId='personal';await f.flush();assert.deepEqual(ids(),['code','plans','secure','detailed'])
+  f.workspaces.userId='other';await f.flush();assert.deepEqual(ids(),['plans','detailed','secure','code'])
+ }finally{f.close()}
+})
+
+test('invalid or stale drag updates never change order and blocked storage does not break in-session reordering',async()=>{
+ const cache=new Map([['workspace:owner:personal:section-tab-order:notes:v1','["code","code","retired",3,"plans"]']]),f=fixture({cache,storageFailed:true})
+ try{
+  const ids=()=>Array.from(f.doc.querySelectorAll('.workspace-module-tabs [role=tab]')).map(tab=>tab.dataset.tabValue)
+  assert.deepEqual(ids(),['code','plans','detailed','secure'])
+  f.drag.start();f.drag.update(['code','plans','plans','secure']);await f.flush();assert.deepEqual(ids(),['code','plans','detailed','secure'])
+  f.workspaces.activeId='team';await f.flush();f.drag.update(['code','plans','detailed','secure']);f.drag.end();await f.flush();assert.deepEqual(ids(),['plans','detailed','secure','code'])
+  f.drag.start();f.drag.update(['code','plans','detailed','secure']);f.drag.end();await f.flush();assert.deepEqual(ids(),['code','plans','detailed','secure'])
+  f.props.module='detailed';await f.flush();assert.deepEqual(ids(),['code','plans','detailed','secure'],'a normal tab switch keeps the current order even when storage is unavailable')
  }finally{f.close()}
 })

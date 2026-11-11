@@ -11,6 +11,7 @@ import type { FocusJournal, FocusSession } from '@/features/analytics/lib/focusJ
 export type ModeKey = 'focus' | 'shortBreak' | 'longBreak'
 export interface TimerDurations { focus:number; shortBreak:number; longBreak:number }
 export interface FocusTarget { id:string; collection_id:string; workspace_id:string; title:string; estimated_sessions:number; focus_seconds:number; completed?:boolean }
+export interface PlanFocusSettingsRequest { workspace_id:string; title:string; source?:'plans'|'quick'; record_id?:string; target?:FocusTarget }
 type ServerSession = FocusSession & { task_title?:string | null; task_completed?:boolean; expires_at?:string; segment_started_at?:string|null }
 type Snapshot = { client:string; owner:string; updated:number; mode:ModeKey; deadline:number|null; remaining:number; duration:number; running:boolean; target:FocusTarget|null; session:FocusSession|null; released?:boolean }
 type PendingStop = { id:string; detach:boolean; remote:boolean }
@@ -46,6 +47,13 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
   const modeKey=ref<ModeKey>('focus'),sessionSeconds=ref(1500),timeLeft=ref(1500),isRunning=ref(false)
   const nextMode=computed<ModeKey>(()=>modeKey.value==='focus'?'shortBreak':modeKey.value==='shortBreak'?'longBreak':'focus')
   const currentTarget=ref<FocusTarget|null>(null),queuedTarget=ref<FocusTarget|null>(null)
+  const planSettings=ref<PlanFocusSettingsRequest|null>(null)
+  function openPlanSettings(input?:Omit<PlanFocusSettingsRequest,'workspace_id'>) {
+    if(starting.value||clearing.value)return
+    if(input)planSettings.value={...input,workspace_id:workspaces.activeId}
+    else if(currentTarget.value)planSettings.value={workspace_id:currentTarget.value.workspace_id,title:currentTarget.value.title,target:{...currentTarget.value}}
+  }
+  watch(()=>[auth.user?.id,workspaces.activeId],()=>{planSettings.value=null})
   const remote=ref(false),starting=ref(false),error=ref(''),capability=ref<'unknown'|'ready'|'legacy'>('unknown')
   const clearing=ref(false),errorCode=ref('')
   const errorMessageKey=computed(()=>{
@@ -312,6 +320,17 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
   function forgetTask(id:string) {if(queuedTarget.value?.id===id)queuedTarget.value=null;if(currentTarget.value?.id===id)currentTarget.value={...currentTarget.value,title:'',completed:true};publish()}
   function completedTask(id:string) {if(queuedTarget.value?.id===id)queuedTarget.value=null;if(currentTarget.value?.id===id)currentTarget.value={...currentTarget.value,completed:true};publish()}
   function updateTarget(target:FocusTarget) {if(currentTarget.value?.id===target.id)currentTarget.value=target;if(queuedTarget.value?.id===target.id)queuedTarget.value=target;publish()}
+  async function startConfiguredFocus(target:FocusTarget) {
+    if(clearing.value||starting.value)return
+    if(currentTarget.value?.id===target.id&&modeKey.value==='focus') {
+      error.value='';errorCode.value=''
+      updateTarget(target)
+      if(!isRunning.value&&!remote.value&&journal?.session?.status!=='paused'){sessionSeconds.value=planned();timeLeft.value=sessionSeconds.value}
+      if(!isRunning.value||remote.value)await startTimer(remote.value)
+      return
+    }
+    await focusOn(target,true)
+  }
   function cancelQueued() {queuedTarget.value=null;publish()}
   async function stopServer(sessionId:string) {
     const result=await supabase.rpc('end_focus_session',{session_id:sessionId})
@@ -406,5 +425,6 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
   return {durations,modeKey,sessionSeconds,timeLeft,isRunning,currentTarget,queuedTarget,remote,starting,clearing,error,errorCode,errorMessageKey,capability,provisional,
     completionSequence,lastCompletedMode,syncSequence,taskStatsSequence,activeSession,formattedTime,progressPercentage,canReset,nextMode,
     init,shutdown,sync,startTimer,pauseTimer,resetTimer,setMode,advanceMode,configure,focusOn,forgetTask,completedTask,updateTarget,cancelQueued,clearFocus,
+    planSettings,openPlanSettings,startConfiguredFocus,
     toggleTimer:()=>remote.value?startTimer(true):isRunning.value?pauseTimer():startTimer()}
 })

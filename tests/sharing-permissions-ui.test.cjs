@@ -113,7 +113,7 @@ test('detailed-note cards open a focused reader, edit in the same dialog and kee
   prototype.showModal=function(){this.open=true}
   prototype.close=function(){if(this.open){this.open=false;this.dispatchEvent(new dom.window.Event('close'))}}
   const overflow=doc.body.style.overflow,rootOverflow=doc.documentElement.style.overflow,gutter=doc.documentElement.style.scrollbarGutter
-  const canWrite=vue.ref(true),actions=[],copies=[],props=vue.reactive({todo:{id:'note',title:'Research note',description:'<p>Full note detail</p>',categoryId:'work',completed:false,version:1,createdAt:'2026-10-25'},color:'#287755',categoryName:'Work'})
+  const canWrite=vue.ref(true),actions=[],moves=[],copies=[],props=vue.reactive({todo:{id:'note',title:'Research note',description:'<p>Full note detail</p>',categoryId:'work',completed:false,version:1,createdAt:'2026-10-25'},color:'#287755',categoryName:'Work'})
   let success=false,writes=0,editorEmit
   const store=vue.reactive({categories:[{id:'work',name:'Work'}],todos:[props.todo],async addCategory(category){this.categories.push({...category,id:'research'});return {success:true}},async updateTodo(note){writes++;if(!success)return false;props.todo={...note,version:note.version+1};this.todos=[props.todo];return true}})
   const RichTextEditor={props:['modelValue','disabled','fitHeight'],emits:['update:modelValue','busy-change'],setup(props,{emit}){editorEmit=emit;return()=>props.disabled?vue.h('div',{class:'rich-note-reader'},props.modelValue):vue.h('textarea',{class:'rich-note-writer',value:props.modelValue,onInput:event=>emit('update:modelValue',event.target.value)})}}
@@ -136,18 +136,18 @@ test('detailed-note cards open a focused reader, edit in the same dialog and kee
     insertStaticContent(content,parent,anchor){const template=doc.createElement('template');template.innerHTML=content;const first=template.content.firstChild,last=template.content.lastChild;parent.insertBefore(template.content,anchor);return[first,last]},
   })
   const target=doc.createElement('div');doc.body.append(target)
-  const app=renderer.createApp({setup:()=>()=>vue.h(Card,{...props,onToggle:()=>actions.push('toggle'),onDelete:()=>actions.push('delete')})})
+  const app=renderer.createApp({setup:()=>()=>vue.h(Card,{...props,onToggle:()=>actions.push('toggle'),onMove:direction=>moves.push(direction),onDelete:()=>actions.push('delete')})})
   const flush=async()=>{await vue.nextTick();await new Promise(setImmediate);await vue.nextTick()}
   try{
     app.mount(target);await flush()
     const article=target.querySelector('article'),dialog=doc.querySelector('dialog.note-edit-dialog'),heading=article.querySelector('.note-heading')
     dialog.getBoundingClientRect=()=>({left:100,top:100,right:800,bottom:700})
     assert.equal(article.querySelector('.note-reveal'),null);assert.equal(dialog.open,false)
-    article.querySelector('.note-check').click();article.querySelector('.delete-action').click();article.querySelector('[aria-label="common.copy"]').click();await flush()
-    assert.deepEqual(actions,['toggle','delete']);assert.equal(copies.length,1);assert.equal(dialog.open,false,'card actions do not open the reader')
+    assert.equal(article.querySelector('.note-check'),null);const handle=article.querySelector('.note-drag-handle');assert.equal(handle.querySelectorAll('svg circle').length,6);handle.click();handle.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true}));handle.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));assert.deepEqual(moves,[-1,1]);article.querySelector('.delete-action').click();article.querySelector('[aria-label="common.copy"]').click();await flush()
+    assert.deepEqual(actions,['delete']);assert.equal(copies.length,1);assert.equal(dialog.open,false,'card actions do not open the reader')
     article.querySelector('.note-preview').click();await flush()
     assert.equal(dialog.open,true);assert.equal(doc.body.style.overflow,'hidden');assert.equal(doc.activeElement,dialog.querySelector('.note-focused-reader'))
-    assert.ok(dialog.querySelector('.rich-note-reader'));assert.equal(dialog.querySelector('input,textarea'),null)
+    assert.ok(dialog.querySelector('.rich-note-reader'));assert.equal(dialog.querySelector('input,textarea'),null);dialog.querySelector('[aria-label="todo.toggleCompletion"]').click();assert.deepEqual(actions,['delete','toggle'])
     dialog.click();await flush();assert.equal(dialog.open,true,'one accidental backdrop click never closes the note')
     dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.equal(writes,0,'reading cannot write')
     Array.from(dialog.querySelectorAll('button')).find(button=>button.textContent.includes('common.edit')).click();await flush()

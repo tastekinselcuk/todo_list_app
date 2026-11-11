@@ -15,6 +15,21 @@ function load(path, dependencies, globals = {}) {
 }
 const helpers = load('src/lib/sharing.ts',{})
 
+test('custom workout library RPCs capture scope, reject viewer writes and fence late responses',async()=>{
+ const requests=[],binding={module:'workout',role:'owner',collection_id:'collection'}
+ let hold=false,release
+ const workspaces={userId:'owner',activeId:'workspace',sessionKey:'owner:workspace',sharingAvailable:true,binding:module=>module==='workout'?binding:undefined}
+ const client={async rpc(name,args){requests.push({name,args:JSON.parse(JSON.stringify(args))});if(hold)await new Promise(resolve=>release=resolve);return{data:name==='workout_library_load'?[]:{id:'custom:id'},error:null}}}
+ const api=load('src/lib/workspaceScope.ts',{'./supabase':{supabase:client},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'./sharing':helpers}).useWorkspaceClient()
+ await api.loadWorkoutLibrary();assert.deepEqual(requests[0],{name:'workout_library_load',args:{wid:'workspace'}})
+ await api.saveWorkoutLibrary({name:'Custom'},'request');assert.deepEqual(requests[1].args,{wid:'workspace',request_id:'request',input:{name:'Custom'}})
+ await api.removeWorkoutLibrary('movement');assert.deepEqual(requests[2],{name:'workout_library_remove',args:{wid:'workspace',rid:'movement'}})
+ binding.role='viewer';await assert.rejects(api.saveWorkoutLibrary({},'next'),/READ_ONLY/);await assert.rejects(api.removeWorkoutLibrary('movement'),/READ_ONLY/);assert.equal(requests.length,3)
+ binding.role='owner';hold=true;const pending=api.loadWorkoutLibrary();while(!release)await new Promise(resolve=>setImmediate(resolve))
+ workspaces.sessionKey='owner:other';release();await assert.rejects(pending,/Workspace changed/)
+ await assert.rejects(api.saveWorkoutLibrary({},'next'),/Workspace changed/);await assert.rejects(api.removeWorkoutLibrary('movement'),/Workspace changed/);assert.equal(requests.length,4)
+})
+
 test('workout sequence RPC uses scoped credentials, refreshes the parent version and fences late workspace responses', async () => {
  const requests=[],binding={module:'workout',collection_id:'collection',origin_workspace_id:'workspace',role:'owner'}
  let hold=false,release

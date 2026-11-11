@@ -4,10 +4,21 @@ export interface WorkTask {
   id:string; title:string; description:string; status:TaskStatus; priority:'none'|'low'|'medium'|'high'
   project_id:string|null; due_on:string|null; estimate_minutes:number; checklist:{id:string;title:string;done:boolean}[]
   version:number; created_at:string; deleted_at:string|null
+  scheduled_blocks?:WorkBlock[]
 }
 export interface WorkBlock {
   id:string; task_id:string|null; title:string; starts_at:string; ends_at:string; timezone:string
   version:number; created_at:string; deleted_at:string|null; task_title?:string; task_status?:TaskStatus; project_id?:string|null
+  subtask_ids?:string[]; subtask_titles?:string[]
+}
+export interface WorkTimeChange {id:string;version?:number;title:string;starts_at:string;ends_at:string;timezone:string;subtask_ids:string[]}
+export interface WorkDetailsDraft {task:Record<string,unknown>|null;taskId:string|null;taskVersion?:number;times:WorkTimeChange[];removed:{id:string;version:number}[]}
+export const unassignedProject='00000000-0000-0000-0000-000000000000'
+export function blockTitle(block:Pick<WorkBlock,'title'|'task_title'|'subtask_titles'>){return block.subtask_titles?.length?`${block.subtask_titles.join(' · ')}${block.task_title?' — '+block.task_title:''}`:block.title||block.task_title||''}
+export function blockSummary(block:Pick<WorkBlock,'starts_at'|'ends_at'>,locale='tr'){
+ const start=new Date(block.starts_at),end=new Date(block.ends_at),language=locale==='tr'?'tr-TR':'en-GB'
+ const day=new Intl.DateTimeFormat(language,{day:'numeric',month:'short',year:start.getFullYear()!==new Date().getFullYear()||start.getFullYear()!==end.getFullYear()?'numeric':undefined}),time=new Intl.DateTimeFormat(language,{hour:'2-digit',minute:'2-digit',hour12:false})
+ return `${day.format(start)} · ${time.format(start)}–${localDay(start)===localDay(end)?'':day.format(end)+' · '}${time.format(end)}`
 }
 export type WorkEntity = 'task'|'project'|'block'
 export const taskStatuses:TaskStatus[] = ['todo','doing','done']

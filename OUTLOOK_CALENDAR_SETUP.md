@@ -5,7 +5,7 @@
 ## Sağlanan akış
 
 - Takvim araç çubuğundaki **Bağlı takvimler** ikonundan Outlook hesabı bağlanır.
-- Aynı kullanıcı en fazla 5 Microsoft hesabı bağlayabilir. Hesapların içindeki en fazla 10 takvim birlikte seçilebilir; tümünü seçme ve temizleme kontrolleri bulunur.
+- Aynı kullanıcı Outlook ve Google toplamında en fazla 5 hesap bağlayabilir. Hesapların içindeki en fazla 10 takvim birlikte seçilebilir; tümünü seçme ve temizleme kontrolleri bulunur.
 - İlk bağlantıda yeni hesabın varsayılan takvimi seçilir. Yeniden bağlama veya yenileme mevcut seçimi korur.
 - Seçili takvimler yerel etkinliklerle birlikte gün, hafta, ay ve ajanda görünümünde gösterilir. Kaynağın rengi, takvim adı ve Outlook etiketi kullanılır.
 - Etkinlik tıklanınca salt okunur ayrıntı açılır; uygunsa Outlook'ta aç bağlantısı sunulur. Özel/gizli etkinliklerin başlığı ve konumu gösterilmez.
@@ -38,9 +38,10 @@ Supabase SQL Editor'de şu dosyanın tamamını çalıştır:
 
 ```text
 supabase/migrations/202611040001_external_calendars.sql
+supabase/migrations/202611100001_google_calendar.sql
 ```
 
-Migration yeniden çalıştırılabilir. Bağlantı metadatası, takvim seçimleri, şifreli erişim anahtarları, tek kullanımlık OAuth state ve sunucu istek bütçeleri için tablolar oluşturur. Bu tablolar ve hizmet RPC'si `anon` / `authenticated` rollerine açık değildir. Kullanıcı doğrulaması Edge Function'da yapılıp her işlem gerçek oturum kullanıcısıyla yürütülür.
+Dosyaları yukarıdaki sırayla çalıştır. Eski kurulum zaten uygulanmışsa yalnızca ikinci dosya gerekir. En son migration yeniden çalıştırılabilir; eski dosyayı tek başına yeniden çalıştırmak hizmet fonksiyonunu eski sürüme döndürür. Bağlantı metadatası, takvim seçimleri, şifreli erişim anahtarları, tek kullanımlık OAuth state ve sunucu istek bütçeleri için tablolar oluşturulur. Bu tablolar ve hizmet RPC'si `anon` / `authenticated` rollerine açık değildir. Kullanıcı doğrulaması Edge Function'da yapılıp her işlem gerçek oturum kullanıcısıyla yürütülür.
 
 ## 3. Edge Function secret'larını tanımla
 
@@ -111,7 +112,7 @@ Bağlantıyı uygulamadan kaldırmak yerel erişim anahtarlarını siler. Micros
 - Etkinlik gövdeleri, ekleri ve katılımcı listeleri alınmaz. Etkinlik içerikleri veritabanında veya tarayıcı kalıcı depolamasında saklanmaz; görünür aralık için bellekte tutulur.
 - Dış takvimler genel not aramasına, ekip paylaşımına veya çalışma alanının ortak analizlerine eklenmez.
 
-Ortak `ConnectedEvent` / `CalendarConnection` modeli takvim görünümünden ayrıdır. Gelecekte başka sağlayıcı eklenirken aynı etkinlik modeli kullanılabilir; sağlayıcının OAuth, izin ve sunucu adaptörü ayrıca uygulanır.
+Ortak `ConnectedEvent` / `CalendarConnection` modeli takvim görünümünden ayrıdır. Aynı function artık Google Calendar'ı da destekler; [Google kurulumu](GOOGLE_CALENDAR_SETUP.md) ayrı izinler ve secret'larla yapılır. Google kurulmamış olsa da Outlook tek başına çalışır. Mevcut Microsoft callback adresini veya şifreleme anahtarını değiştirme.
 
 ## Resmî kaynaklar
 

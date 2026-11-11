@@ -1,8 +1,8 @@
 <template>
   <article ref="itemRef" :data-search-record="todo.id" :data-shared-editing="isEditing && canWrite" class="workspace-card note-card group/item relative w-full" :class="{ 'is-complete': todo.completed }" @click="onCardClick">
     <div class="note-summary">
-      <button type="button" :disabled="!canWrite || disabled || saving" :aria-label="`${t('todo.toggleCompletion')}: ${todo.title}`" :aria-pressed="todo.completed" @click.stop="$emit('toggle')" class="note-check" :class="{ checked:todo.completed }"><Check v-if="todo.completed" class="h-3 w-3" /></button>
-      <div class="note-content" :class="{ 'drag-handle':canWrite && !isOpen && !disabled }">
+      <button v-if="canWrite" type="button" class="note-drag-handle" :class="{ 'drag-handle':!disabled && !saving && !mediaBusy && !isOpen }" :disabled="disabled || saving || mediaBusy || isOpen" :aria-label="`${t('todo.dragToReorder')}: ${todo.title}`" :title="t('todo.reorderHint')" aria-keyshortcuts="ArrowUp ArrowDown" @click.stop @keydown.up.stop.prevent="$emit('move', -1)" @keydown.down.stop.prevent="$emit('move', 1)"><GripVertical class="h-4 w-4" /></button>
+      <div class="note-content">
         <button ref="openButtonRef" type="button" class="note-heading" :class="{ 'line-through text-muted-foreground':todo.completed }" :aria-label="`${t('todo.viewNote')}: ${todo.title}`" aria-haspopup="dialog" :aria-expanded="isOpen" :disabled="disabled || saving || mediaBusy" :title="todo.title" @click.stop="onCardClick()">{{ todo.title }}</button>
         <p v-if="descriptionPreview" class="note-preview">{{ descriptionPreview }}</p>
       </div>
@@ -28,6 +28,7 @@
                   <RichTextEditor key="reader" :model-value="todo.description || ''" :disabled="true" />
                 </div>
                 <footer class="flex shrink-0 justify-end gap-1.5 border-t border-border/30 pt-3">
+                  <button v-if="canWrite" type="button" :disabled="disabled" class="mr-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-40" :aria-label="t('todo.toggleCompletion')" :aria-pressed="todo.completed" @click="$emit('toggle')"><Check class="h-3.5 w-3.5" />{{ t(todo.completed ? 'todo.markIncomplete' : 'todo.markComplete') }}</button>
                   <button type="button" class="h-8 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground" @click="copyNote"><Copy class="mr-1.5 inline h-3.5 w-3.5" />{{ t('common.copy') }}</button>
                   <button v-if="canWrite" type="button" :disabled="disabled" class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40" @click="startEdit"><Pencil class="h-3.5 w-3.5" />{{ t('common.edit') }}</button>
                 </footer>
@@ -57,7 +58,7 @@
 <script setup lang="ts">
 import { useModuleAccess } from '@/lib/workspaceScope'
 import { ref, watch, computed, nextTick, defineAsyncComponent, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
-import { Check, Trash2, Pencil, Copy, Loader2, X } from 'lucide-vue-next'
+import { Check, GripVertical, Trash2, Pencil, Copy, Loader2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import type { Todo } from '@/features/todos/stores/todo'
 import { useTodoStore, TODO_TITLE_MAX_LENGTH } from '@/features/todos/stores/todo'
@@ -81,6 +82,7 @@ const props = defineProps<{
 defineEmits<{
   toggle: []
   delete: []
+  move: [direction: number]
 }>()
 
 const { t, locale } = useI18n()
@@ -247,8 +249,10 @@ const formatDate = (date: string | null) => date ? new Date(date).toLocaleDateSt
 .note-card:hover,.note-card:focus-within { background:hsl(var(--muted)/.5); }
 .note-card.is-complete { background:hsl(var(--muted)/.25); }
 .note-summary { display:flex; align-items:center; gap:13px; min-height:44px; }
-.note-check { height:19px; width:19px; border:1px solid hsl(var(--muted-foreground)/.4); border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.note-check.checked { background:hsl(var(--primary)); border-color:hsl(var(--primary)); color:hsl(var(--primary-foreground)); }
+.note-drag-handle { display:inline-flex; flex-shrink:0; align-items:center; justify-content:center; width:1.25rem; height:2.25rem; margin-inline:-.25rem; border-radius:.375rem; color:hsl(var(--muted-foreground)/.45); cursor:grab; touch-action:none; }
+.note-drag-handle:hover:not(:disabled) { color:hsl(var(--foreground)); background:hsl(var(--muted)/.6); }
+.note-drag-handle:active:not(:disabled) { cursor:grabbing; }
+.note-drag-handle:disabled { cursor:default; opacity:.4; }
 .note-content { flex:1; min-width:0; }
 .note-heading { display:block; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; font-size:13px; font-weight:400; line-height:20px; }
 .note-preview { margin-top:3px; font-size:12px; line-height:17px; color:hsl(var(--muted-foreground)); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

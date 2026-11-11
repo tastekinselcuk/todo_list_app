@@ -99,45 +99,53 @@ test('the next-session arrow follows reset, updates its destination and keeps na
  }finally{f.close()}
 })
 
-test('card and dock enter the same focus view without moving placement or restarting a running session',async()=>{
+test('one hover options menu owns placement, fullscreen, duration and linked settings while dock controls stay centered and music survives placement',async()=>{
  const f=fixture();let app
  try{
   f.app.unmount();pinia.setActivePinia(pinia.createPinia())
-  let initialized=0,shutdown=0,toggles=0,advances=0,configured=0
+  let initialized=0,shutdown=0,toggles=0,configured=0,targetSettings=0
   const useTimer=pinia.defineStore('focus-ui',()=>{
    const time=vue.ref('24:57'),isRunning=vue.ref(true),durations=vue.ref({focus:25,shortBreak:5,longBreak:15}),modeKey=vue.ref('focus'),sessionSeconds=vue.ref(1500),canReset=vue.ref(true),remote=vue.ref(false),starting=vue.ref(false),clearing=vue.ref(false),error=vue.ref(''),completionSequence=vue.ref(0),currentTarget=vue.ref(null),progressPercentage=vue.ref(1)
    const nextMode=vue.computed(()=>modeKey.value==='focus'?'shortBreak':modeKey.value==='shortBreak'?'longBreak':'focus')
-   return {formattedTime:time,isRunning,durations,modeKey,sessionSeconds,canReset,remote,starting,clearing,error,errorMessageKey:'failure',completionSequence,currentTarget,progressPercentage,nextMode,init(){initialized++},shutdown(){shutdown++},async toggleTimer(){toggles++;isRunning.value=!isRunning.value},async resetTimer(){time.value='25:00';isRunning.value=false},async advanceMode(){advances++;modeKey.value=nextMode.value;time.value=modeKey.value==='focus'?'25:00':modeKey.value==='shortBreak'?'05:00':'15:00';isRunning.value=false},setMode(){},configure(value){configured++;durations.value={...value}},clearFocus(){}}
+   return {openPlanSettings(){targetSettings++},formattedTime:time,isRunning,durations,modeKey,sessionSeconds,canReset,remote,starting,clearing,error,errorMessageKey:'failure',completionSequence,currentTarget,progressPercentage,nextMode,init(){initialized++},shutdown(){shutdown++},async toggleTimer(){toggles++;isRunning.value=!isRunning.value},async resetTimer(){time.value='25:00';isRunning.value=false},async advanceMode(){},setMode(){},configure(value){configured++;durations.value={...value}}}
   })
   const timer=useTimer(),placement=vue.ref(false),moves=[]
   f.deps['@/features/pomodoro/stores/pomodoro']={usePomodoroStore:useTimer,normalizeDurations:value=>value};f.deps['@/stores/ui']={useUIStore:()=>({addToast(){}})}
-  f.deps['@/lib/navigationScroll']={workspaceHeaderHeight:56};f.deps['@/lib/utils']={isDialogBackdropDoubleClick:()=>false}
+  f.deps['@/lib/navigationScroll']={workspaceHeaderHeight:56};f.deps['@/lib/utils']={isDialogBackdropDoubleClick:()=>false};f.deps['./PlanFocusSettings.vue']={default:{setup:()=>()=>null}}
+  const proto=f.dom.window.HTMLElement.prototype
+  proto.getClientRects=function(){return this.closest('.timer-menu-modes')&&f.dom.window.innerWidth>=800?[]:[{}]}
+  const toggleEvent=(element,state)=>{const event=new f.dom.window.Event('toggle');Object.defineProperty(event,'newState',{value:state});element.dispatchEvent(event)}
+  proto.showPopover=function(){this.dataset.open='true';toggleEvent(this,'open')};proto.hidePopover=function(){delete this.dataset.open;toggleEvent(this,'closed')}
+  f.dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true};f.dom.window.HTMLDialogElement.prototype.close=function(){this.open=false}
   const Timer=f.compile('PomodoroTimer')
-  app=f.renderer.createApp({setup:()=>()=>vue.h(Timer,{docked:placement.value,onExpand:()=>{placement.value=true;moves.push('dock')},onCollapse:()=>{placement.value=false;moves.push('card')}})})
+  app=f.renderer.createApp({setup:()=>()=>vue.h(Timer,{docked:placement.value,onExpand:()=>{placement.value=true;moves.push('dock')},onCollapse:()=>{placement.value=false;moves.push('card')}},{profile:()=>vue.h('button',{class:'test-profile'},'Profile')})})
   app.config.globalProperties.$t=key=>key;app.mount(f.doc.querySelector('main'));await f.flush()
-  const compact=f.doc.querySelector('[data-teleport="compact"]'),up=compact.querySelector('[aria-label="pomodoro.expandToNavbar"]')
-  assert.ok(up.querySelector('.lucide-arrow-up-icon'));assert.ok(up.classList.contains('timer-dock-button'));assert.ok(compact.querySelector('.timer-fullscreen-button [data-direction="outward"]'))
-  assert.ok(compact.querySelector('.pomodoro-card-time').classList.contains('text-foreground'));assert.equal(compact.querySelector('.pomodoro-card-time').classList.contains('text-primary'),false);assert.equal(compact.querySelector('.pomodoro-card-time').textContent,'24:57');assert.equal(compact.querySelector('.timer-music-button'),null)
-  timer.currentTarget={title:'Mesleki çalışma · Sistem tasarımı'};await f.flush()
-  compact.querySelector('[aria-label="pomodoro.fullscreen"]').click();await f.flush();assert.ok(f.screen);assert.equal(timer.isRunning,true);assert.equal(timer.formattedTime,'24:57');assert.equal(placement.value,false)
-  assert.equal(f.screen.querySelector('.focus-mode-label').textContent,timer.currentTarget.title);timer.modeKey='shortBreak';await f.flush();assert.equal(f.screen.querySelector('.focus-mode-label').textContent,'pomodoro.shortBreak');timer.modeKey='focus';await f.flush()
-  f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('[data-settings-tab="sound"]').click();await f.flush();f.screen.querySelector('.focus-music-toggle').click();await f.flush()
-  const audio=f.media[0];audio.readyState=1;audio.duration=249;audio.onloadedmetadata();audio.currentTime=73;audio.ontimeupdate();await f.flush()
-  f.screen.querySelector('.focus-exit').click();await f.flush();assert.equal(audio.paused,false);assert.equal(audio.currentTime,73)
-  const music=compact.querySelector('.timer-music-button');assert.ok(music);assert.equal(music.getAttribute('aria-label'),'pomodoro.pauseMusic');assert.equal(music.getAttribute('aria-pressed'),'true')
-  music.click();await f.flush();assert.equal(audio.paused,true);assert.equal(music.getAttribute('aria-label'),'pomodoro.playMusic');assert.equal(timer.isRunning,true,'music does not pause the timer')
-  music.click();await f.flush();assert.equal(audio.paused,false);assert.equal(audio.currentTime,73);assert.equal(f.media.length,1)
-  up.click();await f.flush();assert.equal(placement.value,true);assert.equal(audio.paused,false);assert.equal(f.doc.querySelector('.dock-right .timer-music-button').getAttribute('aria-pressed'),'true')
-  f.doc.querySelector('[data-pomodoro-navigation] [aria-label="pomodoro.fullscreen"]').click();await f.flush();assert.ok(f.screen);assert.equal(placement.value,true)
-  timer.formattedTime='24:55';await f.flush();assert.equal(f.screen.querySelector('.focus-time').textContent,'24:55')
-  f.screen.querySelector('.focus-appearance').click();await f.flush();assert.equal(Number(f.screen.querySelector('.focus-seek').value),73);assert.match(f.screen.querySelector('.focus-music-toggle').textContent,/pauseMusic/);f.key('Escape');await f.flush()
-  f.screen.querySelector('.focus-toggle').click();await f.flush();assert.equal(timer.isRunning,false);assert.equal(toggles,1)
-  f.screen.querySelector('.focus-next').click();await f.flush();assert.ok(f.screen);assert.equal(timer.modeKey,'shortBreak');assert.equal(f.screen.querySelector('.focus-time').textContent,'05:00');assert.equal(placement.value,true)
-  f.screen.querySelector('.focus-next').click();await f.flush();assert.equal(timer.modeKey,'longBreak');assert.equal(f.screen.querySelector('.focus-time').textContent,'15:00')
-  f.screen.querySelector('.focus-next').click();await f.flush();assert.equal(timer.modeKey,'focus');assert.equal(f.screen.querySelector('.focus-time').textContent,'25:00');assert.equal(advances,3);assert.equal(shutdown,0)
-  f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('[data-settings-tab="duration"]').click();await f.flush();f.screen.querySelector('[data-duration-preset="extended"]').click();await f.flush();f.screen.querySelector('.focus-duration-apply').click();await f.flush();assert.equal(configured,1);assert.equal(timer.durations.focus,60);assert.ok(f.screen);f.key('Escape');await f.flush()
-  f.key('Escape');await f.flush();assert.equal(f.screen,null);assert.equal(placement.value,true);assert.deepEqual(moves,['dock']);assert.equal(initialized,1);assert.equal(shutdown,0)
-  f.doc.querySelector('.dock-right .timer-music-button').click();await f.flush();assert.equal(audio.paused,true);assert.equal(f.doc.querySelector('.dock-right .timer-music-button').getAttribute('aria-pressed'),'false');assert.equal(toggles,1)
+  const menu=()=>f.doc.querySelector('#pomodoro-options'),trigger=()=>f.doc.querySelector('.timer-options-trigger'),choose=async key=>{const button=Array.from(menu().querySelectorAll('button')).find(button=>button.textContent.includes(key));assert.ok(button,key);button.click();await f.flush()}
+  const openMenu=async()=>{trigger().getBoundingClientRect=()=>({right:530,bottom:60});trigger().click();await f.flush();assert.equal(trigger().getAttribute('aria-expanded'),'true');assert.equal(menu().style.left,'290px');assert.equal(f.doc.activeElement.closest('.timer-menu-modes'),null,'desktop focus skips the hidden mode group')}
+  const compact=f.doc.querySelector('[data-teleport="compact"]')
+  assert.equal(compact.querySelectorAll('.timer-options-trigger').length,1);assert.equal(compact.querySelector('.timer-dock-button,.timer-fullscreen-button'),null)
+  assert.equal(compact.querySelector('.pomodoro-card-time').tagName,'DIV');assert.equal(compact.querySelector('.pomodoro-card-time').textContent,'24:57')
+  await openMenu();assert.equal(f.doc.activeElement,menu().querySelector('button'))
+  for(const button of menu().querySelectorAll('button'))button.getClientRects=()=>[{}]
+  menu().dispatchEvent(new f.dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));assert.equal(f.doc.activeElement,menu().querySelectorAll('button')[1])
+  menu().dispatchEvent(new f.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await f.flush();assert.equal(trigger().getAttribute('aria-expanded'),'false');assert.equal(f.doc.activeElement,trigger());assert.equal(timer.isRunning,true)
+  await openMenu();await choose('pomodoro.durationSettings');assert.equal(f.doc.querySelector('.pomodoro-dialog').open,true);assert.equal(trigger().getAttribute('aria-expanded'),'false');f.doc.querySelector('.pomodoro-dialog').close()
+  timer.currentTarget={id:'task',workspace_id:'workspace',title:'Professional study'};await f.flush();await openMenu();await choose('pomodoro.linkedSessionSettings');assert.equal(targetSettings,1);assert.equal(timer.isRunning,true)
+  await openMenu();await choose('pomodoro.fullscreen');assert.ok(f.screen);assert.equal(timer.formattedTime,'24:57');assert.equal(f.screen.querySelector('button.focus-colon'),null)
+  f.screen.querySelector('.focus-appearance').click();await f.flush();f.screen.querySelector('[data-settings-tab="duration"]').click();await f.flush();f.screen.querySelector('.focus-duration-target').click();await f.flush();assert.equal(targetSettings,2)
+  f.screen.querySelector('[data-settings-tab="sound"]').click();await f.flush();f.screen.querySelector('.focus-music-toggle').click();await f.flush()
+  const audio=f.media[0];audio.readyState=1;audio.duration=249;audio.onloadedmetadata();audio.currentTime=73;audio.ontimeupdate();await f.flush();f.screen.querySelector('.focus-exit').click();await f.flush();assert.equal(audio.paused,false)
+  assert.equal(compact.querySelector('.timer-music-button'),null,'music controls share the options menu')
+  await openMenu();await choose('pomodoro.pauseMusic');assert.equal(audio.paused,true);assert.equal(timer.isRunning,true)
+  await openMenu();await choose('pomodoro.playMusic');assert.equal(audio.paused,false);assert.equal(audio.currentTime,73)
+  await openMenu();await choose('pomodoro.expandToNavbar');assert.equal(placement.value,true);assert.equal(audio.paused,false)
+  const dock=f.doc.querySelector('[data-pomodoro-navigation]'),center=dock.querySelector('.dock-session-controls')
+  for(const selector of ['.dock-clock','.dock-modes','.dock-toggle','.dock-reset','.timer-options-trigger'])assert.ok(center.querySelector(selector))
+  assert.ok(dock.querySelector('.dock-profile .test-profile'));assert.equal(dock.querySelector('.dock-right,.dock-left'),null);assert.equal(dock.querySelectorAll('.timer-options-trigger').length,1)
+  center.querySelector('.dock-toggle').click();await f.flush();assert.equal(timer.isRunning,false);assert.equal(toggles,1);assert.equal(audio.paused,false)
+  await openMenu();await choose('pomodoro.environmentSettings');assert.ok(f.screen.querySelector('.focus-appearance-panel'));assert.equal(audio.currentTime,73);f.screen.querySelector('.focus-exit').click();await f.flush()
+  await openMenu();f.dom.window.dispatchEvent(new f.dom.window.Event('resize'));await f.flush();assert.equal(trigger().getAttribute('aria-expanded'),'false')
+  await openMenu();await choose('pomodoro.collapse');assert.equal(placement.value,false);assert.equal(audio.paused,false);assert.equal(audio.currentTime,73);assert.deepEqual(moves,['dock','card']);assert.equal(initialized,1);assert.equal(shutdown,0);assert.equal(configured,0)
  }finally{app?.unmount();f.close()}
 })
 

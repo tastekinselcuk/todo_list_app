@@ -1,191 +1,54 @@
 <template>
   <transition name="teleportLift">
-    <div
-      v-if="!isExpanded"
-      key="compact"
-      data-teleport="compact"
-      class="pomodoro-card bg-card/50 backdrop-blur-xl text-card-foreground p-4 rounded-3xl shadow-[0_6px_24px_rgb(0,0,0,0.025)] border border-border/50 relative max-w-sm mx-auto w-full transition-all duration-300 group/pomodoro flex flex-col items-center"
-    >
+    <div v-if="!isExpanded" key="compact" data-teleport="compact" class="pomodoro-card bg-card/50 backdrop-blur-xl text-card-foreground p-4 rounded-3xl shadow-[0_6px_24px_rgb(0,0,0,0.025)] border border-border/50 relative max-w-sm mx-auto w-full transition-all duration-300 group/pomodoro flex flex-col items-center">
       <div class="pomodoro-card-header w-full flex items-center justify-center mb-4">
         <div role="group" :aria-label="$t('pomodoro.modeSelect')" class="compact-mode-tabs flex min-w-0 gap-0.5 p-1 bg-muted/40 rounded-full items-center justify-center">
-          <button
-            v-for="mode in modes"
-            :key="mode.name"
-            @click="setMode(mode)"
-            @context-menu.prevent="openCustomizeDialog"
-            :title="$t('pomodoro.rightClickSetup')"
-            type="button"
-            :aria-pressed="currentMode.key === mode.key"
-            class="min-w-0 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap rounded-full transition-all duration-300 tabular-nums"
-            :class="[
-              currentMode.name === mode.name
-                ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            ]"
-          >
-            {{ mode.name }}
-          </button>
+          <button v-for="mode in modes" :key="mode.key" type="button" @click="setMode(mode)" :aria-pressed="currentMode.key===mode.key" class="min-w-0 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap rounded-full transition-all duration-300 tabular-nums">{{ mode.name }}</button>
         </div>
       </div>
-      <button type="button" @click="setExpanded(true)" class="timer-view-button timer-dock-button" :title="$t('pomodoro.expandToNavbar')" :aria-label="$t('pomodoro.expandToNavbar')"><ArrowUp :size="16" :stroke-width="1.6" /></button>
-      <button type="button" @click="openFocus" class="timer-view-button timer-fullscreen-button" :title="$t('pomodoro.fullscreen')" :aria-label="$t('pomodoro.fullscreen')"><PomodoroViewIcon /></button>
-      <button v-if="musicStarted" type="button" class="timer-music-button timer-card-music" :aria-pressed="musicPlaying" :aria-label="musicLabel" :title="musicLabel" @click="toggleMusic"><Pause v-if="musicPlaying" :size="15" :stroke-width="1.6" /><Music2 v-else :size="15" :stroke-width="1.6" /></button>
-
+      <button type="button" class="timer-options-trigger timer-card-options" :aria-label="$t('pomodoro.controls')" :title="$t('pomodoro.controls')" aria-haspopup="menu" aria-controls="pomodoro-options" :aria-expanded="menuOpen" @click="toggleOptions" @keydown.down.prevent="toggleOptions"><MoreHorizontal :size="18" :stroke-width="1.7" /></button>
       <div class="pomodoro-card-body flex flex-col items-center justify-center py-2 w-full mb-4">
-        <div v-if="currentTarget" class="mb-2 flex max-w-full items-center gap-1"><button type="button" class="min-w-0 truncate px-2 text-xs text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task', currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button><button type="button" :disabled="timer.clearing" class="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-label="t('pomoNotes.freeFocus')" :title="t('pomoNotes.freeFocus')" @click="clearFocus()"><X class="h-3 w-3" /></button></div>
-        <button
-          type="button"
-          class="pomodoro-card-time text-foreground cursor-pointer select-none"
-          @click="clickTimerCustomize"
-          :aria-label="$t('pomodoro.clickSetup')"
-          :title="$t('pomodoro.clickSetup')"
-        >
-          <span>{{ clockParts[0] }}</span><span class="pomodoro-card-colon">:</span><span>{{ clockParts[1] }}</span>
-        </button>
+        <button v-if="currentTarget" type="button" class="mb-2 max-w-full truncate px-2 text-xs text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task',currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button>
+        <div class="pomodoro-card-time text-foreground select-none" role="timer" aria-live="off" :aria-label="formattedTime"><span>{{ clockParts[0] }}</span><span class="pomodoro-card-colon">:</span><span>{{ clockParts[1] }}</span></div>
       </div>
-
       <div class="pomodoro-card-actions flex justify-center gap-2 w-full">
-        <button
-          @click="toggleTimer"
-          :disabled="starting || timer.clearing"
-          class="flex-1 py-2.5 rounded-xl font-semibold transition-all duration-300 shadow-sm flex items-center justify-center gap-2 text-xs"
-          :class="[
-            isRunning
-              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 ring-1 ring-amber-500/30'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md'
-          ]"
-        >
-          {{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}
-        </button>
-        <button
-          @click="resetTimer"
-          class="flex-1 py-2.5 rounded-xl border border-input bg-background/50 text-foreground hover:bg-muted transition-all duration-300 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          :disabled="!canReset"
-        >
-          {{ $t('pomodoro.reset') }}
-        </button>
+        <button type="button" @click="toggleTimer" :disabled="starting||timer.clearing" class="flex-1 py-2.5 rounded-xl font-semibold transition-all duration-300 shadow-sm flex items-center justify-center gap-2 text-xs" :class="isRunning?'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 ring-1 ring-amber-500/30':'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md'">{{ remote?$t('pomoNotes.continueHere'):isRunning?$t('pomodoro.pause'):$t('pomodoro.start') }}</button>
+        <button type="button" @click="resetTimer" :disabled="!canReset" class="flex-1 py-2.5 rounded-xl border border-input bg-background/50 text-foreground hover:bg-muted transition-all duration-300 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed">{{ $t('pomodoro.reset') }}</button>
       </div>
-
-      <p v-if="timer.error && timer.error !== 'REMOTE_ACTIVE'" class="mt-2 text-center text-xs text-muted-foreground" role="status">{{ t(timer.errorMessageKey) }}</p>
+      <p v-if="timer.error&&timer.error!=='REMOTE_ACTIVE'" class="mt-2 text-center text-xs text-muted-foreground" role="status">{{ t(timer.errorMessageKey) }}</p>
     </div>
-
-    <div
-      v-else
-      key="expanded"
-      data-teleport="expanded"
-      data-pomodoro-navigation
-      :inert="!navbarVisible"
-      :style="{ top:attached ? `${(headerOffset ?? workspaceHeaderHeight) - workspaceHeaderHeight}px` : '14px',height:`${workspaceHeaderHeight}px` }"
-      :class="[
-        'pomodoro-dock fixed bg-card/90 backdrop-blur-2xl border border-border/60 shadow-[0_6px_24px_rgb(0,0,0,0.04)] z-40',
-        navbarVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none',
-        { 'is-workspace-attached': attached }
-      ]"
-    >
-      <div class="dock-layout relative" style="height:100%">
-        <div data-pomodoro-left class="dock-left flex min-w-0 items-center gap-2">
-          <div class="flex items-center gap-2">
-            <div class="hidden xl:block p-1.5 bg-primary/10 text-primary rounded-lg ring-1 ring-primary/20">
-              <Timer class="h-4 w-4" />
-            </div>
-            <div class="flex flex-col items-start"><button type="button" @click="clickTimerCustomize" :title="$t('pomodoro.clickSetup')" :aria-label="$t('pomodoro.clickSetup')" class="rounded-lg px-1 text-xl font-medium tracking-tight text-foreground tabular-nums hover:bg-muted/50 transition-colors">{{ formattedTime }}</button><div v-if="currentTarget" class="flex max-w-[6rem] items-center"><button type="button" class="min-w-0 truncate px-1 text-[9px] leading-3 text-muted-foreground hover:text-foreground" :title="currentTarget.title" @click="emit('focus-task', currentTarget.workspace_id)">{{ currentTarget.title || t('pomoNotes.unavailableTask') }}</button><button type="button" :disabled="timer.clearing" class="rounded p-0.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground" :aria-label="t('pomoNotes.freeFocus')" :title="t('pomoNotes.freeFocus')" @click="clearFocus()"><X class="h-2.5 w-2.5" /></button></div></div>
+    <div v-else key="expanded" data-teleport="expanded" data-pomodoro-navigation :inert="!navbarVisible" :style="{top:attached?`${(headerOffset??workspaceHeaderHeight)-workspaceHeaderHeight}px`:'14px',height:`${workspaceHeaderHeight}px`}" class="pomodoro-dock fixed z-40" :class="[navbarVisible?'translate-y-0 opacity-100':'-translate-y-full opacity-0 pointer-events-none',{'is-workspace-attached':attached}]">
+      <div class="dock-layout">
+        <div class="dock-balance" aria-hidden="true"></div>
+        <div class="dock-session-controls" data-pomodoro-controls>
+          <Timer class="dock-timer-icon" :size="17" :stroke-width="1.6" />
+          <div class="dock-clock"><span class="dock-time" role="timer" aria-live="off" :aria-label="formattedTime">{{ formattedTime }}</span><button v-if="currentTarget" type="button" class="dock-target" :title="currentTarget.title" @click="emit('focus-task',currentTarget.workspace_id)">{{ currentTarget.title||t('pomoNotes.unavailableTask') }}</button></div>
+          <div class="dock-modes" data-pomodoro-modes role="group" :aria-label="$t('pomodoro.modeSelect')"><button v-for="mode in modes" :key="mode.key" type="button" :aria-pressed="currentMode.key===mode.key" @click="setMode(mode)">{{ mode.name }}</button></div>
+          <div class="dock-action-group">
+            <button type="button" class="dock-toggle" :class="{'is-running':isRunning}" :disabled="starting||timer.clearing" :aria-label="remote?$t('pomoNotes.continueHere'):isRunning?$t('pomodoro.pause'):$t('pomodoro.start')" @click="toggleTimer"><Pause v-if="isRunning&&!remote" :size="14" /><Play v-else :size="14" /><span>{{ remote?$t('pomoNotes.continueHere'):isRunning?$t('pomodoro.pause'):$t('pomodoro.start') }}</span></button>
+            <button type="button" class="dock-reset" :disabled="!canReset" :title="$t('pomodoro.reset')" :aria-label="$t('pomodoro.reset')" @click="resetTimer"><RotateCcw :size="15" :stroke-width="1.6" /></button>
+            <button type="button" class="timer-options-trigger" :aria-label="$t('pomodoro.controls')" :title="$t('pomodoro.controls')" aria-haspopup="menu" aria-controls="pomodoro-options" :aria-expanded="menuOpen" @click="toggleOptions" @keydown.down.prevent="toggleOptions"><MoreHorizontal :size="18" :stroke-width="1.7" /></button>
           </div>
-
-        <div data-pomodoro-modes role="group" :aria-label="$t('pomodoro.modeSelect')" class="hidden lg:flex gap-1 p-0.5 bg-muted/40 rounded-full border border-border/50 items-center">
-          <button
-            v-for="mode in modes"
-            :key="mode.name"
-            @click="setMode(mode)"
-            @context-menu.prevent="openCustomizeDialog"
-            :title="$t('pomodoro.rightClickSetup')"
-            type="button"
-            :aria-pressed="currentMode.key === mode.key"
-            class="px-2.5 py-1 text-[10px] font-semibold whitespace-nowrap rounded-full transition-colors duration-200"
-            :class="[
-              currentMode.name === mode.name
-                ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                : 'text-muted-foreground hover:text-foreground hover:bg-background/30'
-            ]"
-          >
-            {{ mode.name }}
-          </button>
+      <div class="dock-progress absolute bottom-0 left-3 right-3 h-px bg-transparent overflow-hidden"><div class="h-full transition-all duration-1000 ease-linear" :class="isRunning?'bg-primary':'bg-muted-foreground/30'" :style="{width:`${progressPercentage}%`}"></div></div>
         </div>
-        <button data-pomodoro-mode-trigger type="button" popovertarget="pomodoro-dock-controls" :aria-label="$t('pomodoro.modeSelect')" :title="$t('pomodoro.modeSelect')" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground transition-colors hover:bg-background sm:inline-flex lg:hidden"><MoreHorizontal class="h-3.5 w-3.5" /></button>
-        </div>
-
-        <div class="dock-right">
-        <button v-if="musicStarted" type="button" class="timer-music-button" :aria-pressed="musicPlaying" :aria-label="musicLabel" :title="musicLabel" @click="toggleMusic"><Pause v-if="musicPlaying" :size="15" :stroke-width="1.6" /><Music2 v-else :size="15" :stroke-width="1.6" /></button>
-        <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
-          <div class="flex items-center gap-1.5 bg-muted/40 rounded-full p-0.5 border border-border/50">
-            <button
-              type="button"
-              @click="openFocus"
-              class="p-1.5 hover:bg-background rounded-full transition-colors text-muted-foreground hover:text-foreground"
-              :title="$t('pomodoro.fullscreen')"
-              :aria-label="$t('pomodoro.fullscreen')"
-            ><PomodoroViewIcon class="h-3.5 w-3.5" /></button>
-            <button
-              @click="toggleTimer"
-              :disabled="starting || timer.clearing"
-              :aria-label="remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start')"
-              class="inline-flex items-center justify-center px-3 py-1 rounded-full text-[11px] font-semibold transition-all duration-300"
-              :class="[
-                isRunning
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 ring-1 ring-amber-500/30'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
-              ]"
-            >
-              <Pause v-if="isRunning && !remote" class="h-3.5 w-3.5 lg:hidden" /><Play v-else class="h-3.5 w-3.5 lg:hidden" /><span class="hidden lg:inline">{{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}</span>
-            </button>
-            <button
-              @click="resetTimer"
-              :title="$t('pomodoro.reset')" :aria-label="$t('pomodoro.reset')" class="px-2 py-1 rounded-full text-[11px] font-medium bg-transparent text-foreground hover:bg-background transition-colors disabled:opacity-40"
-              :disabled="!canReset"
-            >
-              <span class="hidden lg:inline">{{ $t('pomodoro.reset') }}</span><RotateCcw class="h-3.5 w-3.5 lg:hidden" />
-            </button>
-            <button
-              type="button"
-              @click="setExpanded(false)"
-              class="p-1.5 hover:bg-background rounded-full transition-colors text-muted-foreground hover:text-foreground"
-              :title="$t('pomodoro.collapse')"
-              :aria-label="$t('pomodoro.collapse')"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            </button>
-          </div>
-
-
-        </div>
-        <button type="button" popovertarget="pomodoro-dock-controls" :aria-label="$t('pomodoro.controls')" :title="$t('pomodoro.controls')" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground transition-colors hover:bg-background hover:text-foreground sm:hidden">
-          <MoreHorizontal class="h-4 w-4" />
-        </button>
-        <slot name="profile" />
-        </div>
-        <div ref="dockControls" id="pomodoro-dock-controls" popover="auto" :style="{top:attached ? `${(headerOffset ?? workspaceHeaderHeight)+8}px` : '70px'}" :aria-label="$t('pomodoro.controls')" class="dock-controls rounded-2xl border border-border/60 bg-card p-1.5 text-card-foreground shadow-[0_12px_36px_rgb(0,0,0,0.12)]">
-          <div role="group" :aria-label="$t('pomodoro.modeSelect')" class="border-b border-border/40 pb-1.5 mb-1.5 sm:border-0 sm:pb-0 sm:mb-0">
-            <button v-for="mode in modes" :key="mode.key" type="button" :aria-pressed="currentMode.key === mode.key" class="dock-control" :class="currentMode.key === mode.key ? 'bg-muted text-foreground' : 'text-muted-foreground'" @click="setMode(mode); closeDockControls()">{{ mode.name }}<Check v-if="currentMode.key === mode.key" class="ml-auto h-3.5 w-3.5" /></button>
-          </div>
-          <button type="button" :disabled="starting || timer.clearing" class="dock-control sm:!hidden" @click="toggleTimer(); closeDockControls()"><Pause v-if="isRunning && !remote" class="h-3.5 w-3.5" /><Play v-else class="h-3.5 w-3.5" />{{ remote ? $t('pomoNotes.continueHere') : isRunning ? $t('pomodoro.pause') : $t('pomodoro.start') }}</button>
-          <button type="button" :disabled="!canReset" class="dock-control sm:!hidden" @click="resetTimer(); closeDockControls()"><RotateCcw class="h-3.5 w-3.5" />{{ $t('pomodoro.reset') }}</button>
-          <button type="button" class="dock-control text-muted-foreground" @click="openFocus"><PomodoroViewIcon class="h-3.5 w-3.5" />{{ $t('pomodoro.fullscreen') }}</button>
-          <button type="button" class="dock-control text-muted-foreground sm:!hidden" @click="closeDockControls(); setExpanded(false)"><ArrowDown class="h-3.5 w-3.5" />{{ $t('pomodoro.collapse') }}</button>
-        </div>
-      </div>
-
-      <div class="dock-progress absolute bottom-0 left-3 right-3 h-px bg-transparent overflow-hidden">
-        <div
-          class="h-full transition-all duration-1000 ease-linear"
-          :class="isRunning ? 'bg-primary' : 'bg-muted-foreground/30'"
-          :style="{ width: `${progressPercentage}%` }"
-        ></div>
+        <div class="dock-profile"><slot name="profile" /></div>
       </div>
     </div>
   </transition>
 
-  <PomodoroFocus ref="focusView" :time="formattedTime" :mode="currentMode.name" :next-label="nextModeLabel" :durations="timer.durations" :target-duration="Boolean(currentTarget)" :target-title="timer.modeKey === 'focus' ? currentTarget?.title : undefined" :running="isRunning" :remote="remote" :progress="progressPercentage" :busy="starting || timer.clearing" :can-reset="canReset" :error="timer.error && timer.error !== 'REMOTE_ACTIVE' ? t(timer.errorMessageKey) : undefined" @toggle="toggleTimer" @reset="resetTimer" @next="advanceMode" @configure="configureFocusDurations" />
+  <div ref="optionsMenu" id="pomodoro-options" popover="auto" role="menu" :aria-label="$t('pomodoro.controls')" class="timer-options-menu" tabindex="-1" :style="menuPosition" @toggle="handleMenuToggle" @keydown="menuKeydown">
+    <div v-if="isExpanded" class="timer-menu-modes" role="group" :aria-label="$t('pomodoro.modeSelect')"><button v-for="mode in modes" :key="mode.key" type="button" role="menuitemradio" :aria-checked="currentMode.key===mode.key" @click="setMode(mode);closeOptions()"><Timer :size="15" /><span>{{ mode.name }}</span><Check v-if="currentMode.key===mode.key" :size="13" /></button><div class="timer-menu-divider" role="separator"></div></div>
+    <button type="button" role="menuitem" :aria-label="$t(isExpanded?'pomodoro.collapse':'pomodoro.expandToNavbar')" @click="setExpanded(!isExpanded)"><ArrowDown v-if="isExpanded" :size="15" /><ArrowUp v-else :size="15" /><span>{{ $t(isExpanded?'pomodoro.collapse':'pomodoro.expandToNavbar') }}</span></button>
+    <button type="button" role="menuitem" @click="openFocus"><PomodoroViewIcon class="h-3.5 w-3.5" /><span>{{ $t('pomodoro.fullscreen') }}</span></button>
+    <div class="timer-menu-divider" role="separator"></div>
+    <button type="button" role="menuitem" :disabled="starting||timer.clearing" @click="openCustomizeDialog"><Timer :size="15" /><span>{{ $t('pomodoro.durationSettings') }}</span></button>
+    <button v-if="currentTarget" type="button" role="menuitem" :disabled="starting||timer.clearing" @click="openTargetSettings"><Link2 :size="15" /><span>{{ $t('pomodoro.linkedSessionSettings') }}</span></button>
+    <button type="button" role="menuitem" @click="openEnvironment"><SlidersHorizontal :size="15" /><span>{{ $t('pomodoro.environmentSettings') }}</span></button>
+    <button v-if="musicStarted" type="button" role="menuitemcheckbox" class="timer-music-button" :aria-checked="musicPlaying" :aria-label="musicLabel" @click="toggleMusic"><Pause v-if="musicPlaying" :size="15" /><Music2 v-else :size="15" /><span>{{ musicLabel }}</span></button>
+  </div>
+
+  <PlanFocusSettings />
+  <PomodoroFocus ref="focusView" :time="formattedTime" :mode="currentMode.name" :next-label="nextModeLabel" :durations="timer.durations" :target-duration="Boolean(currentTarget)" :target-title="timer.modeKey === 'focus' ? currentTarget?.title : undefined" :running="isRunning" :remote="remote" :progress="progressPercentage" :busy="starting || timer.clearing" :can-reset="canReset" :error="timer.error && timer.error !== 'REMOTE_ACTIVE' ? t(timer.errorMessageKey) : undefined" @toggle="toggleTimer" @reset="resetTimer" @next="advanceMode" @configure="configureFocusDurations" @target-settings="openTargetSettings" />
 
   <dialog
     ref="customizeDialog"
@@ -303,10 +166,11 @@
 
 <script setup lang="ts">
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ArrowDown, ArrowUp, Check, MoreHorizontal, Music2, Pause, Play, Timer, X, RotateCcw } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, Check, MoreHorizontal, Music2, Pause, Play, Timer, X, RotateCcw, Link2, SlidersHorizontal } from 'lucide-vue-next'
 import PomodoroFocus from './PomodoroFocus.vue'
+import PlanFocusSettings from './PlanFocusSettings.vue'
 import PomodoroViewIcon from './PomodoroViewIcon.vue'
 import { focusDurationPresets } from '../lib/focusEnvironment'
 import { useI18n } from 'vue-i18n'
@@ -331,19 +195,48 @@ const modes = computed<TimerMode[]>(() => [
 const currentMode = computed(() => ({ ...modes.value.find(mode=>mode.key===timer.modeKey)!, duration:timer.sessionSeconds }))
 const nextModeLabel=computed(()=>t('pomodoro.nextSession',{mode:t(`pomodoro.${timer.nextMode}`)}))
 const isExpanded = ref(props.docked)
-const dockControls = ref<HTMLElement>()
+const optionsMenu=ref<HTMLElement>(),menuOpen=ref(false),menuPosition=ref({left:'0px',top:'0px'})
+let optionsTrigger:HTMLButtonElement|undefined,trackingOptions=false
+function stopOptionsTracking(){if(!trackingOptions)return;trackingOptions=false;window.removeEventListener('resize',closeOptions);window.removeEventListener('scroll',handleOptionsScroll,true)}
+function closeOptions(){optionsMenu.value?.hidePopover?.();menuOpen.value=false;stopOptionsTracking()}
+function positionOptions(){
+  if(!optionsTrigger||!optionsMenu.value)return
+  const rect=optionsTrigger.getBoundingClientRect(),width=240,height=optionsMenu.value.offsetHeight||300
+  menuPosition.value={left:Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width))+'px',top:Math.max(8,Math.min(window.innerHeight-height-8,rect.bottom+8))+'px'}
+  Object.assign(optionsMenu.value.style,menuPosition.value)
+}
+function visibleMenuItems(){return Array.from(optionsMenu.value?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]:not(:disabled)')||[]).filter(item=>item.getClientRects().length)}
+async function toggleOptions(event:MouseEvent|KeyboardEvent){
+  if(menuOpen.value){closeOptions();return}
+  optionsTrigger=event.currentTarget as HTMLButtonElement
+  positionOptions();optionsMenu.value?.showPopover?.();positionOptions();menuOpen.value=true;trackingOptions=true;window.addEventListener('resize',closeOptions);window.addEventListener('scroll',handleOptionsScroll,true)
+  await nextTick();positionOptions();(visibleMenuItems()[0]||optionsMenu.value)?.focus({preventScroll:true})
+}
+function handleMenuToggle(event:Event){menuOpen.value=(event as ToggleEvent).newState==='open';if(!menuOpen.value)stopOptionsTracking()}
+function menuKeydown(event:KeyboardEvent){
+  if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeOptions();optionsTrigger?.focus();return}
+  if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
+  const items=visibleMenuItems()
+  if(!items.length)return
+  event.preventDefault()
+  const index=items.indexOf(document.activeElement as HTMLButtonElement),next=event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length
+  items[next]?.focus()
+}
+function handleOptionsScroll(event:Event){if(menuOpen.value&&!(event.target instanceof Node&&optionsMenu.value?.contains(event.target)))closeOptions()}
+
 const customizeDialog = ref<HTMLDialogElement|null>(null)
 const focusView=ref<InstanceType<typeof PomodoroFocus>>()
 const clockParts=computed(()=>formattedTime.value.split(':'))
 const musicStarted=computed(()=>Boolean(focusView.value?.musicStarted))
 const musicPlaying=computed(()=>focusView.value?.soundStatus==='playing'||focusView.value?.soundStatus==='loading')
 const musicLabel=computed(()=>t(musicPlaying.value?'pomodoro.pauseMusic':'pomodoro.playMusic'))
-function toggleMusic(){focusView.value?.toggleMusic()}
-const closeDockControls = () => dockControls.value?.hidePopover?.()
-function openFocus(){closeDockControls();void focusView.value?.open()}
-watch(()=>props.navbarVisible,visible=>{if(!visible)closeDockControls()})
-watch(()=>props.docked,value=>{isExpanded.value=value})
-function setExpanded(value:boolean) { isExpanded.value=value;if(value)emit('expand');else emit('collapse') }
+function toggleMusic(){focusView.value?.toggleMusic();closeOptions()}
+function openFocus(){closeOptions();void focusView.value?.open()}
+function openEnvironment(){closeOptions();void focusView.value?.openSettings()}
+function openTargetSettings(){closeOptions();timer.openPlanSettings()}
+watch(()=>props.navbarVisible,visible=>{if(!visible)closeOptions()})
+watch(()=>props.docked,value=>{closeOptions();isExpanded.value=value})
+function setExpanded(value:boolean) { closeOptions();isExpanded.value=value;if(value)emit('expand');else emit('collapse') }
 const timerPresets=focusDurationPresets
 const customDurations = ref<TimerDurations>({...timer.durations})
 const draftCustomDurations = ref<TimerDurations>({...customDurations.value})
@@ -353,15 +246,13 @@ const formatDurationTriplet=(value:TimerDurations)=>`${value.focus}m / ${value.s
 const customPreviewDurations=computed(()=>draftPreset.value==='custom'?normalizeDurations(draftCustomDurations.value):customDurations.value)
 const presetCards=computed(()=>[...timerPresets.map(preset=>({id:preset.id as TimerPresetId,name:t(`pomodoro.presets.${preset.id}`),summary:formatDurationTriplet(preset)})),
   {id:'custom' as TimerPresetId,name:t('pomodoro.custom'),summary:formatDurationTriplet(customPreviewDurations.value)}])
-const openCustomizeDialog=()=>{draftPreset.value=findPresetId(timer.durations);draftCustomDurations.value={...timer.durations};customizeDialog.value?.showModal()}
+const openCustomizeDialog=()=>{closeOptions();draftPreset.value=findPresetId(timer.durations);draftCustomDurations.value={...timer.durations};customizeDialog.value?.showModal()}
 const selectDraftPreset=(id:TimerPresetId)=>{draftPreset.value=id;draftCustomDurations.value={...(timerPresets.find(preset=>preset.id===id)||customDurations.value)}}
 const configureFocusDurations=(value:TimerDurations)=>{if(!starting.value&&!timer.clearing)timer.configure(value)}
 const saveTimerConfiguration=()=>{if(starting.value||timer.clearing)return;const value=normalizeDurations(draftCustomDurations.value);if(draftPreset.value==='custom')customDurations.value=value;configureFocusDurations(value);customizeDialog.value?.close()}
-const clickTimerCustomize=()=>openCustomizeDialog()
 const setMode=async(mode:TimerMode)=>{await timer.setMode(mode.key);notifyFailure()}
 const notifyFailure=()=>{if(timer.error&&timer.error!=='REMOTE_ACTIVE')ui.addToast(t(timer.errorMessageKey),'error')}
 const toggleTimer=async()=>{await timer.toggleTimer();notifyFailure()}
-const clearFocus=async()=>{await timer.clearFocus();notifyFailure()}
 const resetTimer=async()=>{await timer.resetTimer();notifyFailure()}
 const advanceMode=async()=>{await timer.advanceMode();notifyFailure()}
 watch(()=>timer.completionSequence,()=>{
@@ -371,7 +262,7 @@ watch(()=>timer.completionSequence,()=>{
   }
 })
 onMounted(()=>timer.init())
-onUnmounted(()=>timer.shutdown())
+onUnmounted(()=>{closeOptions();timer.shutdown()})
 </script>
 
 <style scoped>
@@ -379,26 +270,49 @@ onUnmounted(()=>timer.shutdown())
 .compact-mode-tabs{max-width:100%}
 .pomodoro-card-time{display:inline-flex;align-items:baseline;max-width:100%;border-radius:12px;font-family:'Segoe UI Variable Display','SF Pro Display','Helvetica Neue',sans-serif;font-size:64px;font-weight:300;line-height:1.05;letter-spacing:-.055em;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pomodoro-card-colon{color:inherit;letter-spacing:0;transform:translateY(-.08em)}
-.timer-music-button{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:hsl(var(--muted-foreground));transition:background 180ms,color 180ms}.timer-music-button[aria-pressed='true']{background:hsl(var(--primary)/.06);color:hsl(var(--foreground)/.8)}.timer-music-button:hover{background:hsl(var(--muted)/.65);color:hsl(var(--foreground))}.timer-card-music{position:absolute;right:12px;top:50%;transform:translateY(-50%)}
-.timer-view-button{position:absolute;top:16px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:hsl(var(--muted-foreground));opacity:0;pointer-events:none;transform:translateY(-2px);transition:opacity 180ms,transform 220ms cubic-bezier(.22,1,.36,1),background 180ms,color 180ms}.timer-dock-button{left:10px}.timer-fullscreen-button{right:10px}.pomodoro-card:hover .timer-view-button,.timer-view-button:focus-visible{opacity:1;pointer-events:auto;transform:none}.timer-view-button:hover{background:hsl(var(--muted)/.65);color:hsl(var(--foreground))}
+.timer-options-trigger{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;color:hsl(var(--muted-foreground));opacity:0;pointer-events:none;transform:translateY(-2px);transition:opacity 180ms,transform 180ms,background 160ms,color 160ms}
+.timer-card-options{position:absolute;top:14px;right:10px}
+.pomodoro-card:hover .timer-options-trigger,.pomodoro-card:focus-within .timer-options-trigger,.dock-session-controls .timer-options-trigger,.timer-options-trigger[aria-expanded=true],.timer-options-trigger:focus-visible{opacity:1;pointer-events:auto;transform:none}
+.timer-options-trigger:hover{background:hsl(var(--muted)/.65);color:hsl(var(--foreground))}
+@media(hover:none){.timer-options-trigger{opacity:1;pointer-events:auto;transform:none}}
 @media(max-width:400px){.compact-mode-tabs button{padding-inline:5px;font-size:10px}}
-@media(hover:none){.timer-view-button{opacity:1;pointer-events:auto;transform:none}}@media(prefers-reduced-motion:reduce){.timer-view-button{transition:none;transform:none}.timer-music-button{transition:none}}
-.pomodoro-dock{left:76px;right:12px;border-radius:18px;transition:transform 240ms cubic-bezier(.22,1,.36,1),opacity 180ms ease}.dock-layout{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 10px}.dock-left{overflow:hidden}.dock-right{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0}.pomodoro-dock [data-pomodoro-modes]{display:none}.pomodoro-dock [data-pomodoro-mode-trigger]{display:none}.pomodoro-dock.is-workspace-attached{transform:none;border-radius:14px;box-shadow:none;backdrop-filter:none;transition:opacity 180ms ease}.dock-progress{opacity:.65}
-@media(min-width:640px){.pomodoro-dock{right:24px;left:76px}.dock-layout{padding-inline:12px}.dock-right{gap:10px}.pomodoro-dock [data-pomodoro-mode-trigger]{display:inline-flex}}
+.pomodoro-dock{left:76px;right:12px;pointer-events:none;transition:transform 240ms cubic-bezier(.22,1,.36,1),opacity 180ms ease}
+.dock-layout{display:grid;grid-template-columns:minmax(48px,1fr) auto minmax(48px,1fr);height:100%;align-items:center;gap:10px;padding:0 12px}
+.dock-session-controls{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;height:100%;gap:12px;padding:0 16px;overflow:hidden;pointer-events:auto;border:1px solid hsl(var(--border)/.6);border-radius:18px;background:hsl(var(--card)/.9);backdrop-filter:blur(24px);box-shadow:0 6px 24px rgb(0 0 0/.04)}
+.dock-timer-icon{flex-shrink:0;color:hsl(var(--muted-foreground))}
+.dock-clock{display:flex;flex-direction:column;align-items:flex-start;min-width:66px;max-width:136px}
+.dock-time{font-size:21px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.035em;line-height:1.15;color:hsl(var(--foreground))}
+.dock-target{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:2px;font-size:9px;line-height:1.2;text-align:left;color:hsl(var(--muted-foreground))}
+.dock-target:hover{color:hsl(var(--foreground))}
+.dock-modes{display:flex;align-items:center;gap:2px;padding:3px;border:1px solid hsl(var(--border)/.4);border-radius:999px;background:hsl(var(--muted)/.3)}
+.dock-modes button{padding:5px 10px;border-radius:999px;white-space:nowrap;font-size:10px;color:hsl(var(--muted-foreground));transition:background 160ms,color 160ms}
+.compact-mode-tabs button,.dock-modes button{color:hsl(var(--muted-foreground));font-weight:500;transition:background 160ms,color 160ms,box-shadow 160ms}
+.compact-mode-tabs button:hover:not([aria-pressed=true]),.dock-modes button:hover:not([aria-pressed=true]){background:hsl(var(--primary)/.055);color:hsl(var(--foreground))}
+.compact-mode-tabs button[aria-pressed=true],.dock-modes button[aria-pressed=true]{background:hsl(var(--primary)/.12);color:hsl(var(--foreground));font-weight:600;box-shadow:inset 0 0 0 .5px hsl(var(--primary)/.16),0 1px 2px rgb(0 0 0/.025)}
+.dock-action-group{display:flex;align-items:center;gap:4px;padding-left:10px;border-left:1px solid hsl(var(--border)/.5)}
+.dock-toggle{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:30px;padding:6px 13px;border-radius:999px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font-size:11px;font-weight:500;white-space:nowrap}
+.dock-toggle.is-running{background:hsl(var(--primary)/.09);color:hsl(var(--foreground))}
+.dock-reset{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;color:hsl(var(--muted-foreground))}.dock-reset:hover:not(:disabled){background:hsl(var(--muted)/.5);color:hsl(var(--foreground))}
+.dock-profile{pointer-events:auto;display:flex;justify-content:flex-end;align-items:center;min-width:0}
+.pomodoro-dock.is-workspace-attached{transform:none;transition:opacity 180ms ease}.dock-progress{opacity:.65}
+@media(min-width:640px){.pomodoro-dock{right:24px;left:76px}}
 @media(min-width:1024px){.pomodoro-dock{left:var(--workspace-sidebar-inset,24px)}}
-@media(min-width:1024px){.pomodoro-dock [data-pomodoro-modes]{display:flex}.pomodoro-dock [data-pomodoro-mode-trigger]{display:none}}
-.dock-controls { inset: 3rem 4.5rem auto auto; margin: 0; width: 11rem; opacity: 0; transform: translateY(-4px); transition: opacity 140ms ease, transform 160ms cubic-bezier(.22,1,.36,1), display 160ms allow-discrete, overlay 160ms allow-discrete; }
-.dock-controls:popover-open { opacity: 1; transform: translateY(0); }
-@media (min-width:640px) { .dock-controls { inset:3rem auto auto 1.25rem; } }
-@starting-style { .dock-controls:popover-open { opacity: 0; transform: translateY(-4px); } }
-.dock-control { display: flex; width: 100%; align-items: center; gap: .5rem; padding: .6rem .65rem; border-radius: .65rem; font-size: .75rem; transition: background-color 150ms, color 150ms; }
-.dock-control:hover { background: hsl(var(--muted) / .6); }
+@media(max-width:799px){.dock-modes{display:none}.dock-timer-icon{display:none}.dock-session-controls{gap:10px}.dock-clock{max-width:110px}}
+@media(max-width:639px){.dock-layout{grid-template-columns:minmax(0,1fr) auto;gap:6px;padding-inline:8px}.dock-balance{display:none}.dock-session-controls{gap:6px;padding-inline:8px}.dock-action-group{gap:0;padding-left:4px}.dock-toggle{width:30px;padding:6px}.dock-toggle>span{display:none}.dock-clock{min-width:48px;max-width:100px}.dock-time{font-size:20px}}
+.timer-options-menu{position:fixed;inset:auto;margin:0;width:240px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:5px;border:1px solid hsl(var(--border)/.65);border-radius:14px;background:hsl(var(--card));color:hsl(var(--foreground));box-shadow:0 12px 36px rgb(0 0 0/.1);opacity:0;transform:translateY(-4px);transition:opacity 140ms,transform 180ms cubic-bezier(.22,1,.36,1),display 180ms allow-discrete,overlay 180ms allow-discrete}
+.timer-options-menu:popover-open{opacity:1;transform:none}
+.timer-options-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:10px;border-radius:9px;text-align:left;font-size:12px;color:hsl(var(--muted-foreground));transition:background 150ms,color 150ms}
+.timer-options-menu button>svg{flex-shrink:0}.timer-options-menu button>span{flex:1}
+.timer-options-menu button:hover:not(:disabled),.timer-options-menu button:focus-visible{background:hsl(var(--primary)/.06);color:hsl(var(--foreground));outline:none}
+.timer-menu-divider{height:1px;margin:4px 7px;background:hsl(var(--border)/.45)}
+@media(min-width:800px){.timer-menu-modes{display:none}}
+@starting-style{.timer-options-menu:popover-open{opacity:0;transform:translateY(-4px)}}
 .teleportLift-enter-active, .teleportLift-leave-active { transition: opacity 180ms ease, transform 220ms cubic-bezier(.22,1,.36,1); }
 .teleportLift-enter-from[data-teleport='compact'], .teleportLift-leave-to[data-teleport='compact'] { opacity: 0; transform: translateY(-8px) scale(.98); }
 .teleportLift-enter-from[data-teleport='expanded'], .teleportLift-leave-to[data-teleport='expanded'] { opacity: 0; transform: translateY(-100%); }
 button:focus-visible { outline: 2px solid hsl(var(--primary) / .45); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
-  .pomodoro-dock, .dock-controls, .teleportLift-enter-active, .teleportLift-leave-active, .customPanel-enter-active, .customPanel-leave-active { transition: none !important; }
+  .pomodoro-dock, .timer-options-menu, .timer-options-trigger, .teleportLift-enter-active, .teleportLift-leave-active, .customPanel-enter-active, .customPanel-leave-active { transition: none !important; }
   .teleportLift-enter-from[data-teleport='compact'], .teleportLift-leave-to[data-teleport='compact'] { transform: none; }
 }
 .pomodoro-dialog { overflow: hidden; }

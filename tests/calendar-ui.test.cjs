@@ -28,9 +28,11 @@ function component(path, dependencies = {}, globals = {}) {
     vue: { ...vue, ...lifecycle, inject: (_key, fallback) => fallback },
     'vue-i18n': { useI18n: () => ({ t: translate, locale: vue.ref('en') }) },
     'lucide-vue-next': {},
-    '@/components/ui/CustomSelect.vue': {},
+    '@/components/ui/CustomSelect.vue': {},'./ProjectSelect.vue':{},
     '@/lib/searchNavigation': { searchScrollKey: Symbol('search-scroll') },
     '../lib/tasks': tasksLib,
+    '../lib/connectedCalendars': load(fs.readFileSync('src/features/tasks/lib/connectedCalendars.ts','utf8'),{vue}),
+    './CalendarProviderIcon.vue':{},
     ...dependencies,
   }, globals).default
 }
@@ -41,108 +43,76 @@ function editorFixture(overrides = {}) {
   const props = vue.reactive({
     mode: 'block',
     block: { id: 'block', title: 'Planning', starts_at: '2026-10-21T09:00', ends_at: '2026-10-21T09:30', version: 1 },
-    tasks: [], projects: [], blocks: [], saving: false, error: '',
+    tasks: [], projects: [], blocks: [], saving: false, error: '',loadTask:async()=>null,saveProject:async()=>null,deleteProject:async()=>false,
     ...overrides,
   })
   const state = scope.run(() => Editor.setup(props, { expose() {}, emit: (...args) => emitted.push(args) }))
   return { props, state, emitted, stop: () => scope.stop() }
 }
 
-test('calendar editor presets change the actual saved interval and shifting the start preserves its duration', async t => {
-  const f = editorFixture(); t.after(f.stop)
-  for (const minutes of [15, 30, 60, 90]) {
-    f.state.setDuration(minutes)
-    assert.equal(f.state.durationMinutes.value, minutes)
-    assert.equal(new Date(f.state.ends.value) - new Date(f.state.starts.value), minutes * 60000)
-  }
-  assert.equal(f.state.durationText.value, '1 h 30 min')
-  f.state.starts.value = '2026-10-22T23:15'
-  await vue.nextTick()
-  assert.equal(f.state.ends.value, '2026-10-23T00:45', 'a shift across midnight keeps the selected 90-minute duration')
-  f.state.submit()
-  const [event, payload] = f.emitted[0]
-  assert.equal(event, 'save')
-  assert.equal(payload.starts_at, new Date('2026-10-22T23:15').toISOString())
-  assert.equal(payload.ends_at, new Date('2026-10-23T00:45').toISOString())
-  assert.equal(payload.task_id, null)
-  assert.equal(payload.timezone, tasksLib.browserTimezone())
+test('unified task editor requires only a title and omits the estimate input contract', t => {
+ const f=editorFixture({mode:'task',block:undefined,initialTitle:'  Task  '});t.after(f.stop)
+ assert.equal(f.state.valid.value,true);assert.equal(f.state.times.value.length,0);f.state.submit()
+ const [event,draft]=f.emitted[0];assert.equal(event,'save');assert.equal(draft.task.title,'Task');assert.equal(draft.task.project_id,null);assert.equal(draft.task.due_on,null);assert.equal('estimate_minutes' in draft.task,false);assert.equal(draft.times.length,0)
 })
 
-test('calendar editor keeps existing task association visible and requires a title after unlinking', t => {
-  const f = editorFixture({ block: { title: '', task_id: 'linked', task_title: 'Existing task', starts_at: '2026-10-21T09:00', ends_at: '2026-10-21T09:30' } }); t.after(f.stop)
-  assert.equal(f.state.linkedTaskTitle.value, 'Existing task')
-  assert.equal(f.state.valid.value, true, 'a linked task supplies the block display title')
-  assert.equal(f.state.taskOptions.value.some(option => option.value === 'linked'), true, 'paginated tasks do not remove an existing association')
-  f.state.taskId.value = ''
-  assert.equal(f.state.linkedTaskTitle.value, '')
-  assert.equal(f.state.valid.value, false)
-  f.state.submit()
-  assert.equal(f.emitted.length, 0)
-  f.state.title.value = 'Independent event'
-  f.state.submit()
-  assert.equal(f.emitted[0][1].title, 'Independent event')
-  assert.equal(f.emitted[0][1].task_id, null)
+test('collapsing the description preserves edits and completed steps are not offered for new planning',async t=>{
+ const task={id:'task',title:'Task',description:'Original note',status:'todo',version:1,checklist:[{id:'done',title:'Finished step',done:true},{id:'open',title:'Open step',done:false}],scheduled_blocks:[{id:'past',task_id:'task',title:'',starts_at:'2026-10-21T09:00:00Z',ends_at:'2026-10-21T09:30:00Z',timezone:'UTC',version:1,subtask_ids:['done']}]}
+ const f=editorFixture({mode:'task',task,block:undefined});t.after(f.stop)
+ f.state.description.value='Edited note';await f.state.toggleDescription();assert.equal(f.state.descriptionOpen.value,false);assert.equal(f.state.description.value,'Edited note')
+ await f.state.toggleDescription();assert.equal(f.state.descriptionOpen.value,true);assert.equal(f.state.description.value,'Edited note')
+ assert.deepEqual(Array.from(f.state.availableSubtasks.value,item=>item.id),['open'])
+ assert.deepEqual(Array.from(f.state.times.value[0].subtask_ids),['done'],'past associations are preserved when a step is finished')
+ f.state.addTime();const newTime=f.state.times.value[1];f.state.toggleTarget(newTime,'done');assert.equal(newTime.subtask_ids.length,0)
+ f.state.toggleTarget(newTime,'open');assert.deepEqual(Array.from(newTime.subtask_ids),['open']);f.state.submit();assert.equal(f.emitted[0][1].task.description,'Edited note')
 })
 
-test('calendar editor blocks duplicate save, closing and duration edits while a write is pending', t => {
-  const f = editorFixture(); t.after(f.stop)
-  f.props.saving = true
-  const originalEnd = f.state.ends.value
-  f.state.setDuration(90)
-  f.state.submit()
-  f.state.close()
-  assert.equal(f.state.ends.value, originalEnd)
-  assert.equal(f.emitted.length, 0)
-  f.props.saving = false
-  f.state.close()
-  assert.equal(f.emitted[0][0], 'close')
+test('multiple sessions, subtask targets and removals are saved together without changing untouched sessions',t=>{
+ const first={id:'first',task_id:'task',title:'',starts_at:'2026-10-21T09:00:00Z',ends_at:'2026-10-21T09:30:00Z',version:1,timezone:'UTC',subtask_ids:[]},second={...first,id:'second',starts_at:'2026-12-01T12:00:00Z',ends_at:'2026-12-01T13:00:00Z'}
+ const task={id:'task',title:'Report',status:'todo',version:2,checklist:[{id:'one',title:'Research',done:false}],scheduled_blocks:[first,second]}
+ const f=editorFixture({mode:'task',task,block:undefined,blocks:[first]});t.after(f.stop)
+ assert.equal(f.state.times.value.length,2,'all dates are loaded, not only the visible calendar range');assert.equal(f.state.canChooseTask,false)
+ f.state.toggleTarget(f.state.times.value[0],'one');f.state.removeTime(f.state.times.value[1]);f.state.submit()
+ const draft=f.emitted[0][1];assert.equal(draft.taskId,'task');assert.equal(draft.taskVersion,2);assert.equal(draft.times.length,1);assert.deepEqual(Array.from(draft.times[0].subtask_ids),['one']);assert.equal(draft.removed[0].id,'second');assert.equal(draft.removed[0].version,1)
+ assert.equal(task.scheduled_blocks.length,2,'draft edits do not mutate the incoming task');assert.equal(task.scheduled_blocks[0].subtask_ids.length,0)
 })
 
-test('calendar editor enforces supported date bounds, positive duration and a seven-day maximum', async t => {
-  const f = editorFixture(); t.after(f.stop)
-  f.state.starts.value = '2100-12-31T23:55'
-  await vue.nextTick()
-  assert.equal(f.state.canSetDuration(15), false)
-  assert.equal(f.state.validTimes.value, false, 'a preserved interval beyond the supported final date cannot be saved')
-  f.state.ends.value = '2100-12-31T23:59'
-  assert.equal(f.state.validTimes.value, true)
-  assert.equal(f.state.minimumEnd.value, '2100-12-31T23:56')
-  assert.equal(f.state.maximumEnd.value, '2100-12-31T23:59')
-  f.state.starts.value = '2026-10-21T12:00'
-  await vue.nextTick()
-  f.state.ends.value = tasksLib.localInput(new Date(new Date(f.state.starts.value).getTime() + 7 * 86400000))
-  assert.equal(f.state.validTimes.value, true)
-  f.state.ends.value = tasksLib.localInput(new Date(new Date(f.state.starts.value).getTime() + 7 * 86400000 + 60000))
-  assert.equal(f.state.validTimes.value, false)
-  f.state.ends.value = f.state.starts.value
-  assert.equal(f.state.validTimes.value, false)
-  f.state.starts.value = '1899-12-31T23:00'
-  await vue.nextTick()
-  f.state.ends.value = '1900-01-01T00:00'
-  assert.equal(f.state.validTimes.value, false)
-  assert.equal(f.state.canSetDuration(30), false)
-  f.state.submit()
-  assert.equal(f.emitted.length, 0)
+test('time validation preserves bounds, overlap warnings and the seven-day maximum',t=>{
+ const f=editorFixture({blocks:[{id:'other',starts_at:'2026-10-21T09:15',ends_at:'2026-10-21T09:45'}]});t.after(f.stop)
+ const time=f.state.times.value[0];assert.equal(f.state.conflicts(time),1);assert.equal(f.state.valid.value,true)
+ time.ends=time.starts;assert.equal(f.state.valid.value,false);f.state.submit();assert.equal(f.emitted.length,0)
+ time.starts='2100-12-31T23:00';time.ends='2101-01-01T00:00';assert.equal(f.state.valid.value,false)
+ time.starts='2026-10-21T09:00';time.ends='2026-10-28T09:00';assert.equal(f.state.valid.value,true)
+ time.ends='2026-10-28T09:01';assert.equal(f.state.valid.value,false)
 })
 
-test('calendar editor overlap notice excludes itself and task-mode save contract stays intact', t => {
-  const block = editorFixture({ blocks: [
-    { id: 'block', starts_at: '2026-10-21T09:00', ends_at: '2026-10-21T09:30' },
-    { id: 'overlap', starts_at: '2026-10-21T09:15', ends_at: '2026-10-21T09:45' },
-    { id: 'touching', starts_at: '2026-10-21T09:30', ends_at: '2026-10-21T10:00' },
-  ] }); t.after(block.stop)
-  assert.equal(block.state.conflicts.value, 1)
-  assert.equal(block.state.valid.value, true, 'overlap informs without blocking an intentional schedule')
-  const f = editorFixture({ mode: 'task', task: {
-    title: '  Task title  ', description: 'Notes', project_id: 'project', status: 'doing', priority: 'high', due_on: '2026-11-01', estimate_minutes: 45,
-    checklist: [{ id: 'child', title: '  Child task  ', done: true }],
-  } }); t.after(f.stop)
-  f.state.submit()
-  assert.deepEqual(JSON.parse(JSON.stringify(f.emitted[0])), ['save', {
-    title: 'Task title', description: 'Notes', project_id: 'project', status: 'doing', priority: 'high', due_on: '2026-11-01', estimate_minutes: 45,
-    checklist: [{ id: 'child', title: 'Child task', done: true }],
-  }])
-  assert.equal(f.props.task.checklist[0].title, '  Child task  ', 'editing a checklist keeps incoming task props unchanged')
+test('completed parent drafts reopen when a child reopens, and removed children lose their time targets',t=>{
+ const task={id:'task',title:'Task',status:'done',version:1,checklist:[{id:'one',title:'Step',done:true}],scheduled_blocks:[]}
+ const f=editorFixture({mode:'task',task,block:undefined});t.after(f.stop)
+ f.state.checklist.value[0].done=false;assert.equal(f.state.status.value,'todo');assert.equal(task.checklist[0].done,true)
+ f.state.addTime();f.state.toggleTarget(f.state.times.value[0],'one');f.state.removeSubtask(0);assert.equal(f.state.times.value[0].subtask_ids.length,0)
+ f.state.status.value='done';f.state.subtaskDraft.value='New step';f.state.addSubtask();assert.equal(f.state.status.value,'todo')
+})
+
+test('only a new calendar event can choose a task; selecting it hydrates its full details',async t=>{
+ const task={id:'task',title:'Task',description:'Notes',status:'doing',version:3,checklist:[{id:'one',title:'Step',done:false}],scheduled_blocks:[]}
+ const f=editorFixture({block:{starts_at:'2026-10-21T09:00',ends_at:'2026-10-21T09:30'},loadTask:async()=>task});t.after(f.stop)
+ assert.equal(f.state.canChooseTask,true);await f.state.chooseTask('task');assert.equal(f.state.title.value,'Task');assert.equal(f.state.isTask.value,true);assert.equal(f.state.checklist.value.length,1);assert.equal(f.state.times.value.length,1)
+ f.state.toggleTarget(f.state.times.value[0],'one');f.state.submit();assert.equal(f.emitted[0][1].taskId,'task');assert.equal(f.emitted[0][1].times[0].subtask_ids[0],'one')
+ const existing=editorFixture({mode:'task',task});t.after(existing.stop);assert.equal(existing.state.canChooseTask,false);await existing.state.chooseTask('other');assert.equal(existing.state.linked.value.id,'task')
+})
+
+test('saving, closing and duplicate submissions are blocked while a request is pending',t=>{
+ const f=editorFixture();t.after(f.stop);f.props.saving=true;f.state.submit();f.state.close();assert.equal(f.emitted.length,0)
+ f.props.saving=false;f.state.close();assert.equal(f.emitted[0][0],'close')
+})
+
+test('deleting the selected project inside the editor preserves local edits and advances only its known task version',async t=>{
+ const task={id:'task',title:'Original',project_id:'project',status:'todo',version:4,checklist:[],scheduled_blocks:[]}
+ const f=editorFixture({mode:'task',task,block:undefined,deleteProject:async()=>true,loadTask:async()=>({...task,project_id:null,version:5})});t.after(f.stop)
+ f.state.title.value='Unsaved edit';assert.equal(await f.state.removeProject({id:'project'}),true)
+ assert.equal(f.state.title.value,'Unsaved edit');assert.equal(f.state.linked.value.version,5)
+ f.state.projectId.value='';f.state.submit();assert.equal(f.emitted[0][1].taskVersion,5);assert.equal(f.emitted[0][1].task.title,'Unsaved edit')
 })
 
 function calendarFixture(overrides = {}, stored = {}, globals = {}) {
@@ -153,7 +123,7 @@ function calendarFixture(overrides = {}, stored = {}, globals = {}) {
   }
   const Calendar = component('src/features/tasks/components/WorkCalendar.vue', {
     '@/lib/workspaceScope': { useWorkspaceDraft(key, initial) { if (!drafts.has(key)) drafts.set(key, vue.ref(key in stored ? stored[key] : initial)); return drafts.get(key) } },
-    '@fullcalendar/vue3': { default: {} },'./ExternalCalendars.vue':{},
+    './CalendarSurface.vue': { default: {} },'./CalendarAgenda.vue':{},'./ExternalCalendars.vue':{},
     '@fullcalendar/daygrid': { default: {} },
     '@fullcalendar/timegrid': { default: {} },
     '@fullcalendar/list': { default: {} },
@@ -182,6 +152,36 @@ function calendarFixture(overrides = {}, stored = {}, globals = {}) {
   emitted.length = 0; apiCalls.length = 0
   return { props, state, emitted, moves, apiCalls, range, drafts, dragInstances, stop: () => scope.stop() }
 }
+
+test('agenda anchors a bounded multiweek range on the chosen day without asking FullCalendar for a removed view',async t=>{
+ const f=calendarFixture();t.after(f.stop);f.state.chooseDay(new Date('2026-10-21T12:00'));f.apiCalls.length=0;f.emitted.length=0
+ f.state.setPeriod('listWeek');await vue.nextTick()
+ assert.equal(f.apiCalls.length,0)
+ const range=f.state.visibleRange.value,chosen=new Date('2026-10-21T00:00').getTime()
+ assert.ok(range.start<chosen&&range.end>chosen);assert.ok(range.end-range.start<=63*86400000)
+ assert.equal(f.emitted.filter(event=>event[0]==='range').length,1)
+ f.state.jumpDate({target:{value:'1900-01-01'}});await vue.nextTick()
+ assert.equal(tasksLib.localDay(new Date(f.state.visibleRange.value.start)),'1900-01-01')
+ f.state.jumpDate({target:{value:'2100-12-31'}});await vue.nextTick()
+ assert.equal(tasksLib.localDay(new Date(f.state.visibleRange.value.end)),'2101-01-01')
+ assert.equal(f.apiCalls.length,0)
+})
+
+test('agenda groups entries by day, preserves an empty selected day and clips cross-midnight and all-day intervals',t=>{
+ const Agenda=component('src/features/tasks/components/CalendarAgenda.vue'),scope=vue.effectScope();t.after(()=>scope.stop())
+ const props=vue.reactive({selectedDay:'2026-10-25',start:new Date('2026-10-19T00:00').getTime(),end:new Date('2026-11-01T00:00').getTime(),busy:false,loading:false,events:[
+  {id:'late',title:'Overnight',start:'2026-10-21T23:00',end:'2026-10-22T01:00'},
+  {id:'all',title:'All day',start:'2026-10-22',end:'2026-10-23',allDay:true},
+  {id:'external',title:'Outlook',start:'2026-10-24T09:00',end:'2026-10-24T10:00',extendedProps:{external:{calendar_name:'Work'}}}
+ ]})
+ const state=scope.run(()=>Agenda.setup(props,{expose(){},emit(){}}))
+ assert.deepEqual(Array.from(state.days.value,day=>day.key),['2026-10-21','2026-10-22','2026-10-24','2026-10-25'])
+ const [first,second]=state.days.value;assert.equal(state.eventTime(first.entries[0],first),'23:00 – 24:00')
+ assert.equal(second.entries[0].allDay,true);assert.equal(state.eventTime(second.entries[1],second),'00:00 – 01:00')
+ assert.equal(state.days.value.at(-1).entries.length,0)
+ props.loading=true;assert.equal(state.days.value.length,1);assert.equal(state.days.value[0].key,props.selectedDay)
+ props.loading=false;props.failed=true;assert.equal(state.days.value.length,1);assert.equal(state.days.value[0].entries.length,0)
+})
 
 test('calendar separates selecting a day from creating a timed block and protects a click from also becoming a selection', t => {
   const f = calendarFixture(); t.after(f.stop)
@@ -216,7 +216,6 @@ test('calendar date and view navigation validates saved preferences and keeps th
   assert.equal(f.state.period.value, 'timeGridWeek')
   assert.equal(f.state.validDay(f.state.savedDay.value), true)
   assert.equal(f.state.validDay(f.state.selectedDay.value), true)
-  assert.equal(f.state.panel.value, 'day')
   for (const value of ['2026-02-31', '1899-12-31', '2101-01-01', '2026-1-01', 'not-a-date']) assert.equal(f.state.validDay(value), false)
   f.state.chooseDay(new Date('2026-10-22T12:00'))
   f.state.setPeriod('timeGridDay')
@@ -242,7 +241,7 @@ test('calendar date and view navigation validates saved preferences and keeps th
   assert.equal(f.state.period.value, 'timeGridDay')
 })
 
-test('calendar shows the selected-day agenda, clips cross-midnight times and excludes only tasks scheduled in this period', t => {
+test('calendar shows the selected-day agenda, clips cross-midnight times and respects completion filters', t => {
   const f = calendarFixture({
     tasks: [
       { id: 'scheduled', status: 'todo' }, { id: 'outside', status: 'todo' },
@@ -258,7 +257,6 @@ test('calendar shows the selected-day agenda, clips cross-midnight times and exc
   }); t.after(f.stop)
   f.state.chooseDay(new Date('2026-10-21T12:00'))
   assert.deepEqual(Array.from(f.state.dayBlocks.value, row => row.id), ['earlier', 'late'])
-  assert.deepEqual(Array.from(f.state.backlog.value, row => row.id), ['outside', 'open'])
   assert.equal(f.state.blockTime(f.state.dayBlocks.value[1]), '23:00 – 24:00')
   assert.equal(f.state.dayDeadlines.value.length, 1)
   f.state.chooseDay(new Date('2026-10-22T12:00'))
@@ -273,7 +271,6 @@ test('calendar shows the selected-day agenda, clips cross-midnight times and exc
   f.props.loading = true
   assert.equal(f.state.events.value.length, 0)
   assert.equal(f.state.dayBlocks.value.length, 0)
-  assert.equal(f.state.backlog.value.length, 0)
   assert.equal(f.state.options.value.editable, false)
   f.props.loading = false; f.props.failed = true
   assert.equal(f.state.events.value.length, 0, 'failed refresh never displays old records as current')
@@ -310,14 +307,13 @@ test('calendar sizing respects the available viewport and changes width without 
  assert.equal(f.emitted.length,0)
 })
 
-test('dense day, backlog and agenda retain all records inside the fixed calendar frame',t=>{
+test('dense day and agenda retain all records inside the fixed calendar frame',t=>{
  const blocks=Array.from({length:13},(_,i)=>({id:'block-'+i,title:'Block '+i,starts_at:'2026-10-21T09:00',ends_at:'2026-10-21T10:00'}))
  const deadlines=Array.from({length:4},(_,i)=>({id:'deadline-'+i,title:'Deadline '+i,due_on:'2026-10-21',status:'todo'}))
  const tasks=Array.from({length:11},(_,i)=>({id:'task-'+i,title:'Task '+i,status:'todo'}))
  const f=calendarFixture({blocks,deadlines,tasks});t.after(f.stop)
  f.state.chooseDay(new Date('2026-10-21T12:00'))
  assert.equal(f.state.dayBlocks.value.length,13);assert.equal(f.state.dayDeadlines.value.length,4)
- assert.equal(f.state.backlog.value.length,11)
  f.state.period.value='listWeek'
  assert.equal(f.state.options.value.events.length,17,'the internal agenda scroll has access to every event')
  assert.equal(f.state.calendarHeight.value,480);assert.equal(f.emitted.length,0)
@@ -351,7 +347,7 @@ test('calendar measures the grid throughout width transitions, ignores height fe
 test('the actual FullCalendar grid renders all 48 half-hour slots inside its own fixed-height scroller',t=>{
  const {JSDOM}=require('jsdom'),dom=new JSDOM('<!doctype html><div id="calendar"></div>',{pretendToBeVisual:true})
  const previous=new Map(),globals={window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,getComputedStyle:dom.window.getComputedStyle.bind(dom.window)}
- let calendar;const f=calendarFixture()
+ dom.window.matchMedia=()=>({matches:false});let calendar;const f=calendarFixture({}, {}, globals)
  for(const [key,value]of Object.entries(globals)){previous.set(key,global[key]);global[key]=value}
  try{
   const {Calendar}=require('@fullcalendar/core'),timeGrid=require('@fullcalendar/timegrid').default,list=require('@fullcalendar/list').default
@@ -370,7 +366,7 @@ test('month cells show three events, then two plus the remaining count, and open
  const {JSDOM}=require('jsdom'),dom=new JSDOM('<!doctype html><div id="calendar"></div>',{pretendToBeVisual:true})
  const previous=new Map(),globals={window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,getComputedStyle:dom.window.getComputedStyle.bind(dom.window)}
  const blocks=[...[3,4].flatMap((count,day)=>Array.from({length:count},(_,i)=>({id:`${day}-${i}`,title:`Event ${i}`,starts_at:`2026-10-${20+day}T09:00`,ends_at:`2026-10-${20+day}T10:00`})))]
- const f=calendarFixture({blocks});f.state.period.value='dayGridMonth';let calendar
+ dom.window.matchMedia=()=>({matches:false});const f=calendarFixture({blocks}, {}, globals);f.state.period.value='dayGridMonth';let calendar
  for(const[key,value]of Object.entries(globals)){previous.set(key,global[key]);global[key]=value}
  // Supply event dimensions for JSDOM's otherwise zero-height layout engine.
  dom.window.HTMLElement.prototype.getBoundingClientRect=function(){const event=this.classList.contains('fc-daygrid-event-harness'),cell=this.closest('.fc-daygrid-day'),x=cell?Number(cell.dataset.date?.slice(-2))%7*100:0;return{x,y:0,left:x,top:0,right:x+100,bottom:event?18:100,width:cell?100:700,height:event?18:100}}
@@ -452,34 +448,8 @@ test('calendar drag saves once, reverts rejected and thrown saves, and external 
   assert.equal(saves.length, 1)
   assert.equal(reverts, 3)
   f.props.busy = false
-  f.state.options.value.drop({ draggedEl: { dataset: { dragTask: 'task' } }, date: new Date('2026-10-22T00:00'), allDay: true })
-  assert.equal(f.emitted.length, 1)
-  assert.equal(f.emitted[0][0], 'drop-task', 'external drop saves through its distinct action rather than opening a second scheduling flow')
-  assert.equal(f.emitted[0][1].id, 'task')
-  assert.equal(f.emitted[0][2].getHours(), 9)
-  f.state.options.value.drop({ draggedEl: { dataset: { dragTask: 'done' } }, date: new Date('2026-10-22T10:00'), allDay: false })
-  assert.equal(f.emitted.length, 1)
+  assert.equal(f.state.options.value.droppable,false,'the retired planner no longer accepts external task drags')
 })
-
-test('calendar planning panel creates and disposes its external draggable as the panel opens and closes', async t => {
-  const f = calendarFixture({ tasks: [{ id: 'task', title: 'Task', estimate_minutes: 45 }] }); t.after(f.stop)
-  const first = { id: 'panel-one' }, second = { id: 'panel-two' }
-  f.state.dragArea.value = first
-  await vue.nextTick()
-  assert.equal(f.dragInstances.length, 1)
-  const data = f.dragInstances[0].options.eventData({ dataset: { dragTask: 'task' } })
-  assert.equal(data.title, 'Task')
-  assert.equal(data.duration.minutes, 45)
-  assert.equal(data.create, false, 'FullCalendar cannot create an extra local duplicate alongside the persisted block')
-  f.state.dragArea.value = undefined
-  await vue.nextTick()
-  assert.equal(f.dragInstances[0].destroyed, true)
-  f.state.dragArea.value = second
-  await vue.nextTick()
-  assert.equal(f.dragInstances.length, 2)
-  assert.equal(f.dragInstances[1].destroyed, false)
-})
-
 
 test('Outlook overlays stay read-only, preserve all-day boundaries and open their own details',async()=>{
  const f=calendarFixture();try{
@@ -492,4 +462,19 @@ test('Outlook overlays stay read-only, preserve all-day boundaries and open thei
   let reverted=0;await f.state.options.value.eventDrop({event:{start:new Date(external.start),end:new Date(external.end),extendedProps:{external}},revert(){reverted++}});assert.equal(reverted,1);assert.equal(f.moves.length,0)
   f.state.chooseDay(new Date('2026-11-05T12:00:00'));assert.equal(f.state.dayExternal.value.length,0,'all-day end dates are exclusive')
  }finally{f.stop()}
+})
+
+
+test('a height-changing resize waits for the Vue update and cannot resize a calendar torn down during that update',async t=>{
+ const frames=new Map();let next=0
+ const f=calendarFixture({}, {}, {window:{innerHeight:800,matchMedia:()=>({matches:false})},getComputedStyle:()=>({paddingBottom:'24px'}),requestAnimationFrame:fn=>{frames.set(++next,fn);return next},cancelAnimationFrame:id=>frames.delete(id)})
+ t.after(()=>{f.state.pauseCalendarSize();f.stop()})
+ f.state.calendarRoot.value={clientWidth:970,getBoundingClientRect:()=>({top:100}),querySelector:()=>({getBoundingClientRect:()=>({height:100})}),closest:()=>({})}
+ f.state.calendarSurface.value={isConnected:true}
+ f.state.activateCalendarSize();for(const[id,fn]of frames){frames.delete(id);fn()}
+ assert.equal(f.state.calendarHeight.value,568)
+ assert.equal(f.apiCalls.some(call=>call[0]==='updateSize'),false,'new options must reach Vue before imperative sizing')
+ f.state.pauseCalendarSize();await vue.nextTick();assert.equal(f.apiCalls.some(call=>call[0]==='updateSize'),false,'a stale nextTick cannot touch the disposed calendar')
+ f.state.activateCalendarSize();for(const[id,fn]of frames){frames.delete(id);fn()};await vue.nextTick()
+ assert.equal(f.apiCalls.filter(call=>call[0]==='updateSize').length,1)
 })

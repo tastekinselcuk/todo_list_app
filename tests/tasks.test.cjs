@@ -12,6 +12,26 @@ function fixture(handler){
 const row=(id='one')=>({id,title:id,status:'todo',version:1,project_id:null})
 const page=(items=[row()],more=false)=>({data:{projects:[],tasks:{items,total:items.length,counts:{todo:items.length,doing:0,done:0},has_more:more,cursor:more?{id:items.at(-1).id,created_at:'2026-10-01T00:00:00Z'}:null}},error:null})
 const tick=()=>new Promise(r=>setTimeout(r,0))
+
+test('unified saves preserve committed time summaries on a refresh failure and reject duplicate requests',async()=>{
+ const task={...row(),checklist:[],scheduled_blocks:[{id:'session'}]};let finish
+ const f=fixture(name=>name==='work_save_details'?new Promise(resolve=>{finish=()=>resolve({data:{task,blocks:[{id:'session',task_id:'one'}]}})}):{error:{message:'offline'}})
+ try{
+  const draft={taskId:'one',taskVersion:1,task:{title:'one'},times:[],removed:[]}
+  const pending=f.store.saveDetails(draft);await tick();assert.equal(await f.store.saveDetails(draft),null)
+  finish();assert.ok(await pending);assert.equal(f.store.tasks[0].scheduled_blocks.length,1);assert.equal(f.store.error,'failed')
+  assert.equal(f.calls.filter(call=>call.name==='work_save_details').length,1)
+ }finally{f.scope.stop()}
+})
+
+test('project deletion resets its filter only on success and keeps a conflict recoverable',async()=>{
+ let fail=true;const f=fixture(name=>name==='work_project_delete'?fail?{error:{message:'WORK_CONFLICT'}}:{data:true}:page([{...row(),project_id:null}],false))
+ try{
+  const project={id:'project',name:'Work',version:1};f.store.projects=[project];f.store.project='project'
+  assert.equal(await f.store.deleteProject(project),false);assert.equal(f.store.project,'project');assert.equal(f.store.projects.length,1)
+  fail=false;assert.equal(await f.store.deleteProject(project),true);assert.equal(f.store.project,'');assert.equal(f.store.tasks.length,1)
+ }finally{f.scope.stop()}
+})
 test('calendar interval logic includes cross-midnight overlap and excludes touching endpoints',()=>{
  assert.equal(lib.overlaps({starts_at:'2026-10-18T23:00Z',ends_at:'2026-10-19T02:00Z'},{starts_at:'2026-10-19T00:00Z',ends_at:'2026-10-19T01:00Z'}),true)
  assert.equal(lib.overlaps({starts_at:'2026-10-18T10:00Z',ends_at:'2026-10-18T11:00Z'},{starts_at:'2026-10-18T11:00Z',ends_at:'2026-10-18T12:00Z'}),false)

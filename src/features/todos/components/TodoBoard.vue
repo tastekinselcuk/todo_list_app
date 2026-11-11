@@ -29,14 +29,14 @@
           </header>
           <draggable :model-value="group.todos" @update:model-value="todoStore.reorderTodos($event)" :disabled="!canWrite" item-key="id" class="space-y-1.5" handle=".drag-handle" :animation="180" ghost-class="note-drag-ghost" :delay="100" :delay-on-touch-only="true">
             <template #item="{ element: todo }">
-              <TodoCardItem :todo="todo" :color="group.category.color" :category-name="group.category.name" :disabled="pendingIds.has(todo.id)" @toggle="handleToggleTodo(todo.id)" @delete="handleDeleteTodo(todo.id)" />
+              <TodoCardItem :todo="todo" :color="group.category.color" :category-name="group.category.name" :disabled="pendingIds.has(todo.id)" @move="moveTodo(todo.id, $event)" @toggle="handleToggleTodo(todo.id)" @delete="handleDeleteTodo(todo.id)" />
             </template>
           </draggable>
         </section>
       </template>
       <draggable v-else v-model="filteredTodosArray" :disabled="!canWrite" item-key="id" class="space-y-1.5" handle=".drag-handle" :animation="180" ghost-class="note-drag-ghost" :delay="100" :delay-on-touch-only="true">
         <template #item="{ element: todo }">
-          <TodoCardItem :todo="todo" :color="getCategoryColor(todo.categoryId)" :category-name="getCategoryName(todo.categoryId)" :disabled="pendingIds.has(todo.id)" @toggle="handleToggleTodo(todo.id)" @delete="handleDeleteTodo(todo.id)" />
+          <TodoCardItem :todo="todo" :color="getCategoryColor(todo.categoryId)" :category-name="getCategoryName(todo.categoryId)" :disabled="pendingIds.has(todo.id)" @move="moveTodo(todo.id, $event)" @toggle="handleToggleTodo(todo.id)" @delete="handleDeleteTodo(todo.id)" />
         </template>
       </draggable>
     </div>
@@ -113,6 +113,16 @@ function clearFilters() {
   query.value = ''; selectedCategories.value = []; showCompleted.value = true
 }
 onDeactivated(() => { clearFilters(); isGrouped.value = false })
+function moveTodo(id: string, direction: number) {
+  if (!canWrite.value || pendingIds.value.has(id)) return
+  const rows = isGrouped.value ? groupedTodos.value.find(group => group.todos.some(todo => todo.id === id))?.todos : filteredTodosArray.value
+  if (!rows) return
+  const index = rows.findIndex(todo => todo.id === id), destination = index + direction
+  if (index < 0 || destination < 0 || destination >= rows.length || pendingIds.value.has(rows[destination].id)) return
+  const reordered = [...rows]
+  reordered.splice(destination, 0, reordered.splice(index, 1)[0])
+  todoStore.reorderTodos(reordered)
+}
 async function handleToggleTodo(id: string) {
   if (!canWrite.value || pendingIds.value.has(id)) return
   pendingIds.value.add(id)

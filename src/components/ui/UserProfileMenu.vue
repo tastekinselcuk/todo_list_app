@@ -72,5 +72,5 @@ button:focus-visible { outline: 2px solid hsl(var(--primary) / .5); outline-offs
 .profile-menu-enter-from, .profile-menu-leave-to { opacity: 0; transform: translateY(-4px) scale(.97); }
 @media (prefers-reduced-motion: reduce) { .profile-host, .profile-menu-enter-active, .profile-menu-leave-active, button, svg { transition: none; } }
 
-.profile-host.profile-embedded{position:relative;inset:auto;flex-shrink:0;transform:none}.profile-embedded .profile-trigger{height:34px;border-color:transparent;background:transparent;box-shadow:none;backdrop-filter:none}.profile-embedded .profile-trigger>span{width:28px;height:28px}
+.profile-host.profile-embedded{position:relative;inset:auto;flex-shrink:0;transform:none}.profile-embedded .profile-trigger{height:34px}.profile-embedded .profile-trigger>span{width:28px;height:28px}
 </style>

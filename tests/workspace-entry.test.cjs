@@ -26,7 +26,7 @@ function cachedController(path,dependencies={},saved={},props={}){
 function workoutFixture(){
  const routines=[{id:'routine',title:'Push',day_of_week:'Monday',exercises:[{id:'exercise',isCompleted:true}]}]
  let create=async()=>null
- const store=vue.reactive({routines,isSaving:false,isLoading:false,async fetchRoutines(){return true},addRoutine(...args){return create(...args)}})
+ const store=vue.reactive({routines,isSaving:false,isLoading:false,async fetchRoutines(){return true},async fetchCustomExercises(){return true},addRoutine(...args){return create(...args)}})
  const f=cachedController('src/features/workout/components/WorkoutTracker.vue',{
   '../stores/workout':{useWorkoutStore:()=>store},'../lib/exercises':{fold:value=>value.toLowerCase()},
   './WorkoutRoutineCard.vue':{},'./WorkoutSequence.vue':{},'./ExerciseLibraryModal.vue':{},'./ExercisePreview.vue':{},

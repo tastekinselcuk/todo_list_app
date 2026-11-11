@@ -9,7 +9,7 @@ const copy = value => JSON.parse(JSON.stringify(value))
 function load(source, dependencies = {}, globals = {}) {
   const exports = {}
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText,
-    { exports, require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || require(name), console: { error() {} }, URL, crypto, ...globals })
+    { exports, require: name => dependencies[name] || (name === '@/lib/utils' ? load(fs.readFileSync('src/lib/utils.ts','utf8'), {}, globals) : null) || (name === '@/lib/searchNavigation' ? load(fs.readFileSync('src/lib/searchNavigation.ts','utf8'), {vue}, globals) : null) || require(name), console: { error() {} }, URL, crypto, setTimeout, clearTimeout, ...globals })
   return exports
 }
 const exercises = load(fs.readFileSync('src/features/workout/lib/exercises.ts', 'utf8'), { '../data/catalog.json': { default: catalog } })
@@ -49,13 +49,46 @@ test('custom exercise validation preserves zero values and free-form reps while 
   }
 })
 
+test('custom library movements use their own media even when named like a stock movement and participate in localized filters',()=>{
+  const custom={id:'custom:'+crypto.randomUUID(),source:'custom',name:'Barbell bench press',group:'back',equipment:'cable',category:'strength',primaryMuscles:[],images:['https://images.example.test/my-row.gif']}
+  const saved=exercises.catalogInput(custom)
+  assert.equal(saved.imageUrl,custom.images[0]);assert.deepEqual(copy(saved.images),custom.images)
+  assert.deepEqual(Array.from(exercises.imageCandidates(saved,catalog)),custom.images,'a custom link must never be replaced with a stock image of the same name')
+  assert.equal(exercises.searchCatalog([custom],'sırt kablo','back','cable').length,1)
+  assert.equal(exercises.searchCatalog([custom],'','chest','cable').length,0)
+  assert.equal(exercises.searchCatalog([custom],'','back','dumbbell').length,0)
+  for(const fields of [{imageUrl:'javascript:alert(1)'},{imageUrl:'https://user:pass@example.test/a.gif'},{group:'all'},{equipment:''}])
+    assert.throws(()=>exercises.normalizeCustomExercise({name:'Custom',imageUrl:custom.images[0],group:'back',equipment:'cable',...fields}),/INVALID_CUSTOM_EXERCISE/)
+})
+
 function fixture({ shared = false, viewer = false } = {}) {
   pinia.setActivePinia(pinia.createPinia())
   const rows = [{ id: 'program', user_id: 'owner', title: 'Push', day_of_week: 'Monday', version: 1,
     exercises: [{ ...input(), id: 'exercise', _version: 3, isCompleted: true }] }]
   const calls = [], failures = new Set()
+  const customRows = []
   let held, release
   const client = {
+    async loadWorkoutLibrary() {
+      calls.push({ operation: 'library-load' })
+      if (failures.has('library-load')) throw Error('OFFLINE')
+      return copy(customRows)
+    },
+    async saveWorkoutLibrary(input, id) {
+      calls.push({ operation: 'library-save', input: copy(input), id })
+      if (failures.has('library-save')) throw Error('OFFLINE')
+      const old = customRows.find(item => item.id === 'custom:' + id)
+      if (old) return copy(old)
+      const item = { id: 'custom:' + id, source: 'custom', name: input.name, group: input.group, equipment: input.equipment, images: [input.imageUrl], primaryMuscles: [], category: 'strength' }
+      customRows.push(item);return copy(item)
+    },
+    async removeWorkoutLibrary(id) {
+      calls.push({ operation: 'library-remove', id })
+      if (failures.has('library-remove')) throw Error('OFFLINE')
+      const index = customRows.findIndex(item => item.id === 'custom:' + id)
+      if (index >= 0) customRows.splice(index, 1)
+      return { id: 'custom:' + id, removed: true }
+    },
     collection: () => shared ? 'collection' : undefined,
     canWrite: () => !viewer,
     listen() {},
@@ -108,7 +141,7 @@ function fixture({ shared = false, viewer = false } = {}) {
     '@/lib/workspaceScope': { defineWorkspaceStore: pinia.defineStore, useWorkspaceClient: () => client },
     '@/stores/auth': { useAuthStore: () => ({ user: { id: 'owner' } }) }, '../lib/exercises': exercises,
   }).useWorkoutStore
-  return { store: useWorkoutStore(), rows, calls, failures,
+  return { store: useWorkoutStore(), rows, customRows, calls, failures,
     hold() { held = new Promise(resolve => { release = resolve }) }, resume() { held = undefined; release() } }
 }
 
@@ -123,6 +156,29 @@ test('editing an existing legacy exercise saves custom fields without changing c
   assert.equal(exercise.weightKg, 60)
   assert.equal(exercise.alternative, 'Cable press')
   assert.equal(h.rows[0].exercises[0].notes, 'Personal note')
+})
+
+test('a saved custom movement remains in the library for later programs without creating an unwanted program',async()=>{
+  const h=fixture(),definition={name:'My band row',imageUrl:'https://images.example.test/row.gif',group:'back',equipment:'bands'},id=crypto.randomUUID()
+  const first=await h.store.saveCustomExercise(definition,id);assert.ok(first);assert.equal(h.store.routines.length,0)
+  assert.equal(h.store.customExercises.length,1);await h.store.saveCustomExercise(definition,id);assert.equal(h.store.customExercises.length,1)
+  h.store.customExercises=[];assert.equal(await h.store.fetchCustomExercises(),true);assert.equal(h.store.customExercises[0].id,first.id)
+  const routine=await h.store.addRoutine('Next program','Any');await h.store.addExerciseToRoutine(routine.id,exercises.catalogInput(first))
+  assert.equal(routine.exercises[0].imageUrl,definition.imageUrl);assert.equal(routine.exercises[0].catalogId,first.id)
+  h.failures.add('library-save');assert.equal(await h.store.saveCustomExercise({...definition,name:'Unsaved'},crypto.randomUUID()),false);assert.equal(h.store.customExercises.length,1)
+  const viewer=fixture({viewer:true});assert.equal(await viewer.store.saveCustomExercise(definition,crypto.randomUUID()),false);assert.equal(viewer.calls.length,0)
+})
+
+test('removing a custom movement updates the reusable library only and failed removals preserve its card',async()=>{
+  const h=fixture(),definition={name:'My row',imageUrl:'https://images.example.test/row.gif',group:'back',equipment:'cable'}
+  const saved=await h.store.saveCustomExercise(definition,crypto.randomUUID())
+  await h.store.fetchRoutines();await h.store.addExerciseToRoutine('program',exercises.catalogInput(saved))
+  const before=copy(h.store.routines)
+  h.failures.add('library-remove');assert.equal(await h.store.removeCustomExercise(saved.id),false);assert.equal(h.store.customExercises.length,1)
+  h.failures.delete('library-remove');assert.equal(await h.store.removeCustomExercise(saved.id),true);assert.deepEqual(copy(h.store.routines),before)
+  await h.store.fetchCustomExercises();assert.equal(h.store.customExercises.length,0)
+  const calls=h.calls.length;assert.equal(await h.store.removeCustomExercise(catalog[0].id),false);assert.equal(h.calls.length,calls,'stock movements cannot be removed')
+  const viewer=fixture({viewer:true});viewer.store.customExercises=[saved];assert.equal(await viewer.store.removeCustomExercise(saved.id),false);assert.equal(viewer.calls.length,0)
 })
 
 test('failed exercise writes do not optimistically change stored content or completion', async () => {
@@ -238,7 +294,7 @@ test('viewer program cards and exercise rows show content without write controls
 const stateRenderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}), insert() {}, remove() {}, setText() {}, setElementText() {}, patchProp() {}, parentNode() {}, nextSibling() {} })
 async function settle() { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick() }
 function setupState(path, props, dependencies, globals = {}, initialize = () => {}) {
-  const component = compileComponent(path, { 'vue-i18n': { useI18n: () => ({ t: key => key }) }, './ExerciseImage.vue': { default: {} }, '@/components/ui/CustomSelect.vue': { default: {} }, '../lib/exercises': exercises, ...dependencies }, false, globals)
+  const component = compileComponent(path, { 'vue-i18n': { useI18n: () => ({ t: key => key }) }, './ExerciseImage.vue': { default: {} }, './ExercisePreview.vue': { default: {} }, '@/components/ui/CustomSelect.vue': { default: {} }, '../lib/exercises': exercises, ...dependencies }, false, globals)
   const events = []
   let state
   const app = stateRenderer.createApp({ setup() { state = component.setup(props, { expose() {}, emit: (...event) => events.push(event) }); initialize(state); return () => vue.h('div') } })
@@ -289,6 +345,92 @@ test('exercise filters reset together and reopening the picker starts with the f
     props.show=false;await settle();props.show=true;await settle()
     assert.equal(state.query.value,'');assert.equal(state.group.value,'all');assert.equal(state.equipment.value,'all')
     assert.equal(state.limit.value,24);assert.equal(state.matches.value.length,catalog.length)
+  }finally{app.unmount()}
+})
+
+test('visual library selection keeps filters and training values, and its enlarged preview never adds or changes the draft',async()=>{
+  const props=vue.reactive({show:false,busy:false,exercise:null})
+  const {app,state,events}=setupState('src/features/workout/components/ExerciseLibraryModal.vue',props)
+  state.dialog.value={open:false,showModal(){this.open=true},close(){this.open=false}}
+  try{
+    props.show=true;await settle()
+    state.query.value='bench';state.group.value='chest';state.equipment.value='barbell';await settle()
+    state.draft.value.sets=4;state.draft.value.reps='6–8';state.draft.value.weightKg=60;state.draft.value.notes='Keep a controlled tempo'
+    let revealed=0
+    state.results.value={querySelector:()=>({scrollIntoView(options){revealed++;assert.equal(options.block,'nearest')}})}
+    const item=state.matches.value[0];assert.ok(item)
+    await state.selectExercise(item)
+    assert.equal(revealed,1);assert.equal(state.query.value,'bench');assert.equal(state.group.value,'chest');assert.equal(state.equipment.value,'barbell')
+    assert.equal(state.draft.value.catalogId,item.id);assert.equal(state.draft.value.sets,4);assert.equal(state.draft.value.weightKg,60)
+    state.draft.value.name='';assert.equal(state.hasSelection.value,true,'clearing a selected title to replace it cannot close the editor');state.draft.value.name=item.name
+    state.previewDraft();assert.equal(state.preview.value.catalogId,item.id);assert.equal(state.preview.value.name,item.name)
+    assert.notEqual(state.preview.value,state.draft.value);assert.equal(events.length,0,'previewing never adds a movement')
+    const selectedDraft=copy(state.draft.value)
+    await state.selectExercise(item);assert.equal(state.detailsOpen.value,false,'clicking the selected card closes its inspector')
+    assert.deepEqual(copy(state.draft.value),selectedDraft,'closing the inspector preserves the pending movement and training settings')
+    await state.selectExercise(item);assert.equal(state.detailsOpen.value,true,'the same card opens its inspector again')
+    assert.deepEqual(copy(state.draft.value),selectedDraft);assert.equal(state.query.value,'bench');assert.equal(state.group.value,'chest')
+    await state.selectExercise(item);await state.selectExercise(state.matches.value[1]);assert.equal(state.detailsOpen.value,true,'choosing another card opens its inspector')
+    state.save();assert.equal(events[0][0],'add');assert.equal(events[0][1].reps,'6–8');assert.equal(events[0][1].notes,'Keep a controlled tempo')
+    props.show=false;await settle();assert.equal(state.preview.value,null);assert.equal(state.dialog.value.open,false)
+  }finally{app.unmount()}
+})
+
+test('opt-in custom creation saves to the library and program, preserves failed drafts and reuses the library retry ID',async()=>{
+  const props=vue.reactive({show:false,busy:false,exercise:null,customExercises:[],async saveCustomExercise(input,id){calls.push({input:copy(input),id});if(fail)return false;const result={id:'custom:'+id,source:'custom',name:input.name,group:input.group,equipment:input.equipment,images:[input.imageUrl],primaryMuscles:[],category:'strength'};props.customExercises=[result];return result},async addCustomToProgram(input){programs.push(copy(input));return !programFail}})
+  const calls=[],programs=[];let fail=true,programFail=true
+  const {app,state,events}=setupState('src/features/workout/components/ExerciseLibraryModal.vue',props)
+  state.dialog.value={open:false,showModal(){this.open=true},close(){this.open=false}}
+  try{
+    props.show=true;await settle();state.switchMode('custom')
+    assert.equal(state.mode.value,'custom');assert.equal(state.customValid.value,false);assert.equal(state.alsoAddToLibrary.value,false)
+    state.alsoAddToLibrary.value=true
+    state.customDraft.value={name:'My row',imageUrl:'https://images.example.test/row.gif',group:'back',equipment:'cable'}
+    await new Promise(resolve=>setTimeout(resolve,240));assert.equal(state.customPreview.value.imageUrl,state.customDraft.value.imageUrl)
+    await state.saveCustom();assert.equal(state.customSaveError.value,true);assert.equal(state.customDraft.value.name,'My row');assert.equal(state.mode.value,'custom');assert.equal(events.length,0)
+    assert.equal(programs.length,0,'a failed library save does not falsely report the whole action as successful')
+    fail=false;await state.saveCustom();assert.equal(calls[0].id,calls[1].id,'a response retry cannot duplicate a saved movement')
+    assert.equal(state.customSaveError.value,true);assert.equal(state.customProgramError.value,true);assert.equal(state.customDraft.value.name,'My row');assert.equal(events.length,0)
+    programFail=false;await state.saveCustom();assert.equal(calls[1].id,calls[2].id)
+    assert.equal(programs.at(-1).catalogId,'custom:'+calls[2].id);assert.equal(programs.at(-1).imageUrl,'https://images.example.test/row.gif')
+    assert.deepEqual(events,[['close']]);assert.equal(props.customExercises.length,1)
+    props.show=false;await settle();props.show=true;await settle()
+    assert.equal(state.customDraft.value.name,'');assert.equal(state.alsoAddToLibrary.value,false);assert.ok(state.matches.value.some(item=>item.id==='custom:'+calls[1].id),'a later program can still find the opted-in library entry')
+  }finally{app.unmount()}
+})
+
+test('custom creation defaults to program only, requires no library classification and retains training settings',async()=>{
+  const programs=[],props=vue.reactive({show:false,busy:false,exercise:null,async saveCustomExercise(){assert.fail('an unchecked option cannot call the library')},async addCustomToProgram(input){programs.push(copy(input));return true}})
+  const {app,state,events}=setupState('src/features/workout/components/ExerciseLibraryModal.vue',props)
+  state.dialog.value={open:false,showModal(){this.open=true},close(){this.open=false}}
+  try{
+    props.show=true;await settle();state.switchMode('custom');assert.equal(state.alsoAddToLibrary.value,false)
+    state.customDraft.value.name='Only in this program';state.customDraft.value.imageUrl='https://images.example.test/private.gif'
+    state.draft.value.sets=4;state.draft.value.reps='6–8';state.draft.value.weightKg=50;state.draft.value.restSeconds=120;state.draft.value.notes='Controlled movement'
+    assert.equal(state.customValid.value,true,'classification is optional without a library entry')
+    state.alsoAddToLibrary.value=true;assert.equal(state.customValid.value,false,'classification is required for library filters')
+    state.alsoAddToLibrary.value=false;await state.saveCustom()
+    assert.equal(programs.length,1);assert.equal(programs[0].sets,4);assert.equal(programs[0].reps,'6–8');assert.equal(programs[0].weightKg,50);assert.equal(programs[0].restSeconds,120);assert.equal(programs[0].notes,'Controlled movement')
+    assert.match(programs[0].catalogId,/^custom:instance:/);assert.deepEqual(Array.from(exercises.imageCandidates(programs[0],catalog)),['https://images.example.test/private.gif'])
+    assert.deepEqual(events,[['close']])
+    props.show=false;await settle();props.show=true;await settle();assert.equal(state.alsoAddToLibrary.value,false)
+  }finally{app.unmount()}
+})
+
+test('the custom-only removal action preserves failed details, closes a removed library selection and keeps a program edit intact',async()=>{
+  const item={id:'custom:'+crypto.randomUUID(),source:'custom',name:'My row',group:'back',equipment:'cable',images:['https://images.example.test/row.gif'],primaryMuscles:[],category:'strength'}
+  let fail=true
+  const calls=[],props=vue.reactive({show:false,busy:false,exercise:null,customExercises:[item],async removeCustomExercise(id){calls.push(id);if(fail)return false;props.customExercises=props.customExercises.filter(row=>row.id!==id);return true}})
+  const {app,state}=setupState('src/features/workout/components/ExerciseLibraryModal.vue',props)
+  state.dialog.value={open:false,showModal(){this.open=true},close(){this.open=false}}
+  try{
+    props.show=true;await settle();await state.selectExercise(catalog[0]);assert.equal(state.selectedCustomExercise.value,undefined)
+    await state.selectExercise(item);assert.equal(state.selectedCustomExercise.value.id,item.id)
+    await state.removeCustom();assert.equal(state.customRemoveError.value,true);assert.equal(state.hasSelection.value,true);assert.equal(props.customExercises.length,1)
+    fail=false;await state.removeCustom();assert.equal(state.hasSelection.value,false);assert.equal(state.draft.value.catalogId,'');assert.equal(props.customExercises.length,0)
+    props.show=false;await settle();props.customExercises=[item];props.exercise={...exercises.catalogInput(item),id:'existing-program-item',isCompleted:true};props.show=true;await settle()
+    const before=copy(state.draft.value);await state.removeCustom();assert.deepEqual(copy(state.draft.value),before,'removal cannot rewrite an existing program movement')
+    assert.equal(state.mode.value,'edit');assert.equal(state.selectedCustomExercise.value,undefined);assert.equal(calls.length,3)
   }finally{app.unmount()}
 })
 
@@ -423,6 +565,8 @@ test('two-pose preview waits for both images, keeps a usable fallback and pauses
   await vue.nextTick()
   assert.equal(state.sources.value.length, 1)
   state.loaded(0, state.sources.value[0]); assert.equal(state.hasMotion.value, false)
+  props.exercise = input({ catalogId: 'custom:' + crypto.randomUUID(), images: ['https://images.example.test/row.gif'], imageUrl: 'https://images.example.test/row.gif' })
+  await vue.nextTick();assert.equal(state.sources.value.length,1);assert.equal(state.sources.value[0],'https://images.example.test/row.gif','custom GIFs never alternate with unrelated stock poses')
   app.unmount()
   doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
   assert.equal(state.pageVisible.value, true) // Listener was removed.

@@ -101,3 +101,46 @@ test('Timeless ignores rollover and legacy deferral writes; shared viewer focus 
   await f.as(f.owner,'postgres');assert.equal((await f.db.query('select task_id from analytics_focus_sessions where id=$1',[proposal.id])).rows[0].task_id,null,'late offline time cannot restore a revoked source link')
  }finally{await f.db.close()}
 })
+
+
+test('removing a personal plan focus link requires a stopped session and preserves notes, recorded time and other users links',async()=>{
+ const f=await fixture();try{
+  await f.as(f.owner,'postgres');await f.db.exec(migration);await f.db.exec(fs.readFileSync('supabase/migrations/202611080001_plan_focus_settings.sql','utf8'))
+  await f.as(f.owner);const plan=(await f.rpc('select plan_entries_load($1) result',[f.wid]))[0]
+  const task=await f.rpc("select plan_focus_prepare($1,'plans',$2,60,2) result",[f.wid,plan.id])
+  const client='30000000-0000-0000-0000-000000000003',sid='40000000-0000-0000-0000-000000000088',start=new Date(Date.now()-30000).toISOString(),end=new Date(Date.now()-10000).toISOString()
+  const proposal={id:sid,workspace_id:f.wid,started_at:start,planned_seconds:60,revision:1,status:'running',segments:[],association:'task',task_id:task.id,estimated_sessions:2,goal_seconds:60}
+  const claim=await f.rpc('select claim_focus_session($1,$2,false) result',[client,JSON.stringify(proposal)])
+  await assert.rejects(f.rpc("select plan_focus_remove($1,'plans',$2) result",[f.wid,plan.id]),/FOCUS_SESSION_ACTIVE/)
+  await f.rpc('select record_focus_session($1) result',[JSON.stringify({...proposal,client_id:client,lease:claim.active.lease,revision:2,status:'ended',segments:[[start,end]]})])
+  await f.rpc('select end_focus_session($1) result',[sid])
+  await f.as(f.guest);await assert.rejects(f.rpc("select plan_focus_remove($1,'plans',$2) result",[f.wid,plan.id]),/PLAN_ACCESS_DENIED/)
+  await f.as(f.owner);await f.rpc("select plan_focus_remove($1,'plans',$2) result",[f.wid,plan.id]);await f.rpc("select plan_focus_remove($1,'plans',$2) result",[f.wid,plan.id])
+  const row=(await f.rpc('select plan_entries_load($1) result',[f.wid])).find(p=>p.id===plan.id)
+  assert.equal(row.focus,null);assert.equal(row.title,plan.title);assert.equal(row.completed,false)
+  assert.equal(await f.rpc('select plan_focus_target($1,$2) result',[f.wid,task.id]),null)
+  await f.as(f.owner,'postgres')
+  const recorded=(await f.db.query('select * from analytics_focus_sessions where id=$1',[sid])).rows[0]
+  assert.equal(recorded.task_id,task.id);assert.equal(recorded.status,'ended');assert.ok(recorded.credited_segments.reduce((seconds,[start,end])=>seconds+(Date.parse(end)-Date.parse(start))/1000,0)>=19)
+  await f.as(f.owner)
+  const readded=await f.rpc("select plan_focus_prepare($1,'plans',$2,120,3) result",[f.wid,plan.id]);assert.notEqual(readded.id,task.id)
+  await f.as(f.owner,'anon');await assert.rejects(f.rpc("select plan_focus_remove($1,'plans',$2) result",[f.wid,plan.id]),/permission denied/)
+ }finally{await f.db.close()}
+})
+
+
+test('a shared viewer removes only their own plan focus connection and revoked source access blocks removal',async()=>{
+ const f=await fixture();try{
+  await f.as(f.owner);const quick=(await f.db.query('select id from quick_notes where created_by=$1',[f.owner])).rows[0]
+  const invite=await f.rpc("select create_collection_invite($1,'quick','viewer') result",[f.wid])
+  await f.as(f.guest);await f.rpc('select accept_collection_invite($1,$2) result',[invite.token,f.gwid])
+  await f.as(f.owner,'postgres');await f.db.exec(migration);await f.db.exec(fs.readFileSync('supabase/migrations/202611080001_plan_focus_settings.sql','utf8'))
+  await f.as(f.owner);const own=await f.rpc("select plan_focus_prepare($1,'quick',$2,60,1) result",[f.wid,quick.id])
+  await f.as(f.guest);await f.rpc("select plan_focus_prepare($1,'quick',$2,120,3) result",[f.gwid,quick.id]);await f.rpc("select plan_focus_remove($1,'quick',$2) result",[f.gwid,quick.id])
+  assert.equal((await f.rpc('select plan_entries_load($1) result',[f.gwid])).find(p=>p.id===quick.id).focus,null)
+  await f.as(f.owner);assert.equal((await f.rpc('select plan_entries_load($1) result',[f.wid])).find(p=>p.id===quick.id).focus.id,own.id)
+  await f.as(f.guest);await f.rpc("select plan_focus_prepare($1,'quick',$2,60,1) result",[f.gwid,quick.id])
+  await f.as(f.owner,'postgres');await f.db.query('delete from collection_members where user_id=$1',[f.guest])
+  await f.as(f.guest);await assert.rejects(f.rpc("select plan_focus_remove($1,'quick',$2) result",[f.gwid,quick.id]),/PLAN_ACCESS_DENIED/)
+ }finally{await f.db.close()}
+})

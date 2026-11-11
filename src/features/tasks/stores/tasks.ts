@@ -3,7 +3,7 @@ import { defineWorkspaceStore } from '@/lib/workspaceScope'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { supabase } from '@/lib/supabase'
 import { onTrashChange } from '@/lib/workspaceTrash'
-import { monthRange, workError, type WorkBlock, type WorkEntity, type WorkProject, type WorkTask } from '../lib/tasks'
+import { monthRange, workError, type WorkBlock, type WorkDetailsDraft, type WorkEntity, type WorkProject, type WorkTask } from '../lib/tasks'
 
 export const useTasksStore=defineWorkspaceStore('work-tasks',()=>{
   const spaces=useWorkspacesStore(),scope=spaces.sessionKey,wid=spaces.activeId
@@ -81,7 +81,7 @@ export const useTasksStore=defineWorkspaceStore('work-tasks',()=>{
       // A committed write is successful even when a later refresh fails.
       if(entity==='task'){
         const index=tasks.value.findIndex(row=>row.id===id)
-        if(index>=0)tasks.value[index]=result.data
+        if(index>=0)tasks.value[index]={...tasks.value[index],...result.data}
         else if(!project.value||result.data.project_id===project.value)tasks.value.unshift(result.data)
         blocks.value=blocks.value.map(row=>row.task_id===id?{...row,task_title:result.data.title,task_status:result.data.status,project_id:result.data.project_id}:row)
         deadlines.value=deadlines.value.filter(row=>row.id!==id)
@@ -112,6 +112,38 @@ export const useTasksStore=defineWorkspaceStore('work-tasks',()=>{
       return result.data as WorkTask|null
     }catch(failure){if(current())error.value=workError(failure);return null}
   }
+  async function saveDetails(draft:WorkDetailsDraft){
+    if(!current()||saving.value)return null
+    saving.value=true;error.value=''
+    try{
+      const result=await supabase.rpc('work_save_details',{wid,tid:draft.taskId,task_payload:draft.task,task_version:draft.taskVersion??null,time_changes:draft.times,time_removals:draft.removed}).abortSignal(AbortSignal.timeout(20000))
+      if(!current())return null
+      if(result.error)throw result.error
+      const saved=result.data as {task:WorkTask|null;blocks:WorkBlock[]}
+      if(saved.task){const index=tasks.value.findIndex(row=>row.id===saved.task!.id);if(index>=0)tasks.value[index]=saved.task;else if(!project.value||saved.task.project_id===project.value)tasks.value.unshift(saved.task)}
+      const removed=new Set(draft.removed.map(row=>row.id)),changed=new Set(saved.blocks.map(row=>row.id))
+      blocks.value=[...blocks.value.filter(row=>!removed.has(row.id)&&!changed.has(row.id)),...saved.blocks]
+      invalidateCalendar()
+      await Promise.allSettled([load(false,true),...(calendarActive.value&&calendarRequested?[loadCalendar()]:[])])
+      return saved
+    }catch(failure){if(current())error.value=workError(failure);return null}
+    finally{saving.value=false}
+  }
+  async function deleteProject(row:WorkProject){
+    if(!current()||saving.value)return false
+    saving.value=true;error.value=''
+    try{
+      const result=await supabase.rpc('work_project_delete',{wid,pid:row.id,expected_version:row.version}).abortSignal(AbortSignal.timeout(20000))
+      if(!current())return false
+      if(result.error)throw result.error
+      projects.value=projects.value.filter(item=>item.id!==row.id)
+      if(project.value===row.id)project.value=''
+      invalidateCalendar(true)
+      await Promise.allSettled([load(),...(calendarActive.value&&calendarRequested?[loadCalendar()]:[])])
+      return true
+    }catch(failure){if(current())error.value=workError(failure);return false}
+    finally{saving.value=false}
+  }
   const stop=onTrashChange(change=>{
     if(change.owner!==spaces.userId||change.workspace!==wid||!['tasks','calendar'].includes(change.module)||!current())return
     if(change.module==='tasks'&&(change.action==='move'||change.action==='purge')){
@@ -132,5 +164,5 @@ export const useTasksStore=defineWorkspaceStore('work-tasks',()=>{
     })
   })
   onScopeDispose(()=>{disposed=true;generation++;calendarGeneration++;stop()})
-  return {projects,tasks,blocks,deadlines,project,range,loading,calendarLoading,saving,paging,error,calendarError,ready,calendarReady,calendarActive,calendarDirty,hasMore,total,counts,load,loadCalendar,setCalendarActive,selectProject,mutate,findTask}
+  return {projects,tasks,blocks,deadlines,project,range,loading,calendarLoading,saving,paging,error,calendarError,ready,calendarReady,calendarActive,calendarDirty,hasMore,total,counts,load,loadCalendar,setCalendarActive,selectProject,mutate,findTask,saveDetails,deleteProject}
 })

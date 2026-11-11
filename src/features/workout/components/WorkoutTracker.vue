@@ -52,7 +52,7 @@
       <p v-if="progress === 100 && activeRoutine.exercises.length" role="status" class="flex items-center gap-2 text-xs text-primary"><CheckCircle2 class="h-4 w-4" />{{ t('workout.workoutComplete') }}</p>
     </template>
 
-    <ExerciseLibraryModal :show="showLibrary && canWrite" :busy="store.isSaving" :exercise="editedExercise" @close="showLibrary = false" @add="addExercise" @update="updateExercise" />
+    <ExerciseLibraryModal :show="showLibrary && canWrite" :busy="store.isSaving" :exercise="editedExercise" :custom-exercises="store.customExercises" :custom-loading="store.libraryLoading" :custom-error="store.libraryError" :save-custom-exercise="store.saveCustomExercise" :remove-custom-exercise="store.removeCustomExercise" :add-custom-to-program="addExercise" @reload-custom="store.fetchCustomExercises" @close="showLibrary = false" @add="addExercise" @update="updateExercise" />
     <ExercisePreview v-if="previewExercise" :exercise="previewExercise" @close="previewExercise = null" />
     <dialog ref="programDialog" class="program-dialog w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-border/60 bg-card p-4 text-card-foreground shadow-2xl" aria-labelledby="workout-edit-title" @dblclick="event=>{if(!store.isSaving && isDialogBackdropDoubleClick(event))programDialog?.close()}" @cancel="cancelProgramEdit">
       <form v-if="editingProgram" class="space-y-4" @submit.prevent="saveProgram">
@@ -94,6 +94,7 @@ const filtered = computed(() => store.routines.filter(routine => fold(routine.ti
 const completed = computed(() => activeRoutine.value?.exercises.filter(exercise => exercise.isCompleted).length || 0)
 const progress = computed(() => activeRoutine.value?.exercises.length ? Math.round(completed.value / activeRoutine.value.exercises.length * 100) : 0)
 const showLibrary = ref(false), editedExercise = ref<Exercise | null>(null), loadFailed = ref(false)
+watch(showLibrary, show => { if (show) void store.fetchCustomExercises() })
 const previewExercise = ref<Exercise | null>(null)
 const programDialog = ref<HTMLDialogElement>(), editingProgram = ref<Routine | null>(null), editingTitle = ref(''), editingDay = ref('Any')
 const failed = () => ui.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
@@ -158,9 +159,10 @@ function editExercise(exercise: Exercise) {
 }
 async function addExercise(input: ExerciseInput) {
   const routine = activeRoutine.value
-  if (!routine || !canWrite.value || store.isSaving) return
-  if (!await store.addExerciseToRoutine(routine.id, input)) { failed(); return }
+  if (!routine || !canWrite.value || store.isSaving) return false
+  if (!await store.addExerciseToRoutine(routine.id, input)) { failed(); return false }
   showLibrary.value = false
+  return true
 }
 async function updateExercise(id: string, input: ExerciseInput, version?: number) {
   const routine = activeRoutine.value

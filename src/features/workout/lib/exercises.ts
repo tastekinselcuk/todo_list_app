@@ -5,7 +5,11 @@ export interface CatalogExercise {
   primaryMuscles: string[]
   category: string
   images: string[]
+  source?: 'custom'
+  group?: string
 }
+
+export interface CustomExerciseInput { name: string; imageUrl: string; group: string; equipment: string }
 
 export interface ExerciseInput {
   name: string
@@ -38,6 +42,7 @@ const aliases: Record<string, string> = {
   'body only': 'vücut ağırlığı vucut agirligi ekipmansız ekipmansiz', dumbbell: 'dambıl dambil dumbell',
   barbell: 'bar halter', cable: 'kablo makara', machine: 'makine', kettlebells: 'kettlebell', bands: 'lastik bant',
   cardio: 'kardiyo koşu kosu', 'push up': 'şınav sinav', pushups: 'şınav sinav', 'pull up': 'barfiks', pullups: 'barfiks', squat: 'çömelme comelme',
+  back: 'sırt sirt', legs: 'bacak', arms: 'kol', core: 'karın karin',
 }
 const legacyNames: Record<string, string> = {
   'barbell bench press': 'Barbell_Bench_Press_-_Medium_Grip',
@@ -55,13 +60,14 @@ export function loadExerciseCatalog() {
   })).catch(error => { catalogPromise = undefined; throw error })
 }
 export function exerciseGroup(exercise: CatalogExercise, group: string) {
+  if (exercise.source === 'custom') return !group || group === 'all' || exercise.group === group
   return !group || group === 'all' || (group === 'cardio' ? exercise.category === 'cardio' : exercise.primaryMuscles.some(muscle => groups[group]?.includes(muscle)))
 }
 const searchTexts = new WeakMap<CatalogExercise, string>()
 function searchText(exercise: CatalogExercise) {
   const cached = searchTexts.get(exercise)
   if (cached) return cached
-  const fields = [exercise.name, exercise.equipment || '', exercise.category, ...exercise.primaryMuscles]
+  const fields = [exercise.name, exercise.equipment || '', exercise.category, exercise.group || '', ...exercise.primaryMuscles]
   const name = fold(exercise.name)
   const text = fold(fields.join(' ') + ' ' + fields.map(field => aliases[field] || '').join(' ') + ' ' + Object.entries(aliases).filter(([key]) => name.includes(key)).map(([, value]) => value).join(' '))
   searchTexts.set(exercise, text)
@@ -78,6 +84,7 @@ export function searchCatalog(catalog: CatalogExercise[], query: string, group =
 }
 const indexes = new WeakMap<CatalogExercise[], { ids: Map<string, CatalogExercise>; names: Map<string, CatalogExercise> }>()
 export function matchCatalogExercise(catalog: CatalogExercise[], exercise: { name: string; catalogId?: string }) {
+  if (isCustomLibraryExercise(exercise)) return undefined
   let index = indexes.get(catalog)
   if (!index) {
     index = { ids: new Map(catalog.map(item => [item.id, item])), names: new Map(catalog.map(item => [fold(item.name), item])) }
@@ -88,6 +95,14 @@ export function matchCatalogExercise(catalog: CatalogExercise[], exercise: { nam
 }
 export function safeImageUrl(value: string) {
   try { const url = new URL(value); return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '' } catch { return '' }
+}
+export const isCustomLibraryExercise = (exercise: { catalogId?: string }) => Boolean(exercise.catalogId?.startsWith('custom:'))
+export function normalizeCustomExercise(input: CustomExerciseInput, requireClassification = true): CustomExerciseInput {
+  const name = input.name.trim(), imageUrl = safeImageUrl(input.imageUrl.trim())
+  if (!name || name.length > 160 || !imageUrl || imageUrl.length > 2048 || new URL(imageUrl).username || new URL(imageUrl).password
+    || ((requireClassification || input.group !== '') && !(muscleGroups as readonly string[]).includes(input.group))
+    || ((requireClassification || input.equipment !== '') && !(equipmentTypes as readonly string[]).includes(input.equipment))) throw Error('INVALID_CUSTOM_EXERCISE')
+  return { name, imageUrl, group: input.group, equipment: input.equipment }
 }
 export function catalogImageUrl(path: string, mirror = false) {
   // Only dataset-relative image paths can be joined to the public host.
@@ -101,13 +116,14 @@ export function imageCandidates(exercise: ExerciseInput, catalog: CatalogExercis
   const remote = exercise.images?.[pose] || (pose === 0 ? exercise.imageUrl : '')
   // Repair old expiring ExerciseDB URLs with a matching catalog entry first.
   const matches = [catalogImageUrl(paths[pose] || paths[0] || ''), catalogImageUrl(paths[pose] || paths[0] || '', true)]
-  const custom = !exercise.catalogId && remote && !/exercisedb|rapidapi/i.test(remote)
+  const custom = (!exercise.catalogId || isCustomLibraryExercise(exercise)) && remote && !/exercisedb|rapidapi/i.test(remote)
   const candidates = custom ? [safeImageUrl(remote), ...matches] : [...matches, safeImageUrl(remote)]
   return [...new Set(candidates.filter(Boolean))]
 }
 export function catalogInput(exercise: CatalogExercise): ExerciseInput {
-  return { name: exercise.name, catalogId: exercise.id, imageUrl: catalogImageUrl(exercise.images[0] || ''),
-    images: exercise.images.map(path => catalogImageUrl(path)).filter(Boolean), equipment: exercise.equipment || '', muscles: exercise.primaryMuscles,
+  const imageUrl = exercise.source === 'custom' ? safeImageUrl : catalogImageUrl
+  return { name: exercise.name, catalogId: exercise.id, imageUrl: imageUrl(exercise.images[0] || ''),
+    images: exercise.images.map(path => imageUrl(path)).filter(Boolean), equipment: exercise.equipment || '', muscles: exercise.primaryMuscles,
     sets: 3, reps: '10–12', weightKg: null, restSeconds: 90, tempo: '', alternative: '', notes: '' }
 }
 export function normalizeExerciseInput(input: ExerciseInput): ExerciseInput {

@@ -17,13 +17,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Dumbbell, Pause, Play } from 'lucide-vue-next'
-import { imageCandidates, loadExerciseCatalog, safeImageUrl, type CatalogExercise, type ExerciseInput } from '../lib/exercises'
+import { imageCandidates, isCustomLibraryExercise, loadExerciseCatalog, safeImageUrl, type CatalogExercise, type ExerciseInput } from '../lib/exercises'
 const props = withDefaults(defineProps<{ exercise: ExerciseInput; animated?: boolean; controls?: boolean }>(), { animated: true, controls: false })
 const host = ref<HTMLElement>(), catalog = ref<CatalogExercise[]>([])
 const attempts = ref([0, 0]), loadedSources = ref(new Set<string>()), paused = ref(false)
 const visible = ref(false), pageVisible = ref(true), reducedMotion = ref(false)
 const candidates = computed(() => {
-  const custom = !props.exercise.catalogId && safeImageUrl(props.exercise.images?.[0] || props.exercise.imageUrl) && !/exercisedb|rapidapi/i.test(props.exercise.images?.[0] || props.exercise.imageUrl)
+  const custom = (!props.exercise.catalogId || isCustomLibraryExercise(props.exercise)) && safeImageUrl(props.exercise.images?.[0] || props.exercise.imageUrl) && !/exercisedb|rapidapi/i.test(props.exercise.images?.[0] || props.exercise.imageUrl)
   // A lone custom photo must not alternate with an unrelated catalog pose.
   const pair = props.animated && (!custom || Boolean(props.exercise.images?.[1]))
   return [imageCandidates(props.exercise, catalog.value, 0), ...(pair ? [imageCandidates(props.exercise, catalog.value, 1)] : [])]

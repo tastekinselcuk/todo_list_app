@@ -1,21 +1,20 @@
 <script setup lang="ts">
-import { computed,inject,ref,onMounted,onActivated,onDeactivated,onUnmounted,watch,nextTick } from 'vue'
+import { computed,inject,ref,onMounted,onActivated,onDeactivated,onUnmounted,watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUpRight,Check,Copy,History,Trash2,Play,Pause,Loader2,X } from 'lucide-vue-next'
+import { ArrowUpRight,Check,Copy,History,Trash2,Play,Pause } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess,useModuleLoad } from '@/lib/workspaceScope'
 import { workspaceNavigationKey,workspaceActiveViewKey } from '@/lib/workspaceNavigation'
-import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { usePomodoroStore } from '@/features/pomodoro/stores/pomodoro'
 import { useSettingsStore } from '@/stores/settings'
 import { useUIStore } from '@/stores/ui'
 import { usePlansStore,type Plan } from '../stores/plans'
 import { firstPopulatedPeriod,periodStart,periods,type Period } from '../lib/periods'
-const {canWrite}=useModuleAccess('plans'),store=usePlansStore(),timer=usePomodoroStore(),settings=useSettingsStore(),ui=useUIStore(),{locale,t}=useI18n()
+const {canWrite}=useModuleAccess('plans'),store=usePlansStore(),timer=usePomodoroStore(),settings=useSettingsStore(),ui=useUIStore(),{locale}=useI18n()
 const copy=computed(()=>locale.value==='tr'?{
- timeless:'Zamansız',daily:'Günlük',weekly:'Haftalık',monthly:'Aylık',yearly:'Yıllık',placeholder:'Aklında ne var?',add:'Ekle',archive:'Geçmişi göster',current:'Bu dönem',done:'tamamlandı',pending:'yapılacak',carried:'Önceki dönemden',history:'Geçmiş dönemler',historyEmpty:'Henüz geçmiş bir dönem yok.',setup:'Planlar yüklenemedi. Bağlantıyı kontrol et; yeni kurulumda PLANS_SETUP.md dosyasındaki güncellemeyi tamamla.',retry:'Tekrar dene',complete:'Tamamla',undo:'Tamamlanmadı olarak işaretle',copy:'Kopyala',copied:'Kopyalandı',copyFailed:'Kopyalama başarısız',delete:'Sil',deleteFailed:'Plan silinemedi',focus:'Odaklan',pause:'Duraklat',next:'Sıradaki odak',goals:'Odak hedefi',sessions:'Oturum hedefi',minutes:'Oturum süresi (dakika)',save:'Kaydet',cancel:'Vazgeç',focusFailed:'Odak başlatılamadı. Veritabanı güncellemesini ve bağlantını kontrol et.',goalHint:'Hedefe ulaşmak planı otomatik tamamlamaz.'
-}:{timeless:'Timeless',daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly',placeholder:'What’s on your mind?',add:'Add',archive:'Show history',current:'This period',done:'completed',pending:'to do',carried:'Carried forward',history:'Past periods',historyEmpty:'No past periods yet.',setup:'Could not load plans. Check your connection and complete the update in PLANS_SETUP.md.',retry:'Retry',complete:'Complete',undo:'Mark incomplete',copy:'Copy',copied:'Copied',copyFailed:'Could not copy',delete:'Delete',deleteFailed:'Could not delete plan',focus:'Focus',pause:'Pause',next:'Next focus',goals:'Focus goal',sessions:'Session goal',minutes:'Session duration (minutes)',save:'Save',cancel:'Cancel',focusFailed:'Could not start focus. Check the database update and your connection.',goalHint:'Reaching the goal does not complete the plan automatically.'})
+ timeless:'Hızlı Not',daily:'Günlük',weekly:'Haftalık',monthly:'Aylık',yearly:'Yıllık',placeholder:'Aklında ne var?',add:'Ekle',archive:'Geçmişi göster',current:'Bu dönem',done:'tamamlandı',pending:'yapılacak',carried:'Önceki dönemden',history:'Geçmiş dönemler',historyEmpty:'Henüz geçmiş bir dönem yok.',setup:'Planlar yüklenemedi. Bağlantıyı kontrol et; yeni kurulumda PLANS_SETUP.md dosyasındaki güncellemeyi tamamla.',retry:'Tekrar dene',complete:'Tamamla',undo:'Tamamlanmadı olarak işaretle',copy:'Kopyala',copied:'Kopyalandı',copyFailed:'Kopyalama başarısız',delete:'Sil',deleteFailed:'Plan silinemedi',focus:'Odaklan',pause:'Duraklat',next:'Sıradaki odak',goals:'Pomodoro ayarları',sessions:'Oturum hedefi',minutes:'Oturum süresi (dakika)',save:'Kaydet',cancel:'Vazgeç',focusFailed:'Odak başlatılamadı. Veritabanı güncellemesini ve bağlantını kontrol et.',goalHint:'Hedefe ulaşmak planı otomatik tamamlamaz.'
+}:{timeless:'Quick Notes',daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly',placeholder:'What’s on your mind?',add:'Add',archive:'Show history',current:'This period',done:'completed',pending:'to do',carried:'Carried forward',history:'Past periods',historyEmpty:'No past periods yet.',setup:'Could not load plans. Check your connection and complete the update in PLANS_SETUP.md.',retry:'Retry',complete:'Complete',undo:'Mark incomplete',copy:'Copy',copied:'Copied',copyFailed:'Could not copy',delete:'Delete',deleteFailed:'Could not delete plan',focus:'Focus',pause:'Pause',next:'Next focus',goals:'Pomodoro settings',sessions:'Session goal',minutes:'Session duration (minutes)',save:'Save',cancel:'Cancel',focusFailed:'Could not start focus. Check the database update and your connection.',goalHint:'Reaching the goal does not complete the plan automatically.'})
 const selected=ref<Period>('timeless'),inputPeriod=ref<Period>('timeless'),title=ref(''),showHistory=ref(false),today=ref(new Date())
 let periodChosen=false
 const periodOptions=computed(()=>periods.map(value=>({value,label:copy.value[value]})))
@@ -23,7 +22,11 @@ const inPeriod=(plan:Plan,period:Period)=>plan.period===period&&(period==='timel
 const currentPlans=computed(()=>store.plans.filter(plan=>inPeriod(plan,selected.value)))
 const active=computed(()=>currentPlans.value.filter(plan=>!plan.completed).sort((a,b)=>b.history.length-a.history.length))
 const completed=computed(()=>currentPlans.value.filter(plan=>plan.completed))
-const emptyMessage=computed(()=>locale.value==='tr'?`Henüz ${copy.value[selected.value].toLocaleLowerCase('tr-TR')} plan eklenmedi.`:`No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
+// Quick notes keep their creation order even when completion changes.
+const displayedPlans=computed(()=>selected.value==='timeless'
+ ? [...currentPlans.value].reverse().sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))
+ : [...active.value,...completed.value])
+const emptyMessage=computed(()=>selected.value==='timeless'?(locale.value==='tr'?'Henüz hızlı not eklenmedi.':'No quick notes added yet.'):locale.value==='tr'?`Henüz ${copy.value[selected.value].toLocaleLowerCase('tr-TR')} plan eklenmedi.`:`No ${copy.value[selected.value].toLowerCase()} plans added yet.`)
 const archived=computed(()=>{
  if(selected.value==='timeless')return []
  const groups=new Map<string,{id:string;title:string;completed:boolean}[]>()
@@ -42,21 +45,18 @@ async function toggle(plan:Plan){if(!editable(plan)||store.isSaving(plan.id))ret
 async function copyPlan(plan:Plan){try{await navigator.clipboard.writeText(plan.title);ui.addToast(copy.value.copied,'success')}catch{ui.addToast(copy.value.copyFailed,'error')}}
 async function deletePlan(plan:Plan){if(!editable(plan)||store.busy||store.isSaving(plan.id))return;if(plan.focus?.id===timer.currentTarget?.id){await timer.clearFocus();if(timer.error)return}if(await store.remove(plan.id,plan.source||'plans')){if(plan.focus)timer.forgetTask(plan.focus.id)}else ui.addToast(copy.value.deleteFailed,'error')}
 const isSelected=(plan:Plan)=>Boolean(plan.focus&&timer.currentTarget?.id===plan.focus.id)
-const isQueued=(plan:Plan)=>Boolean(plan.focus&&timer.queuedTarget?.id===plan.focus.id)
 const isRunning=(plan:Plan)=>isSelected(plan)&&timer.isRunning&&timer.modeKey==='focus'
-async function focus(plan:Plan){if(plan.completed||store.isFocusing(plan)||timer.starting||timer.clearing)return;if(isRunning(plan)&&!timer.remote){timer.pauseTimer();return}const target=await store.prepareFocus(plan,plan.focus?undefined:timer.durations.focus*60);if(!target){ui.addToast(copy.value.focusFailed,'error');return}await timer.focusOn(target);if(timer.error)ui.addToast(t(timer.errorMessageKey),'error')}
-const goalPlan=ref<Plan|null>(null),goalDialog=ref<HTMLDialogElement>(),estimate=ref(1),minutes=ref(25)
-async function openGoal(plan:Plan){goalPlan.value=plan;estimate.value=plan.focus?.estimated_sessions||1;minutes.value=(plan.focus?.focus_seconds||timer.durations.focus*60)/60;await nextTick();goalDialog.value?.showModal()}
-function dismissGoal(){goalDialog.value?.close();goalPlan.value=null}
-function closeGoal(){if(goalPlan.value&&store.isFocusing(goalPlan.value))return;dismissGoal()}
-async function saveGoal(){if(!goalPlan.value||!Number.isInteger(estimate.value)||estimate.value<1||estimate.value>999||!Number.isInteger(minutes.value)||minutes.value<1||minutes.value>90)return;const target=await store.prepareFocus(goalPlan.value,minutes.value*60,estimate.value);if(target){timer.updateTarget(target);closeGoal()}else ui.addToast(copy.value.focusFailed,'error')}
+function openGoal(plan:Plan){
+ if(plan.completed||store.isFocusing(plan)||timer.starting||timer.clearing)return
+ timer.openPlanSettings({source:plan.source||'plans',record_id:plan.id,title:plan.title,target:plan.focus?{...plan.focus,title:plan.title,collection_id:'',workspace_id:''}:undefined})
+}
 const navigation=inject(workspaceNavigationKey,null),reportView=inject(workspaceActiveViewKey,()=>{})
 watch(()=>navigation?.value,intent=>{if(intent?.module==='plans'&&periods.includes(intent.view as Period)){selected.value=intent.view as Period;inputPeriod.value=selected.value;periodChosen=true}},{immediate:true})
 watch(selected,value=>{inputPeriod.value=value;periodChosen=true;if(value==='timeless')showHistory.value=false;reportView('plans',value)})
 watch(()=>timer.taskStatsSequence,()=>{void refresh()})
 let clock:ReturnType<typeof setInterval>|undefined
 function watchDay(){clearInterval(clock);clock=setInterval(()=>{if(periodStart('daily',new Date(),store.timezone)!==periodStart('daily',today.value,store.timezone))void refresh()},30000)}
-onMounted(watchDay);onActivated(watchDay);useModuleLoad(()=>refresh(true));onDeactivated(()=>{title.value='';clearInterval(clock);dismissGoal();showHistory.value=false;selected.value='timeless';inputPeriod.value='timeless';periodChosen=false});onUnmounted(()=>{clearInterval(clock);dismissGoal()})
+onMounted(watchDay);onActivated(watchDay);useModuleLoad(()=>refresh(true));onDeactivated(()=>{title.value='';clearInterval(clock);showHistory.value=false;selected.value='timeless';inputPeriod.value='timeless';periodChosen=false});onUnmounted(()=>{clearInterval(clock)})
 useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period;periodChosen=true;today.value=new Date();await store.load(hit.record_id);if(!isCurrent())return;const plan=store.plans.find(p=>p.id===hit.record_id);if(plan){selected.value=plan.period;showHistory.value=plan.period!=='timeless'&&plan.period_date<periodStart(plan.period,today.value,store.timezone)}})
 </script>
 <template>
@@ -67,18 +67,17 @@ useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.peri
    <div class="period-toolbar"><nav class="period-tabs" :aria-label="copy.current"><button v-for="period in periods" :key="period" :class="{selected:selected===period}" :aria-pressed="selected===period" @click="selected=period">{{ copy[period] }}<span v-if="count(period)">{{ count(period) }}</span></button></nav><button v-if="selected!=='timeless'" class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory=!showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{on:showHistory}"><i /></span></button></div>
   </div>
   <div v-if="!currentPlans.length&&!store.busy&&!store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
-  <div class="task-list"><article v-for="plan in [...active,...completed]" :key="(plan.source||'plans')+plan.id" :data-search-record="plan.id" class="workspace-card task-row" :class="{completed:plan.completed}" @click="editable(plan)&&toggle(plan)">
+  <div class="task-list"><article v-for="plan in displayedPlans" :key="(plan.source||'plans')+plan.id" :data-search-record="plan.id" class="workspace-card task-row" :class="{completed:plan.completed}" @click="editable(plan)&&toggle(plan)">
    <button :disabled="!editable(plan)" class="task-check" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-label="plan.completed?copy.undo:copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
    <button :disabled="!editable(plan)" class="task-content" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.period!=='timeless'&&plan.history.length&&!plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
    <div class="task-actions" @click.stop>
-    <button v-if="plan.focus" type="button" class="focus-goal" :disabled="plan.completed||store.isFocusing(plan)" :aria-label="copy.goals" :title="copy.goals" @click.stop="openGoal(plan)">{{ plan.focus.sessions }}/{{ plan.focus.estimated_sessions }}</button>
+    <button v-if="plan.focus && settings.isModuleActive('pomodoro')" type="button" class="focus-goal" :disabled="plan.completed||store.busy||store.isSaving(plan.id)||timer.starting||timer.clearing" :aria-label="copy.goals" :title="copy.goals" @click.stop="openGoal(plan)">{{ plan.focus.sessions }}/{{ plan.focus.estimated_sessions }}</button>
     <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
-    <button v-if="settings.isModuleActive('pomodoro')" type="button" class="task-action focus-action" :class="{'is-focused':isSelected(plan)||isQueued(plan)}" :disabled="plan.completed||store.busy||store.isSaving(plan.id)||store.isFocusing(plan)||timer.starting||timer.clearing" :aria-label="isRunning(plan)?copy.pause:isQueued(plan)?copy.next:copy.focus" :title="isRunning(plan)?copy.pause:isQueued(plan)?copy.next:copy.focus" @click.stop="focus(plan)"><Loader2 v-if="store.isFocusing(plan)" :size="15" class="animate-spin" /><Pause v-else-if="isRunning(plan)" :size="15" /><Play v-else :size="15" /></button>
+    <button v-if="settings.isModuleActive('pomodoro')" type="button" class="task-action focus-action" :class="{'is-focused':isRunning(plan)}" :disabled="plan.completed||store.busy||store.isSaving(plan.id)||store.isFocusing(plan)||timer.starting||timer.clearing" :aria-label="copy.goals" :title="copy.goals" :aria-pressed="isRunning(plan)" @click.stop="openGoal(plan)"><Pause v-if="isRunning(plan)" :size="15" /><Play v-else :size="15" /></button>
     <button v-if="editable(plan)" type="button" class="task-action delete-action" :disabled="store.busy||store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
    </div>
   </article></div>
   <section v-if="selected!=='timeless'&&showHistory" class="archive-section"><h3><History :size="16" />{{ copy.history }}</h3><p v-if="!archived.length" class="archive-empty">{{ copy.historyEmpty }}</p><details v-for="[date,rows] in archived" :key="date" class="workspace-card archive-group"><summary>{{ formatDate(date) }}<span>{{ rows.filter(row=>row.completed).length }} / {{ rows.length }} {{ copy.done }}</span></summary><div v-for="row in rows" :key="row.id" :data-search-record="row.id" class="archive-row"><Check v-if="row.completed" :size="15" /><History v-else :size="15" /><div><span :class="{'past-done':row.completed}">{{ row.title }}</span><small>{{ row.completed?copy.done:copy.pending }}</small></div></div></details></section>
-  <Teleport to="body"><dialog v-if="goalPlan" ref="goalDialog" class="plan-focus-dialog" :aria-label="copy.goals" @cancel.prevent="closeGoal" @dblclick="event=>{if(isDialogBackdropDoubleClick(event))closeGoal()}"><form @submit.prevent="saveGoal"><header><strong>{{ copy.goals }}</strong><button type="button" :disabled="store.isFocusing(goalPlan)" :aria-label="copy.cancel" @click="closeGoal"><X :size="17" /></button></header><p>{{ goalPlan.title }}</p><label>{{ copy.sessions }}<input v-model.number="estimate" type="number" min="1" max="999" required /></label><label>{{ copy.minutes }}<input v-model.number="minutes" type="number" min="1" max="90" required /></label><small>{{ copy.goalHint }}</small><footer><button type="button" :disabled="store.isFocusing(goalPlan)" @click="closeGoal">{{ copy.cancel }}</button><button type="submit" :disabled="store.isFocusing(goalPlan)||estimate<1||estimate>999||minutes<1||minutes>90">{{ copy.save }}</button></footer></form></dialog></Teleport>
  </section>
 </template>
 <style scoped>
@@ -312,10 +311,6 @@ useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.peri
 .task-action:disabled {
   opacity:.4
 }
-.focus-action.is-focused {
-  color:var(--plan-accent);
-  background:color-mix(in srgb,var(--plan-accent) 9%,transparent)
-}
 .focus-goal {
   padding:4px 7px;
   border-radius:7px;
@@ -328,85 +323,10 @@ useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.peri
   color:var(--plan-accent);
   background:color-mix(in srgb,var(--plan-accent) 8%,transparent)
 }
-.plan-focus-dialog {
-  --plan-accent:hsl(var(--primary));
-  margin:auto;
-  width:380px;
-  max-width:calc(100vw - 32px);
-  max-height:calc(100dvh - 40px);
-  padding:24px;
-  overflow:auto;
-  color:hsl(var(--foreground));
-  background:hsl(var(--card));
-  border:1px solid hsl(var(--border));
-  border-radius:20px;
-  box-shadow:0 24px 80px #0002
-}
-.plan-focus-dialog::backdrop {
-  background:#0005;
-  backdrop-filter:blur(5px)
-}
-.plan-focus-dialog header,.plan-focus-dialog footer {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px
-}
-.plan-focus-dialog header strong {
-  font-size:14px;
-  font-weight:500
-}
-.plan-focus-dialog header button {
-  color:hsl(var(--muted-foreground));
-  border-radius:8px;
-  padding:5px
-}
-.plan-focus-dialog p {
-  margin:8px 0 22px;
-  font-size:12px;
-  color:hsl(var(--muted-foreground));
-  overflow-wrap:anywhere
-}
-.plan-focus-dialog label {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:16px;
-  margin-top:12px;
-  font-size:12px
-}
-.plan-focus-dialog input {
-  width:90px;
-  padding:8px 10px;
-  font-size:13px;
-  font-variant-numeric:tabular-nums;
-  background:hsl(var(--muted)/.3);
-  border:1px solid hsl(var(--border));
-  border-radius:10px
-}
-.plan-focus-dialog small {
-  display:block;
-  margin-top:20px;
-  font-size:11px;
-  color:hsl(var(--muted-foreground))
-}
-.plan-focus-dialog footer {
-  justify-content:flex-end;
-  margin-top:24px
-}
-.plan-focus-dialog footer button {
-  padding:9px 14px;
-  font-size:12px;
-  border:1px solid hsl(var(--border));
-  border-radius:10px
-}
-.plan-focus-dialog footer button[type=submit] {
-  border-color:transparent;
-  background:var(--plan-accent);
-  color:hsl(var(--primary-foreground))
-}
-.plan-focus-dialog button:disabled {
-  opacity:.5
+.focus-goal:disabled { opacity:.4 }
+.focus-action.is-focused {
+  color:var(--plan-accent);
+  background:color-mix(in srgb,var(--plan-accent) 9%,transparent)
 }
 .archive-section>h3 {
   font-size:12px;

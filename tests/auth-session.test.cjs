@@ -10,6 +10,19 @@ function load(path,dependencies={},globals={}){
 }
 const {createAuthStorage,createSharedAuthStorage,createIndexedAuthStorage}=load('src/lib/authStorage.ts',{}, {setTimeout,clearTimeout})
 const profile=load('src/lib/accountProfile.ts')
+
+test('signup emails return explicitly to the browser origin instead of the project default or URL parameters',async()=>{
+ for(const address of ['https://pomodolist.netlify.app/?next=http://localhost:3000','http://localhost:5173/?redirect_to=https://untrusted.test']){
+  pinia.setActivePinia(pinia.createPinia());const calls=[]
+  const auth={async signUp(value){calls.push(value);return {error:null}}}
+  const store=load('src/stores/auth.ts',{'@/lib/supabase':{supabase:{auth}},'@/lib/accountProfile':profile},{window:{location:new URL(address)}}).useAuthStore()
+  try{
+   assert.equal((await store.signup('new@example.test','test-only-password')).success,true)
+   assert.equal(calls[0].options?.emailRedirectTo,new URL('/',address).href)
+   assert.equal(calls[0].email,'new@example.test');assert.equal(store.isAuthenticated,false,'requesting confirmation must not fabricate a signed-in user')
+  }finally{store.$dispose()}
+ }
+})
 test('social login uses enabled providers, coalesces discovery and prevents duplicate redirects',async()=>{
  pinia.setActivePinia(pinia.createPinia())
  let discoveries=0,finish,listener;const calls=[],gate=new Promise(resolve=>finish=resolve)

@@ -312,7 +312,6 @@ const handleLogout = async (scope: 'local' | 'global' = 'local') => {
   .workspace-layout[data-workspace-wide] .pomodoro-host { max-width:var(--workspace-wide-max,98%); }
   body:has(.workspace-layout[data-workspace-wide]):has([data-workspace-rail][data-pinned-open]) .pomodoro-dock,
   body:has(.workspace-layout[data-page-layout]):has([data-workspace-rail][data-pinned-open]) .pomodoro-dock { right:var(--workspace-right-inset); }
-  body:has([data-workspace-rail]) #pomodoro-dock-controls { left:calc(var(--workspace-sidebar-inset,104px) + 20px); }
 }
 .fade-slide-enter-active { transition: opacity 220ms ease, transform 220ms cubic-bezier(.22,1,.36,1); }
 .fade-slide-leave-active { transition: opacity 140ms ease, transform 140ms ease; }

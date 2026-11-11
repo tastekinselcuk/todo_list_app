@@ -85,6 +85,25 @@ export function useWorkspaceClient() {
     trash(module:TrashModule,id:string,version:number){assertWritable(module);return moveToTrash(workspaceId,module,id,version,userId)},
     canWrite(module: string) { return workspaces.binding(module, workspaceId)?.role !== 'viewer' },
     collection(module: string) { return workspaces.binding(module, workspaceId)?.collection_id },
+    async loadWorkoutLibrary() {
+      assertCurrent()
+      const result = await supabase.rpc('workout_library_load', { wid: workspaceId })
+      assertCurrent(); if (result.error) throw result.error
+      if (!Array.isArray(result.data)) throw Error('Invalid workout library response')
+      return result.data
+    },
+    async saveWorkoutLibrary(input: Record<string, unknown>, requestId: string) {
+      assertWritable('workout')
+      const result = await supabase.rpc('workout_library_save', { wid: workspaceId, request_id: requestId, input })
+      assertCurrent(); if (result.error) throw result.error
+      return result.data
+    },
+    async removeWorkoutLibrary(id: string) {
+      assertWritable('workout')
+      const result = await supabase.rpc('workout_library_remove', { wid: workspaceId, rid: id })
+      assertCurrent(); if (result.error) throw result.error
+      return result.data
+    },
     timezone(module: string) { return workspaces.binding(module, workspaceId)?.timezone },
     async sealVault(sessionId: string, previousHash: string, metadata: string, notes: Record<string, unknown>[], version: number, name: string) {
       assertWritable('secure')

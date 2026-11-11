@@ -1,7 +1,7 @@
 import { defineWorkspaceStore as defineStore, useWorkspaceClient } from '@/lib/workspaceScope'
 import { computed, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { normalizeExerciseInput, type ExerciseInput } from '../lib/exercises'
+import { normalizeCustomExercise, normalizeExerciseInput, type CatalogExercise, type CustomExerciseInput, type ExerciseInput } from '../lib/exercises'
 
 export interface Exercise extends ExerciseInput {
   _version?: number
@@ -21,6 +21,40 @@ export const useWorkoutStore = defineStore('workout', () => {
   const authStore = useAuthStore()
   const supabase = useWorkspaceClient()
   const routines = ref<Routine[]>([])
+  const customExercises = ref<CatalogExercise[]>([]), libraryLoading = ref(false), libraryError = ref(false)
+  let libraryGeneration = 0
+  async function fetchCustomExercises() {
+    const request = ++libraryGeneration
+    if (!authStore.user) return false
+    libraryLoading.value = true; libraryError.value = false
+    try {
+      const data = await supabase.loadWorkoutLibrary()
+      if (request !== libraryGeneration) return false
+      customExercises.value = data
+      return true
+    } catch {
+      if (request === libraryGeneration) libraryError.value = true
+      return false
+    } finally { if (request === libraryGeneration) libraryLoading.value = false }
+  }
+  async function saveCustomExercise(input: CustomExerciseInput, requestId: string) {
+    return write('custom-library', async () => {
+      libraryGeneration++; libraryLoading.value = false
+      const result = await supabase.saveWorkoutLibrary({ ...normalizeCustomExercise(input) }, requestId) as CatalogExercise
+      customExercises.value = [result, ...customExercises.value.filter(item => item.id !== result.id)]
+      libraryError.value = false
+      return result
+    })
+  }
+  async function removeCustomExercise(id: string) {
+    if (!customExercises.value.some(item => item.id === id && item.source === 'custom')) return false
+    return write('custom-library', async () => {
+      libraryGeneration++; libraryLoading.value = false
+      await supabase.removeWorkoutLibrary(id.slice('custom:'.length))
+      customExercises.value = customExercises.value.filter(item => item.id !== id)
+      return true
+    })
+  }
   const isLoading = ref(false)
   const savingChildren = ref(0)
   const isSaving = computed(() => savingChildren.value > 0)
@@ -200,5 +234,5 @@ export const useWorkoutStore = defineStore('workout', () => {
   })
 
   supabase.listen?.({ workout_routines: fetchRoutines }, () => isLoading.value || Boolean(savingChildren.value))
-  return { routines, isLoading, isSaving, fetchRoutines, addRoutine, updateRoutine, duplicateRoutine, deleteRoutine, addExerciseToRoutine, updateExercise, deleteExercise, toggleExerciseCompletion, resetRoutine, reorderExercises }
+  return { routines, isLoading, isSaving, customExercises, libraryLoading, libraryError, fetchCustomExercises, saveCustomExercise, removeCustomExercise, fetchRoutines, addRoutine, updateRoutine, duplicateRoutine, deleteRoutine, addExerciseToRoutine, updateExercise, deleteExercise, toggleExerciseCompletion, resetRoutine, reorderExercises }
 })

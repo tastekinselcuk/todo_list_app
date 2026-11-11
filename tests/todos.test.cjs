@@ -619,7 +619,7 @@ test('read-only detailed cards and category filters retain content and hide dest
     const component = load(compileScript(descriptor, { id: file, inlineTemplate: true }).content, prepared.dependencies).default
     const html = await renderToString(vue.createSSRApp(component, props))
     assert.doesNotMatch(html, /todo.deleteTask|todo.deleteCategory|drag-handle/)
-    if (file === 'TodoCard.vue') { assert.match(html, /İş notu/); assert.match(html, /disabled[^>]*aria-label="todo.toggleCompletion/); assert.match(html, /todo.viewNote/) }
+    if (file === 'TodoCard.vue') { assert.match(html, /İş notu/); assert.doesNotMatch(html, /todo.toggleCompletion|note-check/); assert.match(html, /todo.viewNote/) }
   }
 })
 
@@ -718,4 +718,22 @@ test('editing dialog locks the page, protects in-flight changes and restores scr
     assert.equal(dialog.open,true)
   }finally{f.app.unmount()}
   assert.equal(dialog.open,false);assert.equal(browser.body.style.overflow,'auto')
+})
+
+
+test('detailed-note handle keyboard moves preserve filtered and grouped positions and block pending notes',async()=>{
+ const h=fixture(),f=setupState('src/features/todos/components/TodoBoard.vue',h.store)
+ try{
+  await settle()
+  f.state.selectedCategories.value=['work']
+  f.state.moveTodo('c',-1);assert.deepEqual(ids(h.store),['c','b','a','d'])
+  f.state.moveTodo('c',-1);assert.deepEqual(ids(h.store),['c','b','a','d'],'first visible note stays within its filter')
+  f.state.pendingIds.value.add('a');f.state.moveTodo('c',1);assert.deepEqual(ids(h.store),['c','b','a','d'])
+  f.state.pendingIds.value.clear();f.state.clearFilters();f.state.isGrouped.value=true
+  f.state.moveTodo('c',1);assert.deepEqual(ids(h.store),['a','b','c','d'],'grouped moves do not disturb other categories')
+  f.state.moveTodo('b',-1);assert.deepEqual(ids(h.store),['a','b','c','d'])
+  assert.equal(h.store.todos.find(note=>note.id==='d').completed,true)
+ }finally{f.app.unmount()}
+ const v=fixture({viewer:true}),view=setupState('src/features/todos/components/TodoBoard.vue',v.store,{},true)
+ try{await settle();view.state.moveTodo('b',-1);assert.deepEqual(ids(v.store),['a','b','c','d'])}finally{view.app.unmount()}
 })

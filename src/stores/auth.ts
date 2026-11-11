@@ -123,7 +123,10 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const { error: supabaseError } = await supabase.auth.signUp({ email, password })
+      const { error: supabaseError } = await supabase.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: new URL('/', window.location.origin).href }
+      })
       if (supabaseError) throw supabaseError
       
       return { success: true, persistent: authSessionStorage?.persistent ?? true, message: 'Signup successful! Check your email for confirmation.' }

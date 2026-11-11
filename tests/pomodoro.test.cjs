@@ -438,3 +438,19 @@ test('duration configuration leaves a mirrored paused session intact',async()=>{
   assert.equal(f.store.durations.focus,40);assert.equal(f.store.sessionSeconds,600);assert.equal(f.store.timeLeft,540);assert.equal(f.store.modeKey,'focus');assert.equal(f.store.isRunning,false)
  }finally{f.cleanup()}
 })
+
+
+test('configured focus starts explicitly, updating an active target never pauses it, and opening settings has no timer side effects',async()=>{
+ const f=fixture();try{
+  f.store.init();await settle();f.store.openPlanSettings({source:'plans',record_id:'note',title:'Note'})
+  assert.equal(f.store.isRunning,false);assert.equal(f.store.currentTarget,null);assert.equal(f.store.planSettings.workspace_id,'work')
+  await f.store.startConfiguredFocus(target());assert.equal(f.store.isRunning,true);const session=f.store.activeSession.id
+  await f.advance(20_000);const remaining=f.store.timeLeft
+  await f.store.startConfiguredFocus({...target(),estimated_sessions:8,focus_seconds:1200})
+  assert.equal(f.store.isRunning,true);assert.equal(f.store.activeSession.id,session);assert.equal(f.store.timeLeft,remaining);assert.equal(f.store.currentTarget.estimated_sessions,8)
+  f.store.openPlanSettings();assert.equal(f.store.planSettings.target.id,'A');assert.equal(f.store.isRunning,true)
+  f.store.pauseTimer();await settle();await f.store.startConfiguredFocus({...target(),estimated_sessions:8,focus_seconds:1200})
+  assert.equal(f.store.isRunning,true);assert.equal(f.store.activeSession.id,session,'a paused session resumes with its original journal')
+  f.workspaces.activeId='other';await settle();assert.equal(f.store.planSettings,null)
+ }finally{f.cleanup()}
+})

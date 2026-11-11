@@ -88,8 +88,8 @@ onBeforeUnmount(() => motion?.removeEventListener('change', updateMotion))
 <style scoped>
 .exercise-path { display: flex; flex-direction: column; gap: .75rem; list-style: none; padding: 0; margin: 0; }
 .exercise-step { position: relative; display: flex; align-items: flex-start; gap: .75rem; }
-.exercise-step:not(:last-child)::after { content: ''; position: absolute; z-index: 0; left: 13px; top: 55px; bottom: -38px; width: 1px; background: hsl(var(--border) / .7); }
-.step-marker { position: relative; z-index: 1; display: flex; flex: 0 0 28px; align-items: center; justify-content: center; width: 28px; height: 28px; margin-top: 26px; border: 1px solid hsl(var(--border) / .8); border-radius: 50%; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: .6875rem; font-weight: 500; font-variant-numeric: tabular-nums; transition: color 180ms, background-color 180ms, border-color 180ms; }
+.exercise-step:not(:last-child)::after { content: ''; position: absolute; z-index: 0; left: 13px; top: 42px; bottom: -26px; width: 1px; background: hsl(var(--border) / .7); }
+.step-marker { position: relative; z-index: 1; display: flex; flex: 0 0 28px; align-items: center; justify-content: center; width: 28px; height: 28px; margin-top: 14px; border: 1px solid hsl(var(--border) / .8); border-radius: 50%; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: .6875rem; font-weight: 500; font-variant-numeric: tabular-nums; transition: color 180ms, background-color 180ms, border-color 180ms; }
 .step-current .step-marker { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
 .step-complete .step-marker { border-color: hsl(var(--primary) / .25); background: hsl(var(--secondary)); color: hsl(var(--primary)); }
 .step-complete:not(:last-child)::after { background: hsl(var(--primary) / .25); }
@@ -100,6 +100,5 @@ onBeforeUnmount(() => motion?.removeEventListener('change', updateMotion))
 .exercise-dragging { opacity: .95; filter: drop-shadow(0 8px 14px rgb(0 0 0 / .12)); }
 .exercise-dragging::after { display: none; }
 button:focus-visible { outline: 2px solid hsl(var(--primary) / .5); outline-offset: 3px; }
-@media (min-width: 640px) { .step-marker { margin-top: 30px; } .exercise-step:not(:last-child)::after { top: 59px; bottom: -42px; } }
 @media (prefers-reduced-motion: reduce) { .step-marker { transition: none; } }
 </style>
