@@ -448,7 +448,7 @@ onBeforeUnmount(()=>{active=false;if(lockTimer)clearInterval(lockTimer);document
 .vault-control.is-active { @apply border-primary/20 bg-primary/[0.06] text-primary; }
 .vault-action { @apply border border-border/60 bg-card/60; }
 .vault-selector :deep(.select-trigger) { height:36px; border-color:hsl(var(--border)/.7); border-radius:12px; }
-.vault-dialog { height:auto; border-radius:18px; }
+.vault-dialog { height:fit-content; min-height:0; border-radius:18px; }
 .vault-small-dialog { max-width:400px; padding:20px; }
 .vault-small-dialog .secure-field { margin-top:0; }
 .vault-record-dialog { max-width:640px; padding:0; overflow:hidden; }

@@ -160,7 +160,7 @@ onBeforeUnmount(()=>close(true))
 defineExpose({open,close})
 </script>
 <style scoped>
-.vault-manager{height:auto;max-width:520px;max-height:calc(100dvh - 48px);padding:0;overflow:hidden}
+.vault-manager{height:fit-content;min-height:0;max-width:520px;max-height:calc(100dvh - 48px);padding:0;overflow:hidden}
 .vault-manager[open]{display:flex;flex-direction:column}
 .manager-header{@apply flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-5 py-4;}
 .manager-form{display:flex;flex-direction:column;min-height:0;max-height:calc(100dvh - 120px)}
