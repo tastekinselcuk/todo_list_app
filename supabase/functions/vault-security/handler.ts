@@ -7,7 +7,7 @@ export interface VaultDependencies {
   recipientAllowed?(email:string):boolean
 }
 const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value)
-const operations=['password','recover','reset','delete']
+const operations=['password','recover','delete']
 const hex=(b:ArrayBuffer)=>Array.from(new Uint8Array(b),n=>n.toString(16).padStart(2,'0')).join('')
 async function hmac(secret:string,value:string){
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign'])

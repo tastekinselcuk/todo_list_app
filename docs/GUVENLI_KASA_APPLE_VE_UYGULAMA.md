@@ -1,3 +1,7 @@
+# Güncel kullanım notu — 13 Kasım 2026
+
+İçeriği silerek sıfırlama işlemi kaldırılmıştır; kasa silme korunur. Aşağıdaki tarihsel değerlendirmelerdeki sıfırlama önerileri güncel davranış değildir. Eski kasalar kullanıcı parolasıyla yükseltilmeden tüm mevcut kayıtların şifreli olduğu varsayılmamalıdır. Güncel akış ve yedeklerin kapsamı: [Kasa kullanım açıklaması](GUVENLI_KASA_KULLANIMI.md).
+
 # Güvenli Kasa: Apple karşılaştırması ve uygulama kararı
 
 İnceleme: 11–12 Kasım 2026. Kullanıcının Apple/Keychain araştırması, kaynak kodu ve resmi belgeler birlikte değerlendirildi. Önceki `GUVENLI_KASA_ANALIZI.md` önerilerinin uygulama karşılığı bu belgedir. Bu metin bağımsız güvenlik denetimi veya hukuki uygunluk belgesi değildir.

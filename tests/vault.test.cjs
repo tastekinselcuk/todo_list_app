@@ -122,13 +122,23 @@ test('vault quick entry prefills the protected form and switching vaults clears 
     f.state.noteDraftTitle.value='  Private draft title  ';f.state.noteDraftType.value='secret'
     f.state.openAddNoteDialog()
     assert.equal(f.state.editingNote.value.title,'Private draft title');assert.equal(f.state.editingNote.value.type,'secret')
-    const next={id:'another',name:'Work',password_hash:'metadata',created_at:'2026-01-02'}
+    const next={id:'another',name:'Work',password_hash:f.sessions[0].password_hash,created_at:'2026-01-02'}
     f.state.passwordSessions.value=[...f.sessions,next]
     f.state.switchVault('another')
     assert.equal(f.state.isAuthenticated.value,false);assert.equal(f.state.currentSession.value,null)
     assert.equal(f.state.vaultKey.value,null);assert.equal(f.state.secureNotes.value.length,0)
     assert.equal(f.state.noteDraftTitle.value,'');assert.equal(f.state.editingNote.value.title,'')
     assert.equal(f.state.selectedSessionForUnlock.value.id,'another')
+  }finally{f.close()}
+})
+test('legacy vault cards open the upgrade form without exposing plaintext records or an unnecessary unlock dialog',()=>{
+  const f=vaultView(),opened=[]
+  try{
+    f.state.manager.value={open:(...args)=>opened.push(args),close(){}}
+    f.state.promptSessionUnlock(structuredClone(f.sessions[0]))
+    assert.equal(opened.length,1);assert.equal(opened[0][0],'upgrade')
+    assert.equal(f.state.selectedSessionForUnlock.value,null)
+    assert.equal(f.state.isAuthenticated.value,false);assert.equal(f.state.secureNotes.value.length,0)
   }finally{f.close()}
 })
 test('a delayed rename cannot put a key back into a vault that was locked meanwhile', async () => {

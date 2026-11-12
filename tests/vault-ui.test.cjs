@@ -15,7 +15,7 @@ function fixture(file,extra={}){
  const flush=async()=>{await vue.nextTick();await new Promise(resolve=>setTimeout(resolve,5));await vue.nextTick()}
  const until=async condition=>{const deadline=Date.now()+10000;while(!condition()){if(Date.now()>deadline)throw Error('UI did not settle');await flush()}}
  const input=(element,value)=>{element.value=value;element.dispatchEvent(new dom.window.Event('input',{bubbles:true}))}
- return {doc,dom,instance,flush,until,input,close:()=>{app.unmount();dom.window.close();global.Document=previousDocument}}
+ return {doc,dom,instance,flush,until,input,cryptoApi:deps['@/lib/vaultCrypto'],close:()=>{app.unmount();dom.window.close();global.Document=previousDocument}}
 }
 test('notice is unchecked and persists once on the server',async()=>{
  let accepted=false,accepts=0
@@ -31,6 +31,42 @@ test('notice is unchecked and persists once on the server',async()=>{
  const second=fixture('src/features/secure_notes/components/VaultNotice.vue',deps)
  try{await second.flush();assert.equal(second.doc.querySelector('section'),null);assert.equal(accepts,1)}finally{second.close()}
 })
+test('vault management removes reset and keeps deletion behind explicit confirmation',async()=>{
+ const Select={props:['modelValue','options'],setup:props=>()=>vue.h('select',{'aria-label':'actions'},props.options.map(item=>vue.h('option',{value:item.value},item.label)))}
+ const f=fixture('src/features/secure_notes/components/VaultManager.vue',{'@/lib/workspaceScope':{useWorkspaceClient:()=>({})},'../lib/vaultApi':{vaultSecurity(){},downloadVaultFile(){}},'@/components/ui/CustomSelect.vue':{default:Select}})
+ try{
+  const session={id:'vault',name:'Work',password_hash:'{"format":"todo-vault-v2"}',version:1}
+  f.instance.open('password',session);await f.flush()
+  const actions=[...f.doc.querySelectorAll('option')].map(option=>option.value)
+  assert.equal(actions.includes('reset'),false);assert.ok(actions.includes('delete'));assert.ok(actions.includes('backup'))
+  f.instance.open('delete',session);await f.flush()
+  assert.equal(f.doc.querySelectorAll('input[type="password"]').length,0)
+  assert.equal(f.doc.querySelector('footer .workspace-add-button').disabled,true)
+  const checkbox=f.doc.querySelector('input[type="checkbox"]');checkbox.checked=true;checkbox.dispatchEvent(new f.dom.window.Event('change',{bubbles:true}));await f.flush()
+  assert.equal(f.doc.querySelector('footer .workspace-add-button').disabled,false)
+ }finally{f.close()}
+})
+test('backup export uses a separate file password and never changes or embeds the recovery key',async()=>{
+ const downloads=[],rows=[],client={from:()=>({select(){return this},eq(){return this},order(){return this},range:async()=>({data:rows,error:null})})}
+ const f=fixture('src/features/secure_notes/components/VaultManager.vue',{'@/lib/workspaceScope':{useWorkspaceClient:()=>client},'../lib/vaultApi':{vaultSecurity:async()=>{throw Error('Export does not require email')},downloadVaultFile:(...args)=>downloads.push(args)},'@/components/ui/CustomSelect.vue':{default:{render:()=>null}}})
+ try{
+  const sealed=await f.cryptoApi.createRecoverableVault('original vault password')
+  rows.push({id:'record',session_id:'vault',encrypted_payload:await f.cryptoApi.encryptVaultValue(sealed.key,{title:'Saved record',type:'secret',content:'Snapshot content'},'vault:record')})
+  f.instance.open('backup',{id:'vault',name:'Work',password_hash:sealed.metadata,version:1});await f.flush()
+  const fields=[...f.doc.querySelectorAll('input[type="password"]')]
+  assert.equal(fields.length,3)
+  f.input(fields[0],'original vault password');f.input(fields[1],'independent file password');f.input(fields[2],'independent file password')
+  f.doc.querySelector('form').dispatchEvent(new f.dom.window.Event('submit',{bubbles:true,cancelable:true}))
+  await f.until(()=>downloads.length)
+  assert.equal(downloads[0][1],'pomodolist-backup.pvault')
+  const snapshot=await f.cryptoApi.decryptVaultBackup('independent file password',downloads[0][0])
+  assert.equal(snapshot.records[0].content,'Snapshot content')
+  await assert.rejects(f.cryptoApi.decryptVaultBackup('original vault password',downloads[0][0]))
+  assert.equal(downloads[0][0].includes(sealed.recoveryCode),false)
+  const reopened=await f.cryptoApi.recoverVault('new original password',sealed.metadata,sealed.recoveryCode)
+  assert.equal((await f.cryptoApi.decryptVaultValue(reopened.key,rows[0].encrypted_payload,'vault:record')).content,'Snapshot content')
+ }finally{f.close()}
+})
 test('a late acknowledgement lookup cannot open a new account vault',async()=>{
  const auth=vue.reactive({user:{id:'first'}}),pending={}
  const f=fixture('src/features/secure_notes/components/VaultNotice.vue',{'@/lib/supabase':{supabase:{rpc:async(name,args)=>new Promise(resolve=>pending[args.uid]=resolve)}},'@/stores/auth':{useAuthStore:()=>auth}})
@@ -42,7 +78,7 @@ test('a late acknowledgement lookup cannot open a new account vault',async()=>{
 })
 test('new vault creation requires matching passwords, sends only ciphertext, and requires recovery acknowledgement before closing',async()=>{
  const writes=[],client={from:()=>({insert(value){writes.push(value);return{select:async()=>({data:[{id:'vault'}],error:null})}}})}
- const f=fixture('src/features/secure_notes/components/VaultManager.vue',{'@/lib/workspaceScope':{useWorkspaceClient:()=>client},'../lib/vaultApi':{vaultSecurity:async()=>{throw Error('Unexpected email')},downloadVaultFile(){}},'@/components/ui/CustomSelect.vue':{default:{}}})
+ const f=fixture('src/features/secure_notes/components/VaultManager.vue',{'@/lib/workspaceScope':{useWorkspaceClient:()=>client},'../lib/vaultApi':{vaultSecurity:async()=>{throw Error('Unexpected email')},downloadVaultFile(){}},'@/components/ui/CustomSelect.vue':{default:{render:()=>null}}})
  try{
   f.instance.open('create',null,'Work');await f.flush()
   const inputs=[...f.doc.querySelectorAll('input')]

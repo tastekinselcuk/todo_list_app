@@ -20,7 +20,7 @@ Deno.serve(vaultSecurityHandler({
     return response.status===204?null:response.json()
   },
   async send(email,code,action,id){
-    const labels:Record<string,string>={password:'kasa parolasını değiştirme',recover:'kasa erişimini kurtarma',reset:'kasa içeriğini silerek sıfırlama',delete:'kasayı ve tüm içeriğini silme'}
+    const labels:Record<string,string>={password:'kasa parolasını değiştirme',recover:'kasa erişimini kurtarma',delete:'kasayı ve tüm içeriğini silme'}
     const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json','Idempotency-Key':id},
       body:JSON.stringify({from,to:[email],subject:'Pomodolist · Güvenli kasa doğrulama kodu',text:`${labels[action]} işlemi için doğrulama kodunuz: ${code}\n\nKod 10 dakika geçerlidir. Bu işlemi siz başlatmadıysanız kodu paylaşmayın; hesap güvenliğinizi kontrol edin. Pomodolist sizden kasa parolanızı veya kurtarma anahtarınızı e-posta ile istemez.`})})
     if(!response.ok)throw Error('EMAIL_UNAVAILABLE')

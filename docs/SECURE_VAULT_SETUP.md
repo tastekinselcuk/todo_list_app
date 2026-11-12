@@ -48,7 +48,8 @@ Staging'de migration'ı uygulayın; gerçek içeriği bulunmayan ayrı deneme he
 
 ```powershell
 npx.cmd --no-install supabase db query --remote=saamxvuphakjpffvvcbj --file supabase/migrations/202611110001_vault_security.sql --yes
-npx.cmd --no-install supabase functions deploy vault-security --project-ref saamxvuphakjpffvvcbj --no-verify-jwt
+npx.cmd --no-install supabase db query --remote=saamxvuphakjpffvvcbj --file supabase/migrations/202611120001_vault_simplification.sql --yes
+npx.cmd --no-install supabase functions deploy vault-security --project-ref saamxvuphakjpffvvcbj --no-verify-jwt --yes
 ```
 
 Function JWT'yi Supabase Auth üzerinden doğrular. `verify_jwt=false`, kimlik denetiminin kaldırılması değildir. Başka servislerin JWT ayarlarını değiştirmeyin.
@@ -64,10 +65,12 @@ Yeni frontend'i aynı yayın penceresinde Netlify'a yayınlayın. Mevcut açık 
 - Eski v1 kasayı yedekleyip yükseltin. Tüm aktif/silinen kayıtlar korunmalı; yanlış parola veya sürüm çakışmasında yarım geçiş olmamalı.
 - Parola değiştirme, kurtarma anahtarını yenileme ve anahtarla erişim kurtarmada kod gerçek doğrulanmış hesap e-postasına gitmeli. E-posta/oturum değişmişse eski kod çalışmamalı.
 - Yanlış/süresi dolmuş/tüketilmiş kod, beş yanlış deneme, çoklu gönderim, owner/editor/viewer ve MFA gereksinimini deneyin.
-- Deneme kasasında silme/sıfırlama yalnızca seçili kasayı etkilemeli. Gerçek kullanıcı kasalarıyla test yapmayın.
+- Deneme kasasında silme yalnızca seçili kasayı etkilemeli. İçeriği silerek sıfırlama kaldırılmıştır; eski bekleyen sıfırlama kodları kullanılamamalı. Gerçek kullanıcı kasalarıyla test yapmayın.
 - Beş dakika boşta, bir dakika arka planda, modül değişiminde ve tarayıcı geri/ileri önbelleğinde kilidi; açık sırların 30 saniyede maskelendiğini kontrol edin.
 - Silme/geri alma, sürüm geri alma, başka tarayıcıda `.pvault` içe aktarma. Yedek mevcut kasayı ezmemeli; yanlış yedek parolası kayıt oluşturmamalı.
 - iPhone Safari'de e-posta kodu alma/dönme/otomatik kilit etkileşimini deneyin. Bir dakikadan uzun arka planda kalınırsa işlem yeniden başlatılabilir.
 - Gerçek veri sorumlusu/iletişim/sağlayıcı/aktarım belgeleri tamamlanmadan teknik bilgilendirmeyi tam hukuki aydınlatma veya sorumsuzluk beyanı saymayın.
 
 Üretim geri dönüşünde v2 verisini v1'e düşürmeyin; v2 okuyabilen frontend'i koruyun. Migration mevcut içerikleri kendiliğinden yükseltmez. Kullanıcıların v2'ye geçişinden sonra eski frontend güvenli geri dönüş seçeneği değildir.
+
+`202611120001_vault_simplification.sql`, eski kasalara yeni açık metin kayıt yazılmasını da engeller. Kullanıcı eski kasayı kendi parolasıyla yükseltmeden eski içerikler dönüştürülmüş sayılmaz. Kasa parolası, kurtarma anahtarı ve dışa aktarılan dosya yedeğinin farkları için [kullanım açıklamasına](GUVENLI_KASA_KULLANIMI.md) bakın.

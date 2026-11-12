@@ -40,6 +40,7 @@ test('v1 upgrade preserves encrypted history and rolls back incomplete history o
   await db.query('select seal_vault($1,$2,$3,$4,1,$5)',[session.id,session.password_hash,v1.metadata,JSON.stringify([{id:note.id,version:1,encrypted_payload:oldPayload}]),session.name])
   await db.exec('reset role;create role service_role')
   await db.exec(fs.readFileSync('supabase/migrations/202611110001_vault_security.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202611120001_vault_simplification.sql','utf8'))
   await as(owner);await db.query('select vault_acknowledge()')
   const edited={...await crypto.encryptVaultValue(v1.key,{title:'After edit'},session.id+':'+note.id),key_id:crypto.vaultKeyId(v1.metadata)}
   await db.query('update secure_notes set encrypted_payload=$1 where id=$2',[edited,note.id])
@@ -79,6 +80,9 @@ test('security endpoint verifies identity, ignores supplied recipients and store
  assert.equal((await handle(request({},'valid','https://evil.test'))).status,403)
  const result=await handle(request({action:'start',vaultId:sid,operation:'delete',version:1,email:'attacker@test',uid:'attacker'}))
  assert.equal(result.status,200);assert.equal(sent[0][0],'verified@example.test')
+ const beforeReset=calls.filter(([name])=>name==='vault_challenge_start').length
+ assert.equal((await handle(request({action:'start',vaultId:sid,operation:'reset',version:1}))).status,400)
+ assert.equal(calls.filter(([name])=>name==='vault_challenge_start').length,beforeReset)
  const start=calls.find(([name])=>name==='vault_challenge_start')[1]
  assert.equal(start.uid,uid);assert.equal(start.jwt_session,'session-1');assert.equal(start.otp_hash.length,64);assert.equal(JSON.stringify(start).includes(sent[0][1]),false)
  const response=await result.json()
@@ -100,13 +104,16 @@ test('database enforces owner email step-up, persisted acknowledgement, bounded 
  try{
   await db.exec("create role service_role; create table auth.sessions(id uuid primary key,user_id uuid); insert into auth.sessions values('dddddddd-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');")
   await db.exec(fs.readFileSync('supabase/migrations/202611110001_vault_security.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202611120001_vault_simplification.sql','utf8'))
   await db.exec(fs.readFileSync('supabase/migrations/202611110001_vault_security.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/202611120001_vault_simplification.sql','utf8'))
   await as(owner)
   const row=(await db.query('select * from password_sessions')).rows[0],note=(await db.query('select * from secure_notes')).rows[0]
   const sealed=await crypto.createRecoverableVault('secure vault password')
   const envelope={...await crypto.encryptVaultValue(sealed.key,{title:'Private'},row.id+':'+note.id),key_id:crypto.vaultKeyId(sealed.metadata)}
   await assert.rejects(db.query('select seal_vault($1,$2,$3,$4,1,$5)',[row.id,row.password_hash,sealed.metadata,JSON.stringify([{id:note.id,version:1,encrypted_payload:envelope}]),row.name]),/VAULT_ACK_REQUIRED/)
   await db.query('select vault_acknowledge()')
+  await assert.rejects(db.query("update secure_notes set content='Unencrypted overwrite' where id=$1",[note.id]),/VAULT_UPGRADE_REQUIRED/)
   await db.query('select vault_acknowledge()')
   assert.equal((await db.query('select count(*)::int n from vault_acknowledgements')).rows[0].n,1)
   await db.query('select seal_vault($1,$2,$3,$4,1,$5)',[row.id,row.password_hash,sealed.metadata,JSON.stringify([{id:note.id,version:1,encrypted_payload:envelope}]),row.name])
@@ -123,6 +130,7 @@ test('database enforces owner email step-up, persisted acknowledgement, bounded 
   const changed=await crypto.changeVaultPassword('secure vault password',sealed.metadata,'changed secure password'),challenge='bbbbbbbb-0000-0000-0000-000000000001'
   v=(await db.query('select version from password_sessions where id=$1',[row.id])).rows[0].version
   await db.exec('reset role')
+  await assert.rejects(db.query("select vault_challenge_start($1,$2,$3,'reset','dddddddd-0000-0000-0000-000000000001','mailmailmailmailmailmailmailmailmailmailmailmailmailmailmailmail','hashhashhashhashhashhashhashhashhashhashhashhashhashhashhashhash',$4,$5)",[owner,row.id,challenge,v,{metadata:changed.metadata}]),/VAULT_INVALID_DATA/)
   await db.query("select vault_challenge_start($1,$2,$3,'password','dddddddd-0000-0000-0000-000000000001','mailmailmailmailmailmailmailmailmailmailmailmailmailmailmailmail','hashhashhashhashhashhashhashhashhashhashhashhashhashhashhashhash',$4,$5)",[owner,row.id,challenge,v,{metadata:changed.metadata}])
   let result=await rpc("select vault_challenge_finish($1,$2,'different','mailmailmailmailmailmailmailmailmailmailmailmailmailmailmailmail','hashhashhashhashhashhashhashhashhashhashhashhashhashhashhashhash') result",[owner,challenge]);assert.equal(result.error,'INVALID_CODE')
   for(let i=0;i<5;i++)await db.query("select vault_challenge_finish($1,$2,'dddddddd-0000-0000-0000-000000000001','mailmailmailmailmailmailmailmailmailmailmailmailmailmailmailmail','bad')",[owner,challenge])

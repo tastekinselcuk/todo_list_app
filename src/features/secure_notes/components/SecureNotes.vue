@@ -5,12 +5,12 @@
         <form v-if="isOwner" class="workspace-toolbar vault-create-form" @submit.prevent="handleInlineAddSession">
           <input v-model="inlineSessionName" type="text" maxlength="100" :placeholder="$t('secure.sessionNamePlaceholder')" :aria-label="$t('secure.sessionNamePlaceholder')" class="vault-field" :disabled="isLoading" />
           <button type="submit" class="workspace-add-button" :disabled="!inlineSessionName.trim() || isLoading"><Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{{ $t('common.add') }}</button>
-          <button v-if="isOwner" type="button" class="text-xs text-muted-foreground hover:text-foreground" @click="manager?.open('import')">{{ $t('vault.import') }}</button>
+          <button v-if="isOwner" type="button" class="vault-control" @click="manager?.open('import')"><Upload class="h-3.5 w-3.5"/>{{ $t('vault.import') }}</button>
         </form>
         <div v-if="passwordSessions.length" class="vault-grid">
           <button v-for="session in passwordSessions" :key="session.id" type="button" class="workspace-card vault-session" @click="promptSessionUnlock(session)">
             <span class="vault-session-lock"><Lock class="h-4 w-4" /></span>
-            <span class="min-w-0 flex-1"><span class="block truncate text-[13px] font-medium text-foreground">{{ session.name }}</span><span class="mt-1 block text-[11px] text-muted-foreground">{{ $t('secure.passwordProtected') }}</span></span>
+            <span class="min-w-0 flex-1"><span class="block truncate text-[13px] font-medium text-foreground">{{ session.name }}</span><span class="mt-1 block text-[11px]" :class="isSealedVault(session.password_hash)?'text-muted-foreground':'text-primary'">{{ $t(isSealedVault(session.password_hash)?'secure.passwordProtected':'vault.upgradeRequired') }}</span></span>
             <ChevronRight class="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
           </button>
         </div>
@@ -23,14 +23,14 @@
             <CustomSelect v-model="noteDraftType" :options="noteTypeOptions" :aria-label="$t('secure.type')" size="md" class="w-full min-w-0" :disabled="isLoading" />
             <button type="submit" class="workspace-add-button" :disabled="isLoading||!noteDraftTitle.trim()">{{ $t('common.add') }}</button>
           </form>
-          <div class="flex flex-wrap items-center gap-2 border-b border-border/50 pb-2.5">
-            <CustomSelect :model-value="currentSession?.id || ''" @update:model-value="switchVault" :options="vaultOptions" :aria-label="$t('secure.chooseVault')" variant="ghost" size="sm" class="max-w-[200px] flex-1 sm:flex-none" :disabled="isLoading" />
-            <span class="text-[11px] tabular-nums text-muted-foreground">{{ $t('secure.recordCount',{count:visibleNotes.length}) }}</span>
-            <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="showDeleted=!showDeleted">{{ $t(showDeleted?'vault.active':'vault.deleted') }}</button>
+          <div class="relative z-20 flex flex-wrap items-center gap-2">
+            <CustomSelect :model-value="currentSession?.id || ''" @update:model-value="switchVault" :options="vaultOptions" :aria-label="$t('secure.chooseVault')" size="sm" class="vault-selector w-40 max-w-full" :disabled="isLoading" popover />
+            <button type="button" class="vault-control" :class="{'is-active':showDeleted}" :aria-pressed="showDeleted" :disabled="isLoading" @click="showDeleted=!showDeleted"><Trash2 class="h-3.5 w-3.5"/>{{ $t('vault.deleted') }}</button>
+            <span class="px-1 text-[11px] tabular-nums text-muted-foreground">{{ $t('secure.recordCount',{count:visibleNotes.length}) }}</span>
             <div class="ml-auto flex items-center gap-1">
-              <button v-if="canWrite" type="button" class="vault-icon" :disabled="isLoading" :aria-label="$t('secure.editSession')" :title="$t('secure.editSession')" @click="editSession(currentSession!)"><Edit class="h-3.5 w-3.5" /></button>
-              <button v-if="isOwner" type="button" class="vault-icon" :disabled="isLoading" :aria-label="$t('vault.manage')" :title="$t('vault.manage')" @click="openManagement"><ShieldCheck class="h-3.5 w-3.5" /></button>
-              <button type="button" class="vault-icon" :aria-label="$t('secure.lockVault')" :title="$t('secure.lockVault')" @click="logout"><Lock class="h-3.5 w-3.5" /></button>
+              <button v-if="canWrite" type="button" class="vault-icon vault-action" :disabled="isLoading" :aria-label="$t('secure.editSession')" :title="$t('secure.editSession')" @click="editSession(currentSession!)"><Edit class="h-3.5 w-3.5" /></button>
+              <button v-if="isOwner" type="button" class="vault-icon vault-action" :disabled="isLoading" :aria-label="$t('vault.manage')" :title="$t('vault.manage')" @click="openManagement"><ShieldCheck class="h-3.5 w-3.5" /></button>
+              <button type="button" class="vault-icon vault-action" :aria-label="$t('secure.lockVault')" :title="$t('secure.lockVault')" @click="logout"><Lock class="h-3.5 w-3.5" /></button>
             </div>
           </div>
         </div>
@@ -47,7 +47,7 @@
     </div></VaultNotice>
     <VaultManager ref="manager" @changed="vaultChanged"/>
 
-    <dialog @cancel.prevent="closeUnlockDialog" :aria-label="$t('secure.accessSessionTitle',{name:selectedSessionForUnlock?.name})" ref="unlockDialog" class="w-[90vw] max-w-sm vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
+    <dialog @cancel.prevent="closeUnlockDialog" :aria-label="$t('secure.accessSessionTitle',{name:selectedSessionForUnlock?.name})" ref="unlockDialog" class="note-edit-dialog vault-dialog vault-small-dialog space-y-4">
       <div class="text-center space-y-2 mb-2">
         <h2 class="text-sm font-medium text-foreground">{{ $t('secure.accessSessionTitle', { name: selectedSessionForUnlock?.name }) }}</h2>
       </div>
@@ -71,8 +71,8 @@
         </div>
         
         <div class="flex gap-2">
-          <button type="button" @click="closeUnlockDialog" class="flex-1 h-10 rounded-xl bg-muted/50 hover:bg-muted font-semibold text-xs transition-colors">{{ $t('secure.cancel') }}</button>
-          <button type="submit" class="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-sm hover:bg-primary/90 flex items-center justify-center gap-2 transition-all" :disabled="isLoading || !unlockPassword">
+          <button type="button" @click="closeUnlockDialog" class="flex-1 h-10 rounded-xl bg-muted/50 hover:bg-muted font-medium text-xs transition-colors">{{ $t('secure.cancel') }}</button>
+          <button type="submit" class="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-medium text-xs shadow-sm hover:bg-primary/90 flex items-center justify-center gap-2 transition-all" :disabled="isLoading || !unlockPassword">
             <Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin" />
             <span v-else>{{ $t('secure.accessSessionBtn') }}</span>
           </button>
@@ -81,79 +81,40 @@
       </form>
     </dialog>
 
-    <dialog @dblclick="event=>{if(!isLoading && isDialogBackdropDoubleClick(event))closeNoteDialog()}" @cancel.prevent="!isLoading && closeNoteDialog()" :aria-label="$t(editingNote.id ? 'secure.editSecureNote' : 'secure.addSecureNote')" ref="noteDialog" class="w-[90vw] max-w-lg vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
-      <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
-        <h2 class="text-sm font-medium">{{ editingNote.id ? $t('secure.editSecureNote') : $t('secure.addSecureNote') }}</h2>
-        <button :disabled="isLoading" @click="closeNoteDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
-      </div>
-
-      <form @submit.prevent="saveNote" :data-shared-editing="showAddNoteDialog" class="space-y-5">
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5 col-span-2 sm:col-span-1">
-            <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.title') }}</label>
-            <input v-model="editingNote.title" type="text" maxlength="160" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
+    <dialog ref="noteDialog" class="note-edit-dialog vault-dialog vault-record-dialog" :aria-label="$t(editingNote.id?'secure.editSecureNote':'secure.addSecureNote')" :closedby="isLoading?'none':'closerequest'" @dblclick="event=>{if(!isLoading&&isDialogBackdropDoubleClick(event))closeNoteDialog()}" @cancel.prevent="!isLoading&&closeNoteDialog()">
+      <form class="vault-dialog-layout" :data-shared-editing="showAddNoteDialog" @submit.prevent="saveNote">
+        <header class="vault-dialog-header">
+          <h2 class="flex items-center gap-2.5 text-[13px] font-medium"><Lock class="h-4 w-4 text-muted-foreground"/>{{ $t(editingNote.id?'secure.editSecureNote':'secure.addSecureNote') }}</h2>
+          <button type="button" class="vault-icon" :disabled="isLoading" :aria-label="$t('common.close')" @click="closeNoteDialog"><X class="h-4 w-4"/></button>
+        </header>
+        <div class="vault-dialog-body space-y-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
+            <label class="vault-label">{{ $t('secure.title') }}<input v-model="editingNote.title" type="text" maxlength="160" class="secure-field" required :disabled="isLoading"/></label>
+            <div class="vault-label"><span>{{ $t('secure.type') }}</span><CustomSelect :model-value="editingNote.type" @update:model-value="editingNote.type=$event as 'password'|'secret'" :options="noteTypeOptions" :aria-label="$t('secure.type')" :disabled="isLoading" size="md" class="secure-type-select mt-2" popover/></div>
           </div>
-          <div class="space-y-1.5 col-span-2 sm:col-span-1">
-            <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.type') }}</label>
-            <CustomSelect
-              :modelValue="editingNote.type"
-              @update:modelValue="editingNote.type = $event as 'password' | 'secret'"
-              :options="noteTypeOptions"
-              size="md"
-              class="secure-type-select h-11"
-            />
-          </div>
-        </div>
-        
-        <div class="space-y-1.5">
-          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.descriptionOptional') }}</label>
-          <input v-model="editingNote.description" type="text" maxlength="2000" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
-        </div>
-        
-        <div v-if="editingNote.type === 'password'" class="space-y-4 p-5 rounded-2xl bg-muted/30 border border-border/40">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.username') }}</label>
-              <input v-model="editingNote.username" type="text" maxlength="500" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.password') }}</label>
-              <div class="relative">
-                <input v-model="editingNote.password_encrypted" :type="showDialogPassword ? 'text' : 'password'" maxlength="1024" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 pr-10 text-sm font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="new-password" />
-                <button type="button" @click="showDialogPassword = !showDialogPassword" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
-                  <Eye v-if="showDialogPassword" class="h-3.5 w-3.5" />
-                  <EyeOff v-else class="h-3.5 w-3.5" />
-                </button>
+          <label class="vault-label">{{ $t('secure.descriptionOptional') }}<input v-model="editingNote.description" type="text" maxlength="2000" class="secure-field" :disabled="isLoading"/></label>
+          <template v-if="editingNote.type==='password'">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label class="vault-label">{{ $t('secure.username') }}<input v-model="editingNote.username" type="text" maxlength="500" class="secure-field" autocomplete="off" :disabled="isLoading"/></label>
+              <div class="vault-label">
+                <label for="vault-record-password">{{ $t('secure.password') }}</label>
+                <div class="relative mt-2"><input id="vault-record-password" v-model="editingNote.password_encrypted" :type="showDialogPassword?'text':'password'" maxlength="1024" class="secure-field !mt-0 pr-11 font-mono" autocomplete="new-password" :disabled="isLoading"/><button type="button" class="vault-icon absolute right-1 top-1" :aria-label="$t(showDialogPassword?'secure.hidePassword':'secure.showPassword')" :aria-pressed="showDialogPassword" @click="showDialogPassword=!showDialogPassword"><Eye v-if="showDialogPassword" class="h-3.5 w-3.5"/><EyeOff v-else class="h-3.5 w-3.5"/></button></div>
               </div>
             </div>
+            <label class="vault-label">{{ $t('secure.urlOptional') }}<input v-model="editingNote.url" type="url" maxlength="2048" class="secure-field" autocomplete="off" :disabled="isLoading"/></label>
+            <button type="button" class="vault-control" :disabled="isLoading" @click="editingNote.password_encrypted=generateVaultPassword()"><Sparkles class="h-3.5 w-3.5"/>{{ $t('vault.generate') }}</button>
+          </template>
+          <label v-else class="vault-label">{{ $t('secure.content') }}<textarea v-model="editingNote.content" maxlength="100000" class="secure-field vault-secret-content" required :disabled="isLoading"/></label>
+          <div v-if="editingNote.id" class="space-y-2 border-t border-border/50 pt-3">
+            <button type="button" class="vault-control" :aria-expanded="historyOpen" :disabled="isLoading" @click="historyOpen?historyOpen=false:loadHistory()"><History class="h-3.5 w-3.5"/>{{ $t('vault.history') }}</button>
+            <template v-if="historyOpen"><p class="text-[11px] leading-5 text-muted-foreground">{{ $t('vault.historyHint') }}</p><p v-if="!noteHistory.length" class="text-xs text-muted-foreground">{{ $t('vault.noHistory') }}</p><button v-for="version in noteHistory" :key="version.id" type="button" class="flex w-full justify-between rounded-lg border border-border/60 px-3 py-2 text-xs" :disabled="isLoading" @click="restoreHistory(version.id)"><span>{{ new Date(version.saved_at).toLocaleString() }}</span><span>{{ $t('vault.restore') }}</span></button></template>
           </div>
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.urlOptional') }}</label>
-            <input v-model="editingNote.url" type="url" maxlength="2048" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" autocomplete="off" />
-          </div>
-          <button type="button" class="text-xs text-muted-foreground hover:text-foreground" @click="editingNote.password_encrypted=generateVaultPassword()">{{ $t('vault.generate') }}</button>
         </div>
-        
-        <div v-else class="space-y-1.5">
-          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.content') }}</label>
-          <textarea v-model="editingNote.content" maxlength="100000" class="secure-field w-full rounded-xl border border-border/50 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-none font-mono" required></textarea>
-        </div>
-        
-        <div v-if="editingNote.id" class="space-y-2 border-t border-border/50 pt-3">
-          <button type="button" class="text-xs text-muted-foreground hover:text-foreground" @click="loadHistory">{{ $t('vault.history') }}</button>
-          <template v-if="historyOpen"><p class="text-[11px] leading-5 text-muted-foreground">{{ $t('vault.historyHint') }}</p><p v-if="!noteHistory.length" class="text-xs text-muted-foreground">{{ $t('vault.noHistory') }}</p><button v-for="version in noteHistory" :key="version.id" type="button" class="flex w-full justify-between rounded-lg border border-border/60 px-3 py-2 text-xs" :disabled="isLoading" @click="restoreHistory(version.id)"><span>{{ new Date(version.saved_at).toLocaleString() }}</span><span>{{ $t('vault.restore') }}</span></button></template>
-        </div>
-        <div class="flex justify-end gap-3 pt-4">
-          <button type="button" :disabled="isLoading" @click="closeNoteDialog" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted transition-colors">{{ $t('secure.cancel') }}</button>
-          <button type="submit" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
-            <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
-            <span v-else>{{ editingNote.id ? $t('secure.updateNote') : $t('secure.createNote') }}</span>
-          </button>
-        </div>
+        <footer class="vault-dialog-footer"><button type="button" class="vault-control" :disabled="isLoading" @click="closeNoteDialog">{{ $t('secure.cancel') }}</button><button type="submit" class="vault-submit" :disabled="isLoading||!editingNote.title.trim()"><Loader2 v-if="isLoading" class="h-3.5 w-3.5 animate-spin"/>{{ $t(editingNote.id?'secure.updateNote':'secure.createNote') }}</button></footer>
       </form>
     </dialog>
 
-    <dialog @cancel.prevent="closePasswordVerification" :aria-label="$t('secure.verifyPasswordTitle')" ref="passwordVerificationDialog" class="w-[90vw] max-w-sm vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
+    <dialog @cancel.prevent="closePasswordVerification" :aria-label="$t('secure.verifyPasswordTitle')" ref="passwordVerificationDialog" class="note-edit-dialog vault-dialog vault-small-dialog space-y-4">
       <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
         <h2 class="text-sm font-medium">{{ $t('secure.verifyPasswordTitle') }}</h2>
         <button @click="closePasswordVerification" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
@@ -162,7 +123,7 @@
       <div class="space-y-5">
         <p class="text-sm font-medium text-muted-foreground/80 leading-relaxed">{{ $t('secure.verifyPasswordDesc') }}</p>
         <div class="space-y-1.5">
-          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.currentPassword') }}</label>
+          <label class="text-xs font-medium text-muted-foreground ml-1">{{ $t('secure.currentPassword') }}</label>
           <div class="relative">
             <input
               v-model="verificationPassword"
@@ -179,8 +140,8 @@
         </div>
         <p v-if="verificationError" role="alert" class="text-xs text-destructive">{{ verificationError }}</p>
         <div class="flex justify-end gap-3 pt-4">
-          <button type="button" @click="closePasswordVerification" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
-          <button @click="verifyPassword" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isVerifyingPassword">
+          <button type="button" @click="closePasswordVerification" class="px-5 py-2.5 rounded-xl font-medium text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
+          <button @click="verifyPassword" class="px-6 py-2.5 rounded-xl font-medium text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isVerifyingPassword">
             <Loader2 v-if="isVerifyingPassword" class="w-4 h-4 animate-spin" />
             <span v-else>{{ $t('secure.verifyPasswordBtn') }}</span>
           </button>
@@ -188,7 +149,7 @@
       </div>
     </dialog>
       
-    <dialog @dblclick="event=>{if(!isLoading && isDialogBackdropDoubleClick(event))closeSessionDialog()}" @cancel.prevent="!isLoading && closeSessionDialog()" :aria-label="$t('secure.editSession')" ref="sessionDialog" class="w-[90vw] max-w-sm vault-dialog rounded-2xl border border-border/60 bg-card text-card-foreground shadow-2xl p-4 sm:p-5 space-y-4">
+    <dialog @dblclick="event=>{if(!isLoading && isDialogBackdropDoubleClick(event))closeSessionDialog()}" @cancel.prevent="!isLoading && closeSessionDialog()" :aria-label="$t('secure.editSession')" ref="sessionDialog" class="note-edit-dialog vault-dialog vault-small-dialog space-y-4">
       <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
         <h2 class="text-sm font-medium">{{ $t('secure.editSessionTitle') }}</h2>
         <button :disabled="isLoading" @click="closeSessionDialog" class="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"><X class="w-5 h-5" /></button>
@@ -196,12 +157,12 @@
 
       <form @submit.prevent="saveSession" :data-shared-editing="showSessionDialog" class="space-y-5">
         <div class="space-y-1.5">
-          <label class="text-xs font-semibold text-muted-foreground ml-1">{{ $t('secure.sessionName') }}</label>
+          <label class="text-xs font-medium text-muted-foreground ml-1">{{ $t('secure.sessionName') }}</label>
           <input v-model="editingSession.name" type="text" class="secure-field w-full h-11 rounded-xl border border-border/50 bg-background/50 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" required />
         </div>
         <div class="flex justify-end gap-3 pt-4">
-          <button type="button" :disabled="isLoading" @click="closeSessionDialog" class="px-5 py-2.5 rounded-xl font-semibold text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
-          <button type="submit" class="px-6 py-2.5 rounded-xl font-bold text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
+          <button type="button" :disabled="isLoading" @click="closeSessionDialog" class="px-5 py-2.5 rounded-xl font-medium text-sm bg-muted/50 hover:bg-muted text-foreground transition-colors">{{ $t('secure.cancel') }}</button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl font-medium text-sm bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2" :disabled="isLoading">
             <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
             <span v-else>{{ $t('secure.updateSessionBtn') }}</span>
           </button>
@@ -215,7 +176,7 @@
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { ref, shallowRef, computed, onBeforeUnmount, onDeactivated, onMounted, onActivated, watch } from 'vue'
-import { Lock, Eye, EyeOff, Edit, X, Loader2, ChevronRight, ShieldCheck } from 'lucide-vue-next'
+import { Lock, Eye, EyeOff, Edit, X, Loader2, ChevronRight, ShieldCheck, Upload, Trash2, Sparkles, History } from 'lucide-vue-next'
 import { useWorkspaceClient } from '@/lib/workspaceScope'
 import { unlockVaultKey, encryptVaultValue, decryptVaultValue, isSealedVault, isRecoverableVault, vaultKeyId, generateVaultPassword } from '@/lib/vaultCrypto'
 import { useAuthStore } from '@/stores/auth'
@@ -324,6 +285,7 @@ const handleInlineAddSession = () => {
   manager.value?.open('create',null,inlineSessionName.value.trim())
 }
 const promptSessionUnlock = (session: PasswordSession) => {
+  if(isOwner.value&&!isSealedVault(session.password_hash)){manager.value?.open('upgrade',session);return}
   selectedSessionForUnlock.value = session; unlockPassword.value = ''; showUnlockPassword.value = false; unlockDialog.value?.showModal()
 }
 const closeUnlockDialog = () => { selectedSessionForUnlock.value = null; unlockPassword.value = ''; unlockDialog.value?.close() }
@@ -482,17 +444,22 @@ onBeforeUnmount(()=>{active=false;if(lockTimer)clearInterval(lockTimer);document
 .vault-dialog { max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; }
 .vault-dialog::backdrop { background:hsl(var(--background)/.75); backdrop-filter:blur(6px); }
 
-.secure-field::placeholder {
-  color: hsl(var(--muted-foreground) / 0.38);
-  font-weight: 400;
-}
-
-.secure-type-select :deep(button) {
-  height: 2.75rem;
-  min-height: 2.75rem;
-  background-color: hsl(var(--background) / 0.5);
-  border-color: hsl(var(--border) / 0.5);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
+.vault-control { @apply inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border/70 bg-card/60 px-3 text-xs font-medium text-muted-foreground shadow-[0_1px_2px_rgb(15,23,42,0.025)] transition-colors hover:border-border hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-40; }
+.vault-control.is-active { @apply border-primary/20 bg-primary/[0.06] text-primary; }
+.vault-action { @apply border border-border/60 bg-card/60; }
+.vault-selector :deep(.select-trigger) { height:36px; border-color:hsl(var(--border)/.7); border-radius:12px; }
+.vault-dialog { height:auto; border-radius:18px; }
+.vault-small-dialog { max-width:400px; padding:20px; }
+.vault-small-dialog .secure-field { margin-top:0; }
+.vault-record-dialog { max-width:640px; padding:0; overflow:hidden; }
+.vault-dialog-layout { display:flex; flex-direction:column; min-height:0; max-height:calc(100dvh - 48px); }
+.vault-dialog-header { @apply flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-5 py-4; }
+.vault-dialog-body { @apply min-h-0 overflow-y-auto px-5 py-5; }
+.vault-dialog-footer { @apply flex shrink-0 items-center justify-end gap-2 border-t border-border/50 px-5 py-4; }
+.vault-label { @apply block text-[11px] font-medium text-muted-foreground; }
+.secure-field { @apply mt-2 h-10 w-full min-w-0 rounded-xl border border-border/60 bg-background/50 px-3 text-[13px] font-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 disabled:opacity-50; }
+.vault-secret-content { height:160px; min-height:120px; padding-top:10px; padding-bottom:10px; resize:vertical; }
+.secure-type-select :deep(.select-trigger) { height:40px; min-height:40px; font-size:13px; font-weight:400; }
+.vault-submit { @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40; }
+@media(max-width:639px){.vault-record-dialog{width:calc(100vw - 24px)}.vault-dialog-layout{max-height:calc(100dvh - 32px)}.vault-dialog-header,.vault-dialog-footer{padding:14px 16px}.vault-dialog-body{padding:16px}}
 </style>
