@@ -18,27 +18,35 @@ const matches = computed(() => store.available.filter(item =>
   item.name.toLocaleLowerCase().includes(query.value.toLocaleLowerCase())))
 
 function close() { if(open.value)emit('open-change',false);open.value = false; query.value = '' }
-async function toggle() {
-  if (open.value) { close(); return }
-  const rect = trigger.value!.getBoundingClientRect()
+function updatePosition() {
+  if (!trigger.value) return
+  const rect = trigger.value.getBoundingClientRect()
   const width = Math.min(300, window.innerWidth - 24)
   position.value = {
     top: `${rect.bottom + 8}px`,
     left: `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`,
     width: `${width}px`,
   }
+}
+async function toggle(event: MouseEvent) {
+  if (open.value) { close(); return }
+  updatePosition()
   open.value = true
   emit('open-change',true)
   await nextTick()
-  if(open.value)search.value?.focus({preventScroll:true})
+  if (!open.value) return
+  const useSearch = event.detail === 0 || window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)').matches
+  const focusTarget = useSearch ? search.value : popover.value?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+  focusTarget?.focus({ preventScroll: true })
 }
 function select(id: string) { close(); store.switchTo(id); trigger.value?.focus();emit('select',id) }
 function outside(event: Event) {
   if (!trigger.value?.contains(event.target as Node) && !popover.value?.contains(event.target as Node)) close()
 }
 function scroll(event: Event) {
-  if (!(event.target instanceof Node) || !popover.value?.contains(event.target)) close()
+  if (open.value && (!(event.target instanceof Node) || !popover.value?.contains(event.target))) updatePosition()
 }
+function resize() { if (open.value) updatePosition() }
 function focusOutside(event:FocusEvent){if(open.value)outside(event)}
 function move(event:KeyboardEvent){
   if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
@@ -52,13 +60,13 @@ function move(event:KeyboardEvent){
 }
 document.addEventListener('pointerdown', outside)
 document.addEventListener('focusin',focusOutside)
-window.addEventListener('resize', close)
+window.addEventListener('resize', resize)
 window.addEventListener('scroll', scroll, true)
 onBeforeUnmount(() => {
   close()
   document.removeEventListener('pointerdown', outside)
   document.removeEventListener('focusin',focusOutside)
-  window.removeEventListener('resize', close)
+  window.removeEventListener('resize', resize)
   window.removeEventListener('scroll', scroll, true)
 })
 defineExpose({close})

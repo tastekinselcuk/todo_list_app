@@ -103,6 +103,36 @@ test('mobile navigation stays simple and its workspace menu is rendered inside t
  }finally{f.close()}
 })
 
+test('touch opening the workspace menu avoids the keyboard and viewport changes keep its choices available',async()=>{
+ const f=fixture({mobile:true})
+ try{
+  f.doc.querySelector('.rail-mobile-trigger').click()
+  await f.flush()
+  const drawer=f.doc.querySelector('.rail-drawer')
+  const trigger=drawer.querySelector('[aria-label="workspaces.switch"]')
+  trigger.dispatchEvent(new f.dom.window.MouseEvent('click',{bubbles:true,detail:1}))
+  await f.flush()
+  const menu=drawer.querySelector('.workspace-picker-menu')
+  assert.ok(menu)
+  assert.equal(f.doc.activeElement,menu.querySelector('[aria-pressed="true"]'))
+  assert.notEqual(f.doc.activeElement,menu.querySelector('input'))
+  const input=menu.querySelector('input')
+  input.focus()
+  f.dom.window.dispatchEvent(new f.dom.window.Event('resize'))
+  f.dom.window.dispatchEvent(new f.dom.window.Event('scroll'))
+  await f.flush()
+  assert.equal(drawer.querySelector('.workspace-picker-menu'),menu)
+  assert.equal(f.doc.activeElement,input)
+  input.value='Ürün'
+  input.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}))
+  await f.flush()
+  menu.querySelector('[data-workspace]').click()
+  await f.flush()
+  assert.equal(f.workspaces.activeId,'team')
+  assert.equal(drawer.open,false)
+ }finally{f.close()}
+})
+
 
 test('the same desktop rail keeps its pin and entries while only the active page changes',async()=>{
  const f=fixture();try{
