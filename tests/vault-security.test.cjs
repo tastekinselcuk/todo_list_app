@@ -117,6 +117,9 @@ test('database enforces owner email step-up, persisted acknowledgement, bounded 
   await db.query('select vault_acknowledge()')
   assert.equal((await db.query('select count(*)::int n from vault_acknowledgements')).rows[0].n,1)
   await db.query('select seal_vault($1,$2,$3,$4,1,$5)',[row.id,row.password_hash,sealed.metadata,JSON.stringify([{id:note.id,version:1,encrypted_payload:envelope}]),row.name])
+  await db.exec('reset role')
+  await db.exec(fs.readFileSync('supabase/migrations/202611140004_vault_storage_constraints.sql','utf8'))
+  await as(owner)
   await assert.rejects(db.query('delete from password_sessions where id=$1',[row.id]),/VAULT_EMAIL_REQUIRED/)
   await assert.rejects(db.query('update password_sessions set password_hash=$1 where id=$2',[sealed.metadata+' ',row.id]),/VAULT_EMAIL_REQUIRED/)
   const n=(await db.query('select * from secure_notes where id=$1',[note.id])).rows[0]
