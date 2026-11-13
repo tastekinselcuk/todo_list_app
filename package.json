@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "test": "node --test --test-concurrency=2 tests/*.test.cjs",
+    "verify": "npm test && npm run build",
+    "check:database": "node scripts/check-database.mjs",
+    "release": "npm run check:database && npm run verify",
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview"
