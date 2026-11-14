@@ -12,6 +12,7 @@
     "db:initialize": "node scripts/initialize-database.mjs",
     "maintenance:configure": "node scripts/configure-maintenance.mjs",
     "check:production": "node scripts/check-production.mjs",
+    "check:staging": "node scripts/check-staging.mjs",
     "release": "npm run check:database && npm run verify",
     "dev": "vite",
     "build": "vue-tsc && vite build",
