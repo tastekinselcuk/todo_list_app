@@ -283,29 +283,33 @@ export function useWorkspaceClient() {
           select(columns: string = '*') { return observed(supabase.from(table).select(columns).eq('collection_id', binding.collection_id), 'select') },
           insert(values: Record<string, unknown> | Record<string, unknown>[]) {
             assertWritable(tableModules[table]!)
+            if(table==='password_sessions'||table==='secure_notes')throw Error('VAULT_RPC_REQUIRED')
             const stamp = (value: Record<string, unknown>) => ({ ...personalReminders(value), collection_id: binding.collection_id, workspace_id: binding.origin_workspace_id, [owner]: userId })
             return observed(supabase.from(table).insert(Array.isArray(values) ? values.map(stamp) : stamp(values)), 'insert')
           },
           update(values: Record<string, unknown>) {
             assertWritable(tableModules[table]!)
+            if(table==='password_sessions'||table==='secure_notes')throw Error('VAULT_RPC_REQUIRED')
             if ('collection_id' in values || 'workspace_id' in values || owner in values) throw new Error('Record ownership cannot be changed')
             const { version, ...changes } = values
             return observed(supabase.from(table).update(personalReminders(changes)).eq('collection_id', binding.collection_id).select('*'), 'update', version === undefined ? undefined : Number(version))
           },
-          delete(options?:{silent?:boolean}) { assertWritable(tableModules[table]!); return supportsTrash(table)?softDelete(table,!options?.silent):observed(supabase.from(table).delete().eq('collection_id', binding.collection_id).select('*'), 'delete') },
+          delete(options?:{silent?:boolean}) { assertWritable(tableModules[table]!);if(table==='password_sessions'||table==='secure_notes')throw Error('VAULT_RPC_REQUIRED'); return supportsTrash(table)?softDelete(table,!options?.silent):observed(supabase.from(table).delete().eq('collection_id', binding.collection_id).select('*'), 'delete') },
         }
       }
       return {
         select(columns: '*' = '*') { return personalRead(table,supabase.from(table).select(columns).eq('workspace_id', workspaceId).eq(owner, userId)) },
         insert(values: Record<string, unknown> | Record<string, unknown>[]) {
+          if(table==='password_sessions'||table==='secure_notes')throw Error('VAULT_RPC_REQUIRED')
           const stamp = (value: Record<string, unknown>) => ({ ...value, workspace_id: workspaceId, [owner]: userId })
           return personalRead(table,supabase.from(table).insert(Array.isArray(values) ? values.map(stamp) : stamp(values)))
         },
         update(values: Record<string, unknown>) {
+          if(table==='password_sessions'||table==='secure_notes')throw Error('VAULT_RPC_REQUIRED')
           if ('workspace_id' in values || owner in values) throw new Error('Record ownership cannot be changed')
           return personalRead(table,supabase.from(table).update(values).eq('workspace_id', workspaceId).eq(owner, userId).select('*'))
         },
-        delete(options?:{silent?:boolean}) { return supportsTrash(table)?softDelete(table,!options?.silent):supabase.from(table).delete().eq('workspace_id', workspaceId).eq(owner, userId) },
+        delete(options?:{silent?:boolean}) {if(table==='password_sessions'||table==='secure_notes')throw Error('VAULT_RPC_REQUIRED'); return supportsTrash(table)?softDelete(table,!options?.silent):supabase.from(table).delete().eq('workspace_id', workspaceId).eq(owner, userId) },
       }
     },
     listen(callbacks: Record<string, () => unknown | Promise<unknown>>, busy: () => boolean = () => false) {

@@ -120,7 +120,10 @@ try{
  const saved=requireStatus(await request(rest,'/rpc/vault_note_save',verified.access_token,{sid:vaultId,nid:noteId,payload,expected_version:null,expected_session_version:renamed.version}),200)
  if(saved.title!=='Encrypted note'||(await vault.decryptVaultValue(sealed.key,saved.encrypted_payload,vaultId+':'+noteId)).title!=='Encrypted staging proof')throw Error('STAGING_VAULT_CIPHERTEXT_FAILED')
  const forbidden=await request(rest,'/rpc/vault_note_save',other.access_token,{sid:vaultId,nid:crypto.randomUUID(),payload,expected_version:null,expected_session_version:renamed.version})
- if(![400,403].includes(forbidden.status)||forbidden.data?.message!=='ACCESS_DENIED')throw Error('STAGING_VAULT_OWNERSHIP_FAILED');proof.vault=true
+ if(![400,403].includes(forbidden.status)||forbidden.data?.message!=='ACCESS_DENIED')throw Error('STAGING_VAULT_OWNERSHIP_FAILED')
+ const rawWrite=await request(rest,'/secure_notes?id=eq.'+noteId,verified.access_token,{title:'must be rejected'},'PATCH')
+ if(rawWrite.status!==403||requireStatus(await request(rest,'/rpc/application_vault_writes_ready',anon,{}),200)!==true)throw Error('STAGING_VAULT_DIRECT_WRITE_ALLOWED')
+ proof.vault=true
  stage='Storage round trip'
  requireStatus(await request(storage,'/bucket',service,{id:'restore-check',name:'restore-check',public:false}),200)
  const bytes=crypto.randomBytes(1024),object='/object/restore-check/proof.bin'

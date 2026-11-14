@@ -148,6 +148,15 @@ test('every module scopes reads, updates and deletes, and stamps inserts with it
   const tables = ['categories','todos','quick_notes','code_snippets','password_sessions','secure_notes','plans','periodic_tasks','activity_items','learning_subjects','flashcard_decks','workout_routines']
   for (const table of tables) {
     await client.from(table).select('*')
+    if(['password_sessions','secure_notes'].includes(table)){
+      assert.throws(()=>client.from(table).insert({}),/VAULT_RPC_REQUIRED/)
+      assert.throws(()=>client.from(table).update({}),/VAULT_RPC_REQUIRED/)
+      assert.throws(()=>client.from(table).delete(),/VAULT_RPC_REQUIRED/)
+      const read=f.requests.find(request=>request.table===table)
+      assert.ok(read.filters.some(([key,value])=>key==='workspace_id'&&value==='personal'))
+      assert.ok(read.filters.some(([key,value])=>key==='created_by'&&value==='owner'))
+      continue
+    }
     await client.from(table).update({ title: 'changed' }).eq('id', 'one')
     await client.from(table).delete().eq('id', 'one')
     await client.from(table).insert({ title: 'new', workspace_id: 'work', user_id: 'intruder', created_by: 'intruder' })

@@ -3107,6 +3107,7 @@ export type Database = {
         Returns: boolean
       }
       application_security_ready: { Args: never; Returns: boolean }
+      application_vault_writes_ready: { Args: never; Returns: boolean }
       check_api_budget: { Args: never; Returns: undefined }
       check_session_security: { Args: never; Returns: undefined }
       claim_due_periodic_emails: {
