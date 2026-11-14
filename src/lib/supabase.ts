@@ -1,5 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createSharedAuthStorage } from './authStorage'
+import type { Database } from './database.types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -13,6 +14,10 @@ export const authSessionStorage = createSharedAuthStorage(undefined, undefined, 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { storage: authSessionStorage, storageKey: authStorageKey, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
 })
+
+// One SDK instance and one session; typed contracts can be adopted incrementally
+// without pretending existing dynamic workspace proxies are already typed.
+export const typedSupabase = supabase as SupabaseClient<Database>
 
 export type LoginProvider = 'google' | 'github'
 // Read public Auth configuration; show only providers enabled on the server.

@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { i18n } from './i18n'
 import './index.css'
-import { supabase } from './lib/supabase'
+import { supabase, typedSupabase } from './lib/supabase'
 import { createErrorReporter } from './lib/errorReporting'
 
 const app = createApp(App)
@@ -17,7 +17,7 @@ const reportError=createErrorReporter({
   },
   async send(code,screen,release){
     const {data}=await supabase.auth.getSession()
-    if(data.session)await supabase.rpc('report_client_error',{code,screen,release})
+    if(data.session)await typedSupabase.rpc('report_client_error',{code,screen,release})
   },
 })
 app.config.errorHandler=(error)=>{if(import.meta.env.DEV)console.error(error);void reportError('UI_RENDER_ERROR')}
