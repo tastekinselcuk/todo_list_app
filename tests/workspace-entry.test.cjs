@@ -121,7 +121,7 @@ test('a learning subject does not reopen its old topic detail or add form after 
 test('quick, detailed and code composers ignore legacy saved input and clear drafts on actual KeepAlive navigation',async()=>{
  const savedNote={id:'saved-note',title:'Saved note',description:'<p>Saved detail</p>',categoryId:'work',version:2}
  const store=vue.reactive({categories:[{id:'work',name:'Work'}],todos:[savedNote],quickNotes:[],async fetchQuickNotes(){},codeSnippets:[]})
- const shared={'@/features/todos/stores/todo':{useTodoStore:()=>store,TODO_TITLE_MAX_LENGTH:120},'./RichTextEditor.vue':{},'./CategoryModal.vue':{},'./QuickNoteItem.vue':{},'./CodeSnippetItem.vue':{},'./CodeSnippetEditor.vue':{}}
+ const shared={'@/features/todos/stores/todo':{useTodoStore:()=>store,TODO_TITLE_MAX_LENGTH:120},'@/lib/codeHighlighting':{codeLanguages:['plaintext','javascript']},'./RichTextEditor.vue':{},'./CategoryModal.vue':{},'./QuickNoteItem.vue':{},'./CodeSnippetItem.vue':{},'./CodeSnippetEditor.vue':{}}
  for(const [file,fields,legacy] of [
   ['quick_notes/components/QuickNotes.vue',['quickNote'],{'quick-note':'Old cached note'}],
   ['todos/components/TodoQuickAdd.vue',['quickTodoTitle','quickTodoDescription'],{'todo-title':'Old title','todo-description':'Old rich text'}],
