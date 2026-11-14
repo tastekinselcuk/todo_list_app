@@ -457,7 +457,7 @@ app: {
     errors: {
       fillFields: 'Lütfen tüm alanları doldurun',
       passwordsNotMatch: 'Şifreler eşleşmiyor',
-      passwordLength: 'Şifre en az 6 karakter olmalıdır',
+      passwordLength: 'Şifre en az 8 karakter olmalıdır',
       loginFailed: 'Giriş başarısız',
       signupFailed: 'Kayıt başarısız',
       emailRequired: 'Lütfen e-posta adresinizi girin',

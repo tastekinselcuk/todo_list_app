@@ -455,7 +455,7 @@ app: {
     errors: {
       fillFields: 'Please fill in all fields',
       passwordsNotMatch: 'Passwords do not match',
-      passwordLength: 'Password must be at least 6 characters',
+      passwordLength: 'Password must be at least 8 characters',
       loginFailed: 'Login failed',
       signupFailed: 'Signup failed',
       emailRequired: 'Please enter your email address',
