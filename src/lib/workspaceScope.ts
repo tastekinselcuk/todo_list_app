@@ -56,8 +56,9 @@ export function useWorkspaceClient() {
   function trackReads(table:string,builder:any):any {
     return new Proxy(builder,{get(target,property){
       if(property==='then')return(resolve:any,reject:any)=>Promise.resolve(target).then(result=>{
+        if(workspaces.sessionKey!==sessionKey)return {data:null,error:{message:'Workspace changed'}}
         for(const row of Array.isArray(result.data)?result.data:result.data?[result.data]:[])
-          if(row.id&&row.version!==undefined)versions.set(`${table}:${row.id}`,row.version)
+          if(row.id&&row.version!==undefined)versions.set(`${table}:${row.id}`,Math.max(versions.get(`${table}:${row.id}`)??0,row.version))
         return result
       }).then(resolve,reject)
       const value=Reflect.get(target,property)
@@ -320,6 +321,7 @@ export function useWorkspaceClient() {
       const channels: ReturnType<typeof supabase.channel>[] = []
       async function flush() {
         if (stopped || running || busy() || workspaces.sessionKey !== sessionKey) return
+        if (typeof document !== 'undefined' && document.visibilityState==='hidden') return
         if (typeof document !== 'undefined' && document.querySelector('[data-shared-editing="true"]')) return
         running = true
         const tables = [...pending]
@@ -342,8 +344,11 @@ export function useWorkspaceClient() {
       if (!channels.length) return
       const timer = setInterval(() => { void flush() }, 800)
       const reconcile = setInterval(() => { Object.keys(callbacks).forEach(table => pending.add(table)); void flush() }, 15_000)
+      const resume=()=>{if(typeof document!=='undefined'&&document.visibilityState!=='hidden')void flush()}
+      if(typeof document!=='undefined')document.addEventListener?.('visibilitychange',resume)
       if (getCurrentScope()) onScopeDispose(() => {
         stopped = true; clearInterval(timer); clearInterval(reconcile)
+        if(typeof document!=='undefined')document.removeEventListener?.('visibilitychange',resume)
         channels.forEach(channel => { void supabase.removeChannel(channel) })
       })
     },

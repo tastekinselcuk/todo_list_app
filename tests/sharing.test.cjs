@@ -15,6 +15,23 @@ function load(path, dependencies, globals = {}) {
 }
 const helpers = load('src/lib/sharing.ts',{})
 
+test('personal workspace reads reject old scope responses and never downgrade a remembered row version',async()=>{
+ const workspaces={userId:'owner',activeId:'workspace',sessionKey:'scope-one',sharingAvailable:false,binding:()=>undefined}
+ let version=6,hold=false,release;const writes=[]
+ const client=createClient('https://database.example.test','public-key',{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:async(url,options={})=>{
+  if(hold)await new Promise(resolve=>release=resolve)
+  if(String(url).includes('/rpc/delete_note_category')){writes.push(JSON.parse(options.body));return Response.json({id:'category',notes:[]})}
+  return Response.json([{id:'category',version}])
+ }}})
+ const api=load('src/lib/workspaceScope.ts',{'./supabase':{supabase:client},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'./sharing':helpers}).useWorkspaceClient()
+ await api.from('categories').select('*');version=4;await api.from('categories').select('*');await api.removeCategory('category')
+ assert.equal(writes[0].expected_version,6)
+ hold=true;const pending=Promise.resolve(api.from('categories').select('*'))
+ while(!release)await new Promise(resolve=>setImmediate(resolve))
+ workspaces.sessionKey='scope-two';release();const result=await pending
+ assert.equal(result.data,null);assert.match(result.error.message,/Workspace changed/)
+})
+
 test('custom workout library RPCs capture scope, reject viewer writes and fence late responses',async()=>{
  const requests=[],binding={module:'workout',role:'owner',collection_id:'collection'}
  let hold=false,release
@@ -242,8 +259,9 @@ test('closing sharing rejects stale responses and one create request runs at a t
   store.$dispose()
 })
 
-test('Realtime retries pending updates after editing and removes channels and timers on scope disposal', async () => {
+test('Realtime waits for editing and visible pages, then removes channels, visibility listeners and timers on disposal', async () => {
   const timers=new Map(), subscriptions=[], removed=[], callbacks=[]
+  const listeners=new Map(),document={visibilityState:'visible',querySelector:()=>editing?{}:null,addEventListener:(name,callback)=>listeners.set(name,callback),removeEventListener:name=>listeners.delete(name)}
   let nextTimer=0, busy=true, editing=false
   const workspaces=vue.reactive({userId:'editor',activeId:'personal',sessionKey:'session',sharingAvailable:true,
     binding(module){return module==='quick'?{collection_id:'common',epoch:4,shared:true}:undefined},
@@ -258,7 +276,7 @@ test('Realtime retries pending updates after editing and removes channels and ti
     const api=load('src/lib/workspaceScope.ts',{
       './supabase':{supabase:client},'@/stores/workspaces':{useWorkspacesStore:()=>workspaces},'./sharing':helpers,
     },{setInterval:callback=>{timers.set(++nextTimer,callback);return nextTimer},clearInterval:id=>timers.delete(id),
-      document:{querySelector:()=>editing?{}:null},
+      document,
     }).useWorkspaceClient()
     api.listen({quick_notes:async()=>callbacks.push('updated')},()=>busy)
   })
@@ -269,11 +287,14 @@ test('Realtime retries pending updates after editing and removes channels and ti
   busy=false;editing=true
   timers.get(1)();await Promise.resolve()
   assert.equal(callbacks.length,0)
-  editing=false;timers.get(1)();await Promise.resolve();await Promise.resolve()
+  editing=false;document.visibilityState='hidden';timers.get(1)();await Promise.resolve();await Promise.resolve()
+  assert.equal(callbacks.length,0,'hidden browser tabs must not keep fetching shared collections')
+  document.visibilityState='visible';listeners.get('visibilitychange')();await Promise.resolve();await Promise.resolve()
   assert.equal(callbacks.length,1)
   scope.stop()
   assert.equal(timers.size,0)
   assert.equal(removed.length,1)
+  assert.equal(listeners.size,0)
   subscriptions[0].callback({payload:{table:'quick_notes'}})
   await Promise.resolve()
   assert.equal(callbacks.length,1)
