@@ -1,5 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { reminderHandler, escapeHtml } from './handler.ts'
+import { vaultEmailConfig } from '../vault-security/emailConfig.ts'
+const mail = vaultEmailConfig(Deno.env.toObject())
 
 // JWT is verified again here; never trust a body-supplied recipient or user ID.
 Deno.serve(reminderHandler({
@@ -23,15 +25,14 @@ Deno.serve(reminderHandler({
     if (error) throw error
   },
   async send(key, message) {
-    const apiKey = Deno.env.get('RESEND_API_KEY')
-    if (!apiKey) throw new Error('EMAIL_CONFIGURATION_REQUIRED')
+    if (!mail.configured || !mail.recipientAllowed(message.to)) throw new Error('EMAIL_CONFIGURATION_REQUIRED')
     const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto">
       <h2>${escapeHtml(message.title)}</h2><p>Periyodik hatırlatmanızın zamanı geldi.</p>
       ${message.notes ? `<p>${escapeHtml(message.notes)}</p>` : ''}
       <p>${escapeHtml(message.workspaceName)} · ${escapeHtml(message.reminderTime)}</p></div>`
     const result = await fetch('https://api.resend.com/emails', { method: 'POST', signal: AbortSignal.timeout(15_000),
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': key },
-      body: JSON.stringify({ from: Deno.env.get('REMINDER_FROM_EMAIL') || 'Reminders <onboarding@resend.dev>', to: [message.to], subject: `Hatırlatma: ${message.title}`, html }) })
+      headers: { Authorization: `Bearer ${mail.key}`, 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify({ from: mail.from, to: [message.to], subject: `Hatırlatma: ${message.title}`, html }) })
     if (!result.ok) throw new Error('EMAIL_PROVIDER_UNAVAILABLE')
   },
 }))

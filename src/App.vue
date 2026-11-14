@@ -16,7 +16,7 @@
     </div>
   </div>
 
-  <div v-else class="min-h-screen bg-gradient-to-br from-background to-muted relative selection:bg-primary/30">
+  <div v-else :data-app-screen="currentView" class="min-h-screen bg-gradient-to-br from-background to-muted relative selection:bg-primary/30">
     
     <WorkspaceRail :model-value="currentWorkspaceModule" :active-page="currentView" :enabled="enabledModules" :workspace-name="workspaces.active?.name" @update:model-value="goToWorkspace" @search="openWorkspaceAction('search')" @trash="openWorkspaceAction('trash')" @analytics="navigate('analytics')" @settings="navigate('settings')" @manage="openWorkspaceSettings" />
 

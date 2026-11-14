@@ -5,3 +5,11 @@ verify_jwt = false
 [functions.vault-security]
 # The handler verifies every JWT with Auth, including verified email and MFA assurance.
 verify_jwt = false
+
+[functions.scheduled-maintenance]
+# A dedicated server-only secret is verified by the handler.
+verify_jwt = false
+
+[functions.send-periodic-reminder]
+# The handler validates the bearer with Auth before claiming any delivery.
+verify_jwt = false

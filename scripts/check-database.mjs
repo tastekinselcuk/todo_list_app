@@ -49,6 +49,8 @@ async function checkDatabase() {
   const { data, error } = await client.rpc('application_release_ready', { required_rpc: required }, { get: true })
     .abortSignal(AbortSignal.timeout(20000))
   if (error || data !== true) throw new Error('Database release check failed. Apply and verify the required SQL migrations before deployment.')
+  const security = await client.rpc('application_security_ready', {}, { get: true }).abortSignal(AbortSignal.timeout(20000))
+  if (security.error || security.data !== true) throw new Error('Database security check failed. Verify vault constraints, worker permissions and scheduler provisioning before deployment.')
   console.log(`Database release check passed for ${required.length} RPC names and critical schema permissions.`)
 }
 
