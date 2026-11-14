@@ -1,4 +1,5 @@
 import { financePricesHandler, type MarketQuote } from './handler.ts'
+import { verifiedUserHasRequiredAssurance } from '../_shared/authAssurance.ts'
 
 // Use Deno's native HTTP client: this function needs no npm dependencies to deploy.
 function required(name: string) {
@@ -28,7 +29,7 @@ Deno.serve(financePricesHandler({
     if (response.status === 401 || response.status === 403) return null
     if (!response.ok) throw new Error('AUTH_SERVICE_UNAVAILABLE')
     const user = await response.json()
-    return typeof user?.id === 'string' && user.id.length > 0 ? user.id : null
+    return typeof user?.id === 'string' && verifiedUserHasRequiredAssurance(token,user) ? user.id : null
   },
   async consumeBudget(uid) {
     return await adminJSON('/rest/v1/rpc/consume_edge_budget', {

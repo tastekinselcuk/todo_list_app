@@ -80,6 +80,7 @@ function harness(authOverride) {
     '@/stores/workspaces': { useWorkspacesStore: () => workspaces },
     '@/stores/sharing': { useSharingStore: () => ({ start() {}, stop() {} }) },
     '@/components/SharingDialog.vue': { default: placeholder('Sharing') },
+    '@/components/MfaGate.vue': { default: {setup:(_props,{slots})=>()=>slots.default?.()} },
     '@/stores/ui': { useUIStore: () => ({ clearUndoToasts() {}, resolveConfirm() {}, async showConfirm() { return false }, addToast() {} }) },
     '@/lib/workspaceScroll': { createWorkspaceScroll: () => ({refresh(){},reset(){},settle(){},reveal(){},dispose(){}}) },
     '@/lib/navigationScroll': scroll, '@/lib/workspaceReminders': { startWorkspaceReminders: () => () => {} },

@@ -148,6 +148,7 @@ function settingsFixture() {
   const descriptor=parse(fs.readFileSync('src/components/AccountSettings.vue','utf8')).descriptor
   const component=load(compileScript(descriptor,{id:'account-settings-test'}).content,{
     '@/stores/auth':{useAuthStore:()=>auth},'@/stores/ui':{useUIStore:()=>({addToast(){}})},'@/lib/accountProfile':profile,
+    './MfaSettings.vue':{default:{}},
     'vue-i18n':{useI18n:()=>({t:key=>key,locale:vue.ref('tr')})}
   },{cancelAnimationFrame(){},requestAnimationFrame:()=>1,clearTimeout}).default
   const renderer=vue.createRenderer({createElement:()=>({}),createText:()=>({}),createComment:()=>({}),insert(){},remove(){},setText(){},setElementText(){},patchProp(){},parentNode(){},nextSibling(){}})

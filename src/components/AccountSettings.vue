@@ -62,6 +62,7 @@
       </section>
     </div>
 
+    <MfaSettings />
     <section class="account-card" aria-labelledby="account-session">
       <header class="account-card-header"><h3 id="account-session"><Monitor class="h-4 w-4" />{{ t('account.session') }}</h3><span class="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500" />{{ t('account.currentSession') }}</span></header>
       <div class="divide-y divide-border/40 px-4">
@@ -74,6 +75,7 @@
 </template>
 
 <script setup lang="ts">
+import MfaSettings from './MfaSettings.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { BadgeCheck, Check, Copy, Loader2, LogOut, Mail, Monitor, ShieldCheck, UserRound } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'

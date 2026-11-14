@@ -2,6 +2,11 @@
   command = "npm run release"
   publish = "dist"
 
+[[headers]]
+  for = "/release.json"
+  [headers.values]
+    Cache-Control = "no-store"
+
 [build.environment]
   NODE_VERSION = "22"
 

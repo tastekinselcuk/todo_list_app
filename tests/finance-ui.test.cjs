@@ -8,6 +8,7 @@ function fixture(){
  const deps={vue,'@/lib/workspaceScope':{useModuleLoad(){}},'@/lib/workspaceNavigation':{workspaceNavigationKey:Symbol(),workspaceActiveViewKey:Symbol()},'@/stores/workspaces':{useWorkspacesStore:()=>({sessionKey:'one'})},'@/stores/ui':{useUIStore:()=>({showConfirm:async()=>true})}}
  const evaluate=source=>{const exports={};vm.compileFunction(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,['exports','require','document','window','crypto'])(exports,name=>deps[name]||require(name),doc,dom.window,require('node:crypto').webcrypto);return exports}
  deps['@/features/secure_notes/lib/messages']=evaluate(fs.readFileSync('src/features/secure_notes/lib/messages.ts','utf8'))
+ deps['@/lib/mfaMessages']=evaluate(fs.readFileSync('src/lib/mfaMessages.ts','utf8'))
  const tr=evaluate(fs.readFileSync('src/locales/tr.ts','utf8')).default
  const t=(key,args={})=>{let value=key.split('.').reduce((obj,k)=>obj?.[k],tr)||key;for(const[k,v]of Object.entries(args))value=value.replaceAll(`{${k}}`,String(v));return value}
  deps['vue-i18n']={useI18n:()=>({t,locale:vue.ref('tr')})}

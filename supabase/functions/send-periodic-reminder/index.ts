@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { reminderHandler, escapeHtml } from './handler.ts'
 import { vaultEmailConfig } from '../vault-security/emailConfig.ts'
+import { verifiedUserHasRequiredAssurance } from '../_shared/authAssurance.ts'
 const mail = vaultEmailConfig(Deno.env.toObject())
 
 // JWT is verified again here; never trust a body-supplied recipient or user ID.
@@ -8,7 +9,7 @@ Deno.serve(reminderHandler({
   async authenticate(token) {
     const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { auth: { persistSession: false } })
     const { data, error } = await client.auth.getUser(token)
-    return !error && data.user?.email_confirmed_at ? data.user.id : null
+    return !error && data.user?.email_confirmed_at && verifiedUserHasRequiredAssurance(token,data.user) ? data.user.id : null
   },
   async claim(user, task, workspace, timezone) {
     const { data, error } = await admin().rpc('claim_periodic_email', { uid: user, tid: task, wid: workspace, tz: timezone })

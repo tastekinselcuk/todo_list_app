@@ -76,7 +76,7 @@ function nativePriceFixture(fetcher) {
  const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_ANON_KEY:'public-key',SUPABASE_SERVICE_ROLE_KEY:'private-service-key'}
  load('supabase/functions/finance-prices/index.ts',{
   URL,URLSearchParams,fetch:fetcher,Deno:{env:{get:key=>env[key]},serve:callback=>{handler=callback}},
- },{'./handler.ts':load('supabase/functions/finance-prices/handler.ts')})
+ },{'./handler.ts':load('supabase/functions/finance-prices/handler.ts'),'../_shared/authAssurance.ts':load('supabase/functions/_shared/authAssurance.ts',{atob})})
  return handler
 }
 

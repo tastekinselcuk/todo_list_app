@@ -10,6 +10,7 @@
     "types:database": "node scripts/generate-database-types.mjs",
     "db:migrate": "node scripts/apply-database-migrations.mjs",
     "maintenance:configure": "node scripts/configure-maintenance.mjs",
+    "check:production": "node scripts/check-production.mjs",
     "release": "npm run check:database && npm run verify",
     "dev": "vite",
     "build": "vue-tsc && vite build",
@@ -58,6 +59,6 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "vite": "^7.3.7",
-    "vue-tsc": "^2.0.6"
+    "vue-tsc": "^3.3.14"
   }
 }

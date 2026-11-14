@@ -3095,12 +3095,18 @@ export type Database = {
         }
         Returns: Json
       }
+      application_auth_ready: { Args: never; Returns: boolean }
+      application_migrations_ready: {
+        Args: { required: Json }
+        Returns: boolean
+      }
       application_release_ready: {
         Args: { required_rpc: string[] }
         Returns: boolean
       }
       application_security_ready: { Args: never; Returns: boolean }
       check_api_budget: { Args: never; Returns: undefined }
+      check_session_security: { Args: never; Returns: undefined }
       claim_due_periodic_emails: {
         Args: { batch_size?: number; recipient_filter?: string }
         Returns: Json[]
@@ -3428,6 +3434,7 @@ export type Database = {
         }
         Returns: Json
       }
+      session_mfa_satisfied: { Args: never; Returns: boolean }
       sharing_context: { Args: { wid: string }; Returns: Json }
       sharing_notify: {
         Args: { payload: Json; topic: string }

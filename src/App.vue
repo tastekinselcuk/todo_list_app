@@ -8,7 +8,8 @@
 
   <LoginSignup v-else-if="!authStore.isAuthenticated" />
 
-  <div v-else-if="!workspaces.loaded || workspaces.scopeReady === false" class="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-6">
+  <MfaGate v-else @verified="workspaces.load()">
+  <div v-if="!workspaces.loaded || workspaces.scopeReady === false" class="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-6">
     <div class="max-w-md space-y-4 text-center">
       <p class="text-sm text-muted-foreground">{{ workspaces.error || workspaces.sharingError ? $t('workspaces.loadFailed') : $t('app.loading') }}</p>
       <button v-if="workspaces.error || workspaces.sharingError" type="button" :disabled="workspaces.busy" class="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground" @click="workspaces.loaded ? workspaces.refreshBindings(workspaces.activeId, true) : workspaces.load()">{{ $t('workspaces.retry') }}</button>
@@ -61,6 +62,7 @@
     <SharingDialog />
     
   </div>
+  </MfaGate>
 </template>
 
 <script setup lang="ts">
@@ -81,6 +83,7 @@ import { supabase } from '@/lib/supabase'
 import { navigationModules } from '@/lib/moduleCatalog'
 import { discardStoredInputDrafts } from '@/lib/storage'
 import SharingDialog from '@/components/SharingDialog.vue'
+import MfaGate from '@/components/MfaGate.vue'
 
 const AnalyticsView=defineAsyncComponent(()=>import('@/views/AnalyticsView.vue'))
 import WorkspaceTabs from '@/views/WorkspaceTabs.vue'
@@ -257,7 +260,7 @@ watch(() => authStore.user?.id, async (id, previous) => {
   pendingWorkspaceAction.value = null
   targetWorkspaceTab.value = undefined
   targetWorkspaceView.value = undefined;currentWorkspaceView.value=undefined
-  if (id) { discardStoredInputDrafts(id);await workspaces.load();if(pendingCalendarReturn&&authStore.user?.id===id){pendingCalendarReturn=false;goToWorkspace('tasks')} }
+  if (id) { discardStoredInputDrafts(id);await workspaces.load();if(workspaces.error==='MFA_REQUIRED')window.dispatchEvent(new Event('mfa-required'));if(pendingCalendarReturn&&authStore.user?.id===id){pendingCalendarReturn=false;goToWorkspace('tasks')} }
 }, { immediate: true, flush: 'sync' })
 watch(() => workspaces.activeId, (id,previous) => {
   pendingWorkspaceAction.value = null
