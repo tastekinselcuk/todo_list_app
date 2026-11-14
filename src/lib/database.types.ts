@@ -3101,6 +3101,7 @@ export type Database = {
         Args: { required: Json }
         Returns: boolean
       }
+      application_operations_ready: { Args: never; Returns: boolean }
       application_release_ready: {
         Args: { required_rpc: string[] }
         Returns: boolean
