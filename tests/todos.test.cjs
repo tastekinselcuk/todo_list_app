@@ -157,6 +157,8 @@ function setupState(file, store, props = {}, viewer = false, globals = {}) {
     '@/components/ui/CustomSelect.vue': { default: { setup: () => () => vue.h('div') } },
     '@/components/ui/ColorPalette.vue': { default: {} },
     './CodeSnippetEditor.vue': { default: {} }, 'highlight.js/styles/github-dark.css': {},
+    '@/lib/codeHighlighting': { codeLanguages:['plaintext','javascript'],highlightCode:async code=>code },
+    '@/lib/lazyHighlighter': { escapeCode:code=>code },
     './TodoQuickAdd.vue': { default: {} }, './TodoFilters.vue': { default: {} }, './TodoCard.vue': { default: {} }, './CategoryModal.vue': { default: {} }, './RichTextEditor.vue': { default: {} }, './QuickNoteItem.vue': { default: {} },
   }
   const descriptor = parse(fs.readFileSync(file, 'utf8')).descriptor

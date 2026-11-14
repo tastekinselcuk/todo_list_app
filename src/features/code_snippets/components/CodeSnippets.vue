@@ -72,7 +72,7 @@ import CustomSelect from '@/components/ui/CustomSelect.vue'
 import CodeSnippetItem from './CodeSnippetItem.vue'
 import CodeSnippetEditor from './CodeSnippetEditor.vue'
 
-import hljs from 'highlight.js'
+import {codeLanguages} from '@/lib/codeHighlighting'
 
 const { canWrite } = useModuleAccess('code')
 
@@ -90,10 +90,7 @@ const snippetForm = ref({
   code: '',
 })
 
-const availableLanguages = computed(() => {
-  const uniqueLanguages = new Set(['plaintext', ...hljs.listLanguages()])
-  return Array.from(uniqueLanguages).sort((a, b) => a.localeCompare(b))
-})
+const availableLanguages = computed(() => codeLanguages)
 
 const formatLanguageLabel = (language: string) => {
   if (language === 'plaintext') return 'Plain Text'

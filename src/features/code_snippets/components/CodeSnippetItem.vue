@@ -47,7 +47,8 @@ import type { CodeSnippet } from '@/features/todos/stores/todo'
 import CodeSnippetEditor from './CodeSnippetEditor.vue'
 
 // CodeMirror & Highlight.js
-import hljs from 'highlight.js'
+import {highlightCode} from '@/lib/codeHighlighting'
+import {escapeCode} from '@/lib/lazyHighlighter'
 import 'highlight.js/styles/github-dark.css'
 
 const { canWrite } = useModuleAccess('code')
@@ -86,21 +87,14 @@ const formatDate = (isoDate: string) => {
   return new Date(isoDate).toLocaleDateString(currentLang, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const highlightedCode = computed(() => {
-  const code = props.snippet.code
-  const lang = props.snippet.language || 'plaintext'
-  if (!code) return ''
-  
-  const escapeHtml = (c: string) => c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-  
-  try {
-    if (lang === 'plaintext') return escapeHtml(code)
-    if (hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
-    return hljs.highlightAuto(code).value
-  } catch (err) {
-    return escapeHtml(code)
-  }
-})
+const highlightedCode = ref('')
+watch(()=>[isOpen.value,props.snippet.code,props.snippet.language] as const,async([open,code,language],_previous,onCleanup)=>{
+  let cancelled=false;onCleanup(()=>{cancelled=true})
+  if(!open){highlightedCode.value='';return}
+  highlightedCode.value=escapeCode(code)
+  const highlighted=await highlightCode(code,language||'plaintext')
+  if(!cancelled)highlightedCode.value=highlighted
+},{immediate:true})
 
 // Actions
 const openFocusedView = () => { if(!isOpen.value)isOpen.value=true }

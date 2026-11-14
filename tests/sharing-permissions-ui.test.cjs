@@ -69,8 +69,7 @@ test('focused code reader switches to editing in the same dialog, ignores backdr
   const compiled=load(compileScript(descriptor,{id:'focused-code-dom',inlineTemplate:true}).content,{
     'vue-i18n':{useI18n:()=>({t:key=>key})},
     '@/components/ui/CustomSelect.vue':{default:{setup:()=>()=>vue.h('span','Language')}},
-    'vue-codemirror':{Codemirror:{props:['modelValue'],setup:()=>()=>vue.h('div',{class:'cm-content',tabindex:0},'Code editor')}},
-    '@codemirror/theme-one-dark':{oneDark:[]},'@codemirror/lang-javascript':{javascript:()=>[]},
+    './SnippetCodeInput.vue':{__esModule:true,default:{props:['modelValue'],emits:['ready'],setup:(_props,{emit})=>{vue.onMounted(()=>emit('ready'));return()=>vue.h('div',{class:'cm-content',tabindex:0},'Code editor')}}},
   },{document:doc}).default
   const renderer=vue.createRenderer({...runtime.nodeOps,patchProp:runtime.patchProp,
     createElement:(tag,namespace)=>namespace==='svg'?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),
@@ -87,6 +86,7 @@ test('focused code reader switches to editing in the same dialog, ignores backdr
     dialog.click();assert.deepEqual(events,[],'clicking the backdrop must not close the reader')
     dialog.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.deepEqual(events,[],'reading mode cannot submit a write')
     const editButton=[...dialog.querySelectorAll('button')].find(button=>button.textContent.includes('code.edit'));editButton.click()
+    await new Promise(resolve=>setImmediate(resolve))
     await vue.nextTick();await vue.nextTick()
     assert.equal(doc.querySelector('dialog.note-edit-dialog'),dialog,'editing keeps the same modal and page scroll lock')
     assert.equal(dialog.querySelector('.code-preview'),null);assert.equal(doc.activeElement,dialog.querySelector('.cm-content'))

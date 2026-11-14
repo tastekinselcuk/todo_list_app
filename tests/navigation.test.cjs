@@ -87,8 +87,8 @@ function harness(authOverride) {
     '@/lib/workspaceSections': workspaceSections, '@/lib/workspaceNavigation': workspaceNavigation,
     '@/features/analytics/lib/focusService': { focusJournal: () => undefined },
     '@/lib/supabase': { supabase: { rpc: async () => ({error:{code:'PGRST202'}}) } },
-    '@/views/AnalyticsView.vue': { default: placeholder('Analytics') },
-    '@/views/WorkspaceCustomizer.vue': { default: placeholder('Settings') },
+    '@/views/AnalyticsView.vue': { __esModule:true,default: placeholder('Analytics') },
+    '@/views/WorkspaceCustomizer.vue': { __esModule:true,default: placeholder('Settings') },
     '@/components/ui/WorkspaceSearch.vue': { default: placeholder('Search') },
     '@/components/ui/WorkspaceRail.vue': { default: {props:['modelValue','enabled','activePage'],emits:['update:modelValue','search','trash','analytics','settings','manage'],setup(props,{emit}){return()=>vue.h('aside',{'data-workspace-rail':'', 'data-active-page':props.activePage},[
       ...workspaceSections.getWorkspaceSections(props.enabled).map(section=>vue.h('button',{'aria-label':`workspaceNav.sections.${section.id}`,'aria-current':props.activePage==='workspace'&&workspaceSections.workspaceSectionFor(props.modelValue)===section.id?'page':undefined,onClick:()=>emit('update:modelValue',workspaceSections.chooseWorkspaceSectionModule(section))},section.id)),
@@ -423,7 +423,7 @@ test('workspace management, profile editing and Settings navigation open the cor
   const h=harness()
   let workspaceEvents,settingsProps
   h.dependencies['@/views/WorkspaceTabs.vue']={default:{emits:['manage-workspaces'],setup(_props,{emit}){workspaceEvents=emit;return()=>vue.h('div','Workspace')}}}
-  h.dependencies['@/views/WorkspaceCustomizer.vue']={default:{props:['initialSection','focusAccount'],setup(props){settingsProps=props;return()=>vue.h('div','Settings')}}}
+  h.dependencies['@/views/WorkspaceCustomizer.vue']={__esModule:true,default:{props:['initialSection','focusAccount'],setup(props){settingsProps=props;return()=>vue.h('div','Settings')}}}
   const app=h.renderer.createApp(h.component('src/App.vue'));app.config.globalProperties.$t=key=>key
   try{
     app.mount(h.root);await settle()

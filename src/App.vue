@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 import WorkspaceRail from '@/components/ui/WorkspaceRail.vue'
 import UserProfileMenu from '@/components/ui/UserProfileMenu.vue'
 import { createNavigationScrollState, updateNavigationScroll, workspaceHeaderHeight } from '@/lib/navigationScroll'
@@ -82,12 +82,12 @@ import { navigationModules } from '@/lib/moduleCatalog'
 import { discardStoredInputDrafts } from '@/lib/storage'
 import SharingDialog from '@/components/SharingDialog.vue'
 
-import AnalyticsView from '@/views/AnalyticsView.vue'
+const AnalyticsView=defineAsyncComponent(()=>import('@/views/AnalyticsView.vue'))
 import WorkspaceTabs from '@/views/WorkspaceTabs.vue'
 import LoginSignup from '@/views/LoginSignup.vue'
 import PomodoroTimer from "@/features/pomodoro/components/PomodoroTimer.vue"
 import { usePomodoroStore } from '@/features/pomodoro/stores/pomodoro'
-import WorkspaceCustomizer from '@/views/WorkspaceCustomizer.vue'
+const WorkspaceCustomizer=defineAsyncComponent(()=>import('@/views/WorkspaceCustomizer.vue'))
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ConfirmModal from '@/components/ui/ConfirmModal.vue'
 import { calendarReturn } from '@/features/tasks/lib/connectedCalendars'

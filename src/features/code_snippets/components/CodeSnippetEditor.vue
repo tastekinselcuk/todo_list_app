@@ -13,7 +13,7 @@
         <div v-else class="flex shrink-0 items-center gap-2"><span class="rounded-md border border-border/50 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">{{ languageOptions.find(option=>option.value===language)?.label || language }}</span></div>
         <div v-if="viewing" ref="previewRef" class="code-editor code-preview" tabindex="0" role="region" :aria-label="label"><slot name="preview" /></div>
         <div v-else class="code-editor">
-          <Codemirror v-model="code" :placeholder="t('code.codePlaceholder')" :style="{ height: '100%', fontSize: '13px' }" :disabled="busy" :indent-with-tab="true" :tab-size="2" :extensions="extensions" class="code-mirror" />
+          <SnippetCodeInput v-model="code" :placeholder="t('code.codePlaceholder')" :disabled="busy" @ready="focusContent" />
         </div>
         <div v-if="conflict && !viewing" role="alert" class="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-muted/30 px-3 py-2 text-xs">
           <p class="text-muted-foreground">{{ t('sharing.conflict') }}</p>
@@ -36,12 +36,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Copy, Pencil, Loader2, X } from 'lucide-vue-next'
-import { Codemirror } from 'vue-codemirror'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { javascript } from '@codemirror/lang-javascript'
+const SnippetCodeInput=defineAsyncComponent(()=>import('./SnippetCodeInput.vue'))
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { isDialogBackdropDoubleClick } from '@/lib/utils'
 
@@ -71,7 +69,6 @@ const busy = computed(() => props.saving || props.refreshing)
 const title = computed({ get: () => props.modelValue.title, set: value => emit('update:modelValue', { ...props.modelValue, title: value }) })
 const language = computed({ get: () => props.modelValue.language, set: value => emit('update:modelValue', { ...props.modelValue, language: value }) })
 const code = computed({ get: () => props.modelValue.code, set: value => emit('update:modelValue', { ...props.modelValue, code: value }) })
-const extensions = [oneDark, javascript()]
 const dialogRef = ref<HTMLDialogElement | null>(null), titleRef = ref<HTMLInputElement | null>(null), previewRef=ref<HTMLElement|null>(null)
 let disposed = false
 let scrollLock: { body: string; root: string; gutter: string } | null = null
