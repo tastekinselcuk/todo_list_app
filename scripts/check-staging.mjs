@@ -3,13 +3,14 @@ import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import {spawnSync} from 'node:child_process'
+import ts from 'typescript'
 import {baselineTransaction} from './database-baseline.mjs'
 import {migrationFiles,migrationTransaction} from './migration-contract.mjs'
 // No hosted credentials, production data or externally reachable ports are used.
 const id='pomodolist-check-'+crypto.randomBytes(6).toString('hex'),directory=fs.mkdtempSync(path.join(os.tmpdir(),id+'-'))
 const secret=crypto.randomBytes(40).toString('hex'),password=crypto.randomBytes(32).toString('hex'),containers=[]
 const images={db:'public.ecr.aws/supabase/postgres:17.11.0.018@sha256:7c31363a3f7434ff14945f1b8a4880e6eca8b362e197e88b87c476c77aa3cf8c',auth:'supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b',rest:'postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf',storage:'supabase/storage-api:v1.89.12@sha256:8526956cb462e9f7d392e9848ec77133b2769982ed614e9753cc687e8e4339a6'}
-const proof={database:false,authentication:false,isolation:false,mfa:false,storage:false,cleaned:false}
+const proof={database:false,authentication:false,isolation:false,mfa:false,vault:false,storage:false,cleaned:false}
 const archiveIndex=process.argv.indexOf('--backup-archive'),archive=archiveIndex<0?undefined:process.argv[archiveIndex+1]
 let networkCreated=false,stage='initialization',diagnostic='',cancelled=false
 process.once('SIGINT',()=>{cancelled=true});process.once('SIGTERM',()=>{cancelled=true})
@@ -45,7 +46,7 @@ async function request(base,route,token,body,method=body===undefined?'GET':'POST
  const text=await response.text();let data;try{data=JSON.parse(text)}catch{data=text}
  return {status:response.status,data}
 }
-function requireStatus(result,status){if(result.status!==status)throw Error('STAGING_HTTP_EXPECTATION_FAILED');return result.data}
+function requireStatus(result,status){if(result.status!==status)throw Error('STAGING_HTTP_EXPECTATION_FAILED_'+result.status);return result.data}
 function otp(seed){const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';let bits='';for(const ch of seed.replace(/=+$/,''))bits+=alphabet.indexOf(ch).toString(2).padStart(5,'0');const key=Buffer.from(Array.from({length:Math.floor(bits.length/8)},(_,i)=>parseInt(bits.slice(i*8,i*8+8),2))),counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const h=crypto.createHmac('sha1',key).update(counter).digest();return ((h.readUInt32BE(h.at(-1)&15)&0x7fffffff)%1000000).toString().padStart(6,'0')}
 try{
  if(archiveIndex>=0&&(!archive||process.argv.slice(2).length!==2||archiveIndex!==2))throw Error('Provide exactly --backup-archive followed by its file path')
@@ -105,6 +106,21 @@ try{
  const blocked=await request(rest,'/workspaces?select=id',signed.access_token)
  if(blocked.status!==403||blocked.data.code!=='MFA_REQUIRED')throw Error('STAGING_MFA_NOT_ENFORCED')
  requireStatus(await request(rest,'/workspaces?select=id',verified.access_token),200);proof.mfa=true
+ stage='encrypted vault writes'
+ const bindings=await request(rest,'/rpc/ensure_module_bindings',verified.access_token,{wid})
+ if(![200,204].includes(bindings.status))throw Error('STAGING_VAULT_BINDING_FAILED')
+ const acknowledgement=await request(rest,'/rpc/vault_acknowledge',verified.access_token,{})
+ if(![200,204].includes(acknowledgement.status))throw Error('STAGING_VAULT_ACK_FAILED')
+ const source=ts.transpileModule(fs.readFileSync(new URL('../src/lib/vaultCrypto.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+ const vault=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'))
+ const sealed=await vault.createRecoverableVault('synthetic staging vault password')
+ const vaultId=requireStatus(await request(rest,'/rpc/vault_import',verified.access_token,{wid,new_name:'Staging',metadata:sealed.metadata,notes:[]}),200)
+ const renamed=requireStatus(await request(rest,'/rpc/vault_rename',verified.access_token,{sid:vaultId,expected_version:1,new_name:'Renamed'}),200)
+ const noteId=crypto.randomUUID(),payload={...await vault.encryptVaultValue(sealed.key,{title:'Encrypted staging proof'},vaultId+':'+noteId),key_id:vault.vaultKeyId(sealed.metadata)}
+ const saved=requireStatus(await request(rest,'/rpc/vault_note_save',verified.access_token,{sid:vaultId,nid:noteId,payload,expected_version:null,expected_session_version:renamed.version}),200)
+ if(saved.title!=='Encrypted note'||(await vault.decryptVaultValue(sealed.key,saved.encrypted_payload,vaultId+':'+noteId)).title!=='Encrypted staging proof')throw Error('STAGING_VAULT_CIPHERTEXT_FAILED')
+ const forbidden=await request(rest,'/rpc/vault_note_save',other.access_token,{sid:vaultId,nid:crypto.randomUUID(),payload,expected_version:null,expected_session_version:renamed.version})
+ if(![400,403].includes(forbidden.status)||forbidden.data?.message!=='ACCESS_DENIED')throw Error('STAGING_VAULT_OWNERSHIP_FAILED');proof.vault=true
  stage='Storage round trip'
  requireStatus(await request(storage,'/bucket',service,{id:'restore-check',name:'restore-check',public:false}),200)
  const bytes=crypto.randomBytes(1024),object='/object/restore-check/proof.bin'
@@ -135,13 +151,13 @@ try{
   }
   proof.backupAssetsRestored=records.length
  }
- if(!['database','authentication','isolation','mfa','storage'].every(key=>proof[key]))throw Error('STAGING_INCOMPLETE')
+ if(!['database','authentication','isolation','mfa','vault','storage'].every(key=>proof[key]))throw Error('STAGING_INCOMPLETE')
 }catch(error){
- proof.failedStage=stage;proof.error=error.message
+ proof.failedStage=stage;proof.error=/^(STAGING_[A-Z0-9_]+|WINDOWS_DPAPI_REQUIRED|BACKUP_[A-Z_]+|INVALID_BACKUP_[A-Z_]+)$/.test(error.message)?error.message:'STAGING_UNEXPECTED_FAILURE'
  const safe=text=>text.replaceAll(password,'[redacted]').replaceAll(secret,'[redacted]').replaceAll(service,'[redacted]').replaceAll(anon,'[redacted]').replace(/eyJ[A-Za-z0-9_.-]+/g,'[token]').slice(-2000)
- proof.diagnostic=safe(diagnostic)
+ proof.diagnostic=archive?'Diagnostics suppressed while reading a private backup':safe(diagnostic)
  proof.services={}
- for(const name of ['auth','storage'])if(containers.includes(id+'-'+name)){
+ for(const name of ['auth','storage'])if(!archive&&containers.includes(id+'-'+name)){
   const logs=spawnSync('docker',['logs','--tail','5',id+'-'+name],{encoding:'utf8',windowsHide:true});proof.services[name]=safe((logs.stdout||'')+(logs.stderr||''))
  }
  process.exitCode=1

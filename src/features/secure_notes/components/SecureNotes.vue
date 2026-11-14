@@ -179,7 +179,6 @@ import { ref, shallowRef, computed, onBeforeUnmount, onDeactivated, onMounted, o
 import { Lock, Eye, EyeOff, Edit, X, Loader2, ChevronRight, ShieldCheck, Upload, Trash2, Sparkles, History } from 'lucide-vue-next'
 import { useWorkspaceClient } from '@/lib/workspaceScope'
 import { unlockVaultKey, encryptVaultValue, decryptVaultValue, isSealedVault, isRecoverableVault, vaultKeyId, generateVaultPassword } from '@/lib/vaultCrypto'
-import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
@@ -196,7 +195,7 @@ interface PasswordSession { id: string; name: string; password_hash: string; cre
 const { canWrite } = useModuleAccess('secure')
 
 const { t } = useI18n()
-const authStore = useAuthStore(), supabase = useWorkspaceClient(), uiStore = useUIStore()
+const supabase = useWorkspaceClient(), uiStore = useUIStore()
 const isOwner=computed(()=>supabase.isOwner('secure'))
 const manager=ref<InstanceType<typeof VaultManager>>()
 const showDeleted=ref(false),historyOpen=ref(false),noteHistory=ref<{id:string;saved_at:string}[]>([])
@@ -328,9 +327,7 @@ const saveSession = async () => {
   try {
     let updated: PasswordSession
     let nextKey = vaultKey.value
-    const { data, error } = await supabase.from('password_sessions').update({ name: editingSession.value.name, version: editingSession.value.version }).eq('id', session.id).select().single()
-    if (error) throw error
-    updated = data
+    updated = await supabase.renameVault(session.id,editingSession.value.version!,editingSession.value.name)
     if (epoch !== lockEpoch) return
     vaultKey.value = nextKey
     const index = passwordSessions.value.findIndex(s => s.id === session.id)
@@ -362,17 +359,16 @@ const saveNote = async () => {
   if (isLoading.value || !session) return
   isLoading.value = true
   try {
+    if(!key)throw Error('VAULT_UPGRADE_REQUIRED')
     const draft = { ...editingNote.value }, id = draft.id || crypto.randomUUID()
-    const fields = key ? {
-      id, title: 'Encrypted note', type: 'secret', encrypted_payload: await payloadFor(key, { ...draft, id }, session)
-    } : sensitive(draft)
+    editingNote.value.id=id
+    const payload=await payloadFor(key,{...draft,id},session)
     if (epoch !== lockEpoch) return
-    const query = draft.id ? supabase.from('secure_notes').update({ ...fields, version: draft.version }).eq('id', draft.id)
-      : supabase.from('secure_notes').insert([{ ...fields, created_by: authStore.user?.id, session_id: session.id }])
-    const { error } = await query.select()
-    if (error) throw error
+    const saved=await supabase.saveVaultNote(session.id,id,payload,draft.version??null,session.version!)
     if (epoch !== lockEpoch) return
-    await loadSecureNotes(); noteDraftTitle.value='';closeNoteDialog()
+    const row={...saved,...sensitive(draft)} as SecureNote,index=secureNotes.value.findIndex(note=>note.id===id)
+    if(index<0)secureNotes.value.unshift(row);else secureNotes.value[index]=row
+    noteDraftTitle.value='';closeNoteDialog()
     uiStore.addToast(t('secure.noteSaved'), 'success')
   } catch (err) { showFailure(err) } finally { isLoading.value = false }
 }

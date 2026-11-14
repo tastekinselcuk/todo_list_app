@@ -44,6 +44,20 @@ function vaultView() {
   const client={
     collection(){return 'secure-collection'},isOwner(){return true},
     listen(callbacks){Object.assign(listeners,callbacks)},
+    async renameVault(id,version,name){
+      if(fail)throw Error('Offline');entered?.();if(gate)await gate
+      const row=sessions.find(session=>session.id===id);assert.equal(row.version,version)
+      Object.assign(row,{name,version:version+1});calls.push(['rename',id,version,name]);return structuredClone(row)
+    },
+    async saveVaultNote(sessionId,id,payload,version,sessionVersion){
+      if(fail)throw Error('Offline')
+      assert.equal(sessions.find(session=>session.id===sessionId).version,sessionVersion)
+      const row=notes.find(note=>note.id===id)||{id,session_id:sessionId}
+      if(version!==null)assert.equal(row.version,version)
+      Object.assign(row,{title:'Encrypted note',type:'secret',content:null,encrypted_payload:payload,version:(version||0)+1})
+      if(!notes.includes(row))notes.push(row)
+      calls.push(['save',sessionId,id,payload,version]);return structuredClone(row)
+    },
     async sealVault(id,previousHash,metadata,encryptedNotes,version,name){
       calls.push(['seal',previousHash,metadata,encryptedNotes]); entered?.()
       if(gate) await gate
@@ -113,6 +127,23 @@ test('vault screen reads existing v1 encryption and retains the draft when an en
     assert.equal(f.state.secureNotes.value.length,0)
     assert.equal(f.state.editingNote.value.content,undefined)
   } finally { f.close() }
+})
+
+test('a v2 note save sends only ciphertext and updates the unlocked card from the committed RPC version',async()=>{
+ const f=vaultView()
+ try{
+  const sealed=await cryptoApi.createRecoverableVault('a strong vault password')
+  f.sessions[0].password_hash=sealed.metadata
+  f.notes[0].title='Encrypted note';f.notes[0].content=null
+  f.notes[0].encrypted_payload={...await cryptoApi.encryptVaultValue(sealed.key,{title:'Original',type:'secret',content:'Before'},'vault:note'),key_id:cryptoApi.vaultKeyId(sealed.metadata)}
+  f.state.promptSessionUnlock(structuredClone(f.sessions[0]));f.state.unlockPassword.value='a strong vault password';await f.state.authenticate()
+  f.state.editNote(f.state.secureNotes.value[0]);f.state.editingNote.value.content='Only inside the encrypted payload'
+  await f.state.saveNote()
+  assert.equal(f.state.showAddNoteDialog.value,false);assert.equal(f.notes[0].content,null)
+  assert.equal(f.state.secureNotes.value[0].content,'Only inside the encrypted payload');assert.equal(f.state.secureNotes.value[0].version,2)
+  assert.equal((await cryptoApi.decryptVaultValue(sealed.key,f.notes[0].encrypted_payload,'vault:note')).content,'Only inside the encrypted payload')
+  assert.equal(JSON.stringify(f.calls).includes('Only inside the encrypted payload'),false)
+ }finally{f.close()}
 })
 
 test('vault quick entry prefills the protected form and switching vaults clears all decrypted drafts before requesting unlock',async()=>{

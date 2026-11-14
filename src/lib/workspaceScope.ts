@@ -107,6 +107,18 @@ export function useWorkspaceClient() {
     },
     timezone(module: string) { return workspaces.binding(module, workspaceId)?.timezone },
     isOwner(module: string) { return workspaces.binding(module, workspaceId)?.role === 'owner' },
+    async renameVault(id:string,version:number,name:string){
+      assertWritable('secure')
+      const result=await supabase.rpc('vault_rename',{sid:id,expected_version:version,new_name:name})
+      assertCurrent();if(result.error)throw result.error
+      versions.set(`password_sessions:${id}`,result.data.version);return result.data
+    },
+    async saveVaultNote(sessionId:string,id:string,payload:Record<string,unknown>,version:number|null,sessionVersion:number){
+      assertWritable('secure')
+      const result=await supabase.rpc('vault_note_save',{sid:sessionId,nid:id,payload,expected_version:version,expected_session_version:sessionVersion})
+      assertCurrent();if(result.error)throw result.error
+      versions.set(`secure_notes:${id}`,result.data.version);return result.data
+    },
     async vaultHistoryPayloads(ids:string[]) {
       assertCurrent()
       const cid=workspaces.binding('secure',workspaceId)?.collection_id

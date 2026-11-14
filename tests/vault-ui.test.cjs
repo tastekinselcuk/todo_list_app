@@ -77,7 +77,7 @@ test('a late acknowledgement lookup cannot open a new account vault',async()=>{
  }finally{f.close()}
 })
 test('new vault creation requires matching passwords, sends only ciphertext, and requires recovery acknowledgement before closing',async()=>{
- const writes=[],client={from:()=>({insert(value){writes.push(value);return{select:async()=>({data:[{id:'vault'}],error:null})}}})}
+ const writes=[],client={async importVault(name,metadata,notes){assert.deepEqual(notes,[]);writes.push([{name,password_hash:metadata}]);return 'vault'}}
  const f=fixture('src/features/secure_notes/components/VaultManager.vue',{'@/lib/workspaceScope':{useWorkspaceClient:()=>client},'../lib/vaultApi':{vaultSecurity:async()=>{throw Error('Unexpected email')},downloadVaultFile(){}},'@/components/ui/CustomSelect.vue':{default:{render:()=>null}}})
  try{
   f.instance.open('create',null,'Work');await f.flush()

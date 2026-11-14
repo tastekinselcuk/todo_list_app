@@ -3521,6 +3521,16 @@ export type Database = {
         Returns: string
       }
       vault_metadata_valid: { Args: { value: string }; Returns: boolean }
+      vault_note_save: {
+        Args: {
+          expected_session_version: number
+          expected_version: number
+          nid: string
+          payload: Json
+          sid: string
+        }
+        Returns: Json
+      }
       vault_record_action: {
         Args: {
           expected_version: number
@@ -3529,6 +3539,10 @@ export type Database = {
           operation: string
         }
         Returns: undefined
+      }
+      vault_rename: {
+        Args: { expected_version: number; new_name: string; sid: string }
+        Returns: Json
       }
       vault_security_budget: { Args: { uid: string }; Returns: boolean }
       vault_v2_storage_valid: { Args: { value: string }; Returns: boolean }

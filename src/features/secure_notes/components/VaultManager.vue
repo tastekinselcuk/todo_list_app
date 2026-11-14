@@ -97,8 +97,7 @@ async function submit(){
     if(mode.value==='create'){
       const sealed=await createRecoverableVault(newPassword.value)
       if(epoch!==generation)return
-      const result=await client.from('password_sessions').insert([{name:name.value.trim(),password_hash:sealed.metadata}]).select()
-      if(result.error)throw result.error
+      await client.importVault(name.value.trim(),sealed.metadata,[])
       if(epoch!==generation)return
       emit('changed');showRecovery(sealed.recoveryCode);return
     }
