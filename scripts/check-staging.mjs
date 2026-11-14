@@ -10,6 +10,7 @@ const id='pomodolist-check-'+crypto.randomBytes(6).toString('hex'),directory=fs.
 const secret=crypto.randomBytes(40).toString('hex'),password=crypto.randomBytes(32).toString('hex'),containers=[]
 const images={db:'public.ecr.aws/supabase/postgres:17.11.0.018@sha256:7c31363a3f7434ff14945f1b8a4880e6eca8b362e197e88b87c476c77aa3cf8c',auth:'supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b',rest:'postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf',storage:'supabase/storage-api:v1.89.12@sha256:8526956cb462e9f7d392e9848ec77133b2769982ed614e9753cc687e8e4339a6'}
 const proof={database:false,authentication:false,isolation:false,mfa:false,storage:false,cleaned:false}
+const archiveIndex=process.argv.indexOf('--backup-archive'),archive=archiveIndex<0?undefined:process.argv[archiveIndex+1]
 let networkCreated=false,stage='initialization',diagnostic='',cancelled=false
 process.once('SIGINT',()=>{cancelled=true});process.once('SIGTERM',()=>{cancelled=true})
 function docker(args,input){const r=spawnSync('docker',args,{input,encoding:'utf8',windowsHide:true,maxBuffer:8000000,timeout:180000});if(r.status!==0){diagnostic=r.stderr||r.error?.message||'';throw Error('STAGING_DOCKER_FAILED')}return r.stdout.trim()}
@@ -47,6 +48,8 @@ async function request(base,route,token,body,method=body===undefined?'GET':'POST
 function requireStatus(result,status){if(result.status!==status)throw Error('STAGING_HTTP_EXPECTATION_FAILED');return result.data}
 function otp(seed){const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';let bits='';for(const ch of seed.replace(/=+$/,''))bits+=alphabet.indexOf(ch).toString(2).padStart(5,'0');const key=Buffer.from(Array.from({length:Math.floor(bits.length/8)},(_,i)=>parseInt(bits.slice(i*8,i*8+8),2))),counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const h=crypto.createHmac('sha1',key).update(counter).digest();return ((h.readUInt32BE(h.at(-1)&15)&0x7fffffff)%1000000).toString().padStart(6,'0')}
 try{
+ if(archiveIndex>=0&&(!archive||process.argv.slice(2).length!==2||archiveIndex!==2))throw Error('Provide exactly --backup-archive followed by its file path')
+ if(archiveIndex<0&&process.argv.length>2)throw Error('Unknown staging arguments')
  if(process.platform==='win32'){
   const identity=spawnSync('whoami.exe',['/user','/fo','csv','/nh'],{encoding:'utf8',windowsHide:true}).stdout.match(/S-1-[0-9-]+/)?.[0]
   if(!identity||spawnSync('icacls.exe',[directory,'/inheritance:r','/grant:r','*'+identity+':(OI)(CI)F','*S-1-5-18:(OI)(CI)F'],{windowsHide:true,encoding:'utf8'}).status!==0)throw Error('STAGING_DIRECTORY_NOT_PRIVATE')
@@ -55,7 +58,8 @@ try{
  containers.push(id+'-client');docker(['run','--detach','--name',id+'-client','--label','pomodolist.check='+id,'--network',id,'--entrypoint','node',images.storage,'-e','setInterval(()=>{},1000)'])
  stage='database startup';run('db',images.db,{POSTGRES_PASSWORD:password})
  for(let i=0;;i++){
-  try{if(cancelled)throw Error('STAGING_CANCELLED');const logs=docker(['logs',id+'-db']);if(!logs.includes('PostgreSQL init process complete'))throw Error('INITIALIZING');sql('select 1');break}
+  if(cancelled)throw Error('STAGING_CANCELLED')
+  try{const logs=docker(['logs',id+'-db']);if(!logs.includes('PostgreSQL init process complete'))throw Error('INITIALIZING');sql('select 1');break}
   catch{if(i>=120)throw Error('STAGING_DATABASE_NOT_READY');await pause(500)}
  }
  sql(`do $$ declare r text;begin foreach r in array array['anon','authenticated','service_role','authenticator','supabase_auth_admin','supabase_storage_admin'] loop if not exists(select 1 from pg_roles where rolname=r)then execute format('create role %I',r);end if;end loop;end $$;
@@ -110,6 +114,27 @@ try{
  if(!downloaded.ok||!Buffer.from(await downloaded.arrayBuffer()).equals(bytes))throw Error('STAGING_STORAGE_RESTORE_FAILED')
  const denied=await fetch(storage+object,{headers:{Authorization:'Bearer '+anon},signal:AbortSignal.timeout(15000)})
  if(denied.ok)throw Error('STAGING_PRIVATE_STORAGE_EXPOSED');proof.storage=true
+ if(archive){
+  stage='encrypted backup assets'
+  if(process.platform!=='win32')throw Error('WINDOWS_DPAPI_REQUIRED')
+  const extracted=spawnSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.resolve('scripts/read-backup-assets.ps1'),'-ArchivePath',path.resolve(archive)],{encoding:'utf8',windowsHide:true,maxBuffer:100000000})
+  if(extracted.status!==0)throw Error('BACKUP_ASSETS_UNAVAILABLE')
+  const records=JSON.parse(extracted.stdout).records,buckets=new Set()
+  if(!Array.isArray(records)||records.length>10000)throw Error('INVALID_BACKUP_ASSETS')
+  for(const record of records){
+   if(!/^[a-zA-Z0-9._-]{1,100}$/.test(record.bucket)||typeof record.path!=='string'||record.path.split('/').some(part=>!part||part==='.'||part==='..'))throw Error('INVALID_BACKUP_PATH')
+   if(!buckets.has(record.bucket)){requireStatus(await request(storage,'/bucket',service,{id:record.bucket,name:record.bucket,public:false}),200);buckets.add(record.bucket)}
+   const objectPath='/object/'+encodeURIComponent(record.bucket)+'/'+record.path.split('/').map(encodeURIComponent).join('/')
+   const content=Buffer.from(record.base64,'base64');record.base64=''
+   try{
+    const upload=await fetch(storage+objectPath,{method:'POST',headers:{Authorization:'Bearer '+service,'Content-Type':record.contentType||'application/octet-stream'},body:content})
+    if(!upload.ok)throw Error('BACKUP_ASSET_UPLOAD_FAILED')
+    const download=await fetch(storage+objectPath,{headers:{Authorization:'Bearer '+service}})
+    if(!download.ok||crypto.createHash('sha256').update(Buffer.from(await download.arrayBuffer())).digest('hex')!==record.sha256)throw Error('BACKUP_ASSET_RESTORE_FAILED')
+   }finally{content.fill(0)}
+  }
+  proof.backupAssetsRestored=records.length
+ }
  if(!['database','authentication','isolation','mfa','storage'].every(key=>proof[key]))throw Error('STAGING_INCOMPLETE')
 }catch(error){
  proof.failedStage=stage;proof.error=error.message
