@@ -3096,6 +3096,7 @@ export type Database = {
         Returns: Json
       }
       application_auth_ready: { Args: never; Returns: boolean }
+      application_defaults_ready: { Args: never; Returns: boolean }
       application_migrations_ready: {
         Args: { required: Json }
         Returns: boolean

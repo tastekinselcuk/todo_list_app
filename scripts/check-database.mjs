@@ -54,6 +54,8 @@ async function checkDatabase() {
   if (security.error || security.data !== true) throw new Error('Database security check failed. Verify vault constraints, worker permissions and scheduler provisioning before deployment.')
   const assurance=await client.rpc('application_auth_ready',{}, {get:true}).abortSignal(AbortSignal.timeout(20000))
   if(assurance.error||assurance.data!==true)throw new Error('Database MFA enforcement is incomplete. Verify the API hook and restrictive policies before deployment.')
+  const defaults=await client.rpc('application_defaults_ready',{}, {get:true}).abortSignal(AbortSignal.timeout(20000))
+  if(defaults.error||defaults.data!==true)throw new Error('Future database objects have unsafe default grants. Verify the default privilege migration before deployment.')
   const migrations = migrationFiles().map(({version,sha256})=>({version,sha256}))
   const registry=await client.rpc('application_migrations_ready',{required:migrations}).abortSignal(AbortSignal.timeout(20000))
   if(registry.error||registry.data!==true)throw new Error('Database migration history does not match this release. Apply pending migrations without modifying already applied files.')

@@ -28,6 +28,6 @@ try{
   if(file===bootstrap&&!exists)continue
   query(migrationTransaction(file));console.log('Applied and recorded '+file.name)
  }
- console.log('Tracked migrations are current. Older unversioned history still requires baseline reconciliation.')
+ console.log('Tracked migrations are current. Empty projects can use db:initialize; historical pre-rollout executions are not reconstructed.')
 }catch(error){console.error(error.message);process.exitCode=1}
 finally{if(fs.existsSync(temporary))fs.unlinkSync(temporary)}

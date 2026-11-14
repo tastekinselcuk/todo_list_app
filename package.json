@@ -9,6 +9,7 @@
     "check:database": "node scripts/check-database.mjs",
     "types:database": "node scripts/generate-database-types.mjs",
     "db:migrate": "node scripts/apply-database-migrations.mjs",
+    "db:initialize": "node scripts/initialize-database.mjs",
     "maintenance:configure": "node scripts/configure-maintenance.mjs",
     "check:production": "node scripts/check-production.mjs",
     "release": "npm run check:database && npm run verify",
