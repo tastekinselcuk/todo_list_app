@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test --test-concurrency=2 tests/*.test.cjs",
-    "verify": "npm test && npm run build",
+    "verify": "npm run check:repository && npm test && npm run build",
+    "check:repository": "node scripts/check-repository.mjs",
     "check:database": "node scripts/check-database.mjs",
     "types:database": "node scripts/generate-database-types.mjs",
     "db:migrate": "node scripts/apply-database-migrations.mjs",
