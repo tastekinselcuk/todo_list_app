@@ -37,14 +37,37 @@
         >
           <div class="absolute top-0 right-0 w-24 h-24 blur-[40px] -mr-8 -mt-8 pointer-events-none opacity-0 transition-opacity duration-500" :style="{ backgroundColor: deck.color }"></div>
 
-          <div class="flex items-start justify-between relative z-10 mb-2">
-            <div class="flex items-center gap-2">
-              <Layers class="w-4 h-4 opacity-70" :style="{ color: deck.color }" />
-              <h3 class="font-bold text-sm text-foreground tracking-tight line-clamp-1 group-hover:text-primary transition-colors">{{ deck.title }}</h3>
+          <div class="flex items-start justify-between relative z-10 mb-2 gap-2">
+            <div v-if="editingDeckId === deck.id" class="flex items-center gap-1.5 flex-1 min-w-0" @click.stop>
+              <input
+                v-model="editingDeckTitle"
+                type="text"
+                data-edit-deck-input
+                class="flex-1 min-w-0 h-7 px-2 rounded-lg border border-primary/40 bg-background text-xs font-semibold text-foreground outline-none"
+                @keyup.enter="saveEditDeck(deck.id)"
+                @keyup.esc="cancelEditDeck"
+              />
+              <button type="button" data-save-deck-btn class="p-1 text-emerald-500 hover:bg-emerald-500/10 rounded-md" @click.stop="saveEditDeck(deck.id)">
+                <Check class="w-3.5 h-3.5" />
+              </button>
+              <button type="button" class="p-1 text-muted-foreground hover:bg-muted rounded-md" @click.stop="cancelEditDeck">
+                <X class="w-3.5 h-3.5" />
+              </button>
             </div>
-            <button v-if="canWrite" @click.stop="handleDeleteDeck(deck.id)" class="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-500 transition-all">
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
+            <template v-else>
+              <div class="flex items-center gap-2 min-w-0">
+                <Layers class="w-4 h-4 shrink-0 opacity-70" :style="{ color: deck.color }" />
+                <h3 class="font-bold text-sm text-foreground tracking-tight line-clamp-1 group-hover:text-primary transition-colors">{{ deck.title }}</h3>
+              </div>
+              <div v-if="canWrite" class="flex items-center gap-0.5 shrink-0">
+                <button type="button" data-edit-deck-btn @click.stop="startEditDeck(deck)" class="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary transition-all">
+                  <Pencil class="w-3.5 h-3.5" />
+                </button>
+                <button type="button" @click.stop="handleDeleteDeck(deck.id)" class="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-500 transition-all">
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </template>
           </div>
           
           <div class="mt-auto relative z-10 pl-6">
@@ -65,14 +88,35 @@
 
     <div v-else-if="currentView === 'study' && activeDeck" class="workspace-content space-y-6 animate-in slide-in-from-bottom-4 duration-500">
       <div :data-search-record="activeDeck.id" class="workspace-toolbar flex flex-col sm:flex-row sm:items-center justify-between bg-card/40 backdrop-blur-2xl p-3 sm:p-4 rounded-2xl shadow-sm border border-white/10 dark:border-white/5 gap-4 relative z-20">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
           <button @click="currentView = 'decks'" class="p-2 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border/50">
             <ArrowLeft class="w-4 h-4" />
           </button>
           <div class="p-2 rounded-xl shadow-inner border" :style="{ backgroundColor: `${activeDeck.color}15`, color: activeDeck.color, borderColor: `${activeDeck.color}30` }">
             <Layers class="w-3.5 h-3.5" />
           </div>
-          <h2 class="text-sm font-bold tracking-tight text-foreground">{{ activeDeck.title }}</h2>
+          <div v-if="editingDeckId === activeDeck.id" class="flex items-center gap-1.5 flex-1 max-w-sm">
+            <input
+              v-model="editingDeckTitle"
+              type="text"
+              data-edit-active-deck-input
+              class="flex-1 min-w-0 h-8 px-2.5 rounded-lg border border-primary/40 bg-background text-sm font-bold text-foreground outline-none"
+              @keyup.enter="saveEditDeck(activeDeck.id)"
+              @keyup.esc="cancelEditDeck"
+            />
+            <button type="button" class="p-1.5 text-emerald-500 hover:bg-emerald-500/10 rounded-lg" @click="saveEditDeck(activeDeck.id)">
+              <Check class="w-3.5 h-3.5" />
+            </button>
+            <button type="button" class="p-1.5 text-muted-foreground hover:bg-muted rounded-lg" @click="cancelEditDeck">
+              <X class="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-1.5 min-w-0">
+            <h2 class="text-sm font-bold tracking-tight text-foreground truncate">{{ activeDeck.title }}</h2>
+            <button v-if="canWrite" type="button" data-edit-active-deck-btn class="p-1 text-muted-foreground hover:text-primary rounded-lg transition-colors" @click="startEditDeck(activeDeck)">
+              <Pencil class="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div v-if="activeDeck.cards.length > 0" class="flex items-center gap-2 w-full sm:w-auto">
@@ -117,15 +161,67 @@
       </div>
 
       <div class="workspace-card-grid perspective-1000 relative z-0" style="--workspace-card-min:14rem">
-        <div v-for="card in activeDeck.cards" :key="card.id" :data-search-record="activeDeck.id" :data-search-child="card.id" class="relative w-full h-32 cursor-pointer group" @click="toggleCard(card.id)">
-          <div class="absolute inset-0 w-full h-full transition-all duration-500 transform-style-3d shadow-sm rounded-xl" :class="{ 'rotate-y-180': flippedCards.includes(card.id) }">
-            <div class="workspace-card absolute inset-0 w-full h-full bg-card/60 backdrop-blur-sm backface-hidden flex items-center justify-center p-4 text-center">
-              <button v-if="canWrite" @click.stop="handleDeleteCard(card.id)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all z-10">
-                <Trash2 class="w-3.5 h-3.5" />
+        <div
+          v-for="card in activeDeck.cards"
+          :key="card.id"
+          :data-search-record="activeDeck.id"
+          :data-search-child="card.id"
+          class="relative w-full h-32 group"
+          :class="editingCardId === card.id ? '' : 'cursor-pointer'"
+          @click="editingCardId === card.id ? null : toggleCard(card.id)"
+        >
+          <div
+            v-if="editingCardId === card.id"
+            class="workspace-card w-full h-full bg-card p-3 flex flex-col justify-between gap-1.5 shadow-sm rounded-xl border border-primary/40"
+            @click.stop
+          >
+            <input
+              v-model="editingCardFront"
+              type="text"
+              data-edit-card-front
+              :placeholder="$t('flashcards.frontPlaceholder')"
+              class="w-full h-7 px-2 rounded-lg border border-border/60 bg-background text-xs font-semibold text-foreground outline-none focus:border-primary/50"
+              @keyup.esc="cancelEditCard"
+            />
+            <input
+              v-model="editingCardBack"
+              type="text"
+              data-edit-card-back
+              :placeholder="$t('flashcards.backPlaceholder')"
+              class="w-full h-7 px-2 rounded-lg border border-border/60 bg-background text-xs text-primary font-medium outline-none focus:border-primary/50"
+              @keyup.enter="saveEditCard(activeDeck.id, card.id)"
+              @keyup.esc="cancelEditCard"
+            />
+            <div class="flex items-center justify-end gap-1.5">
+              <button type="button" class="px-2 py-0.5 rounded-md text-[11px] text-muted-foreground hover:bg-muted" @click="cancelEditCard">
+                Vazgeç
               </button>
+              <button type="button" data-save-card-btn class="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90" @click="saveEditCard(activeDeck.id, card.id)">
+                Kaydet
+              </button>
+            </div>
+          </div>
+          <div v-else class="absolute inset-0 w-full h-full transition-all duration-500 transform-style-3d shadow-sm rounded-xl" :class="{ 'rotate-y-180': flippedCards.includes(card.id) }">
+            <div class="workspace-card absolute inset-0 w-full h-full bg-card/60 backdrop-blur-sm backface-hidden flex items-center justify-center p-4 text-center">
+              <div v-if="canWrite" class="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all z-10">
+                <button type="button" data-edit-card-btn @click.stop="startEditCard(card)" class="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all">
+                  <Pencil class="w-3.5 h-3.5" />
+                </button>
+                <button type="button" @click.stop="handleDeleteCard(card.id)" class="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all">
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
               <span class="font-semibold text-sm text-foreground line-clamp-3">{{ card.front }}</span>
             </div>
             <div class="workspace-card absolute inset-0 w-full h-full bg-primary/5 backface-hidden rotate-y-180 flex items-center justify-center p-4 text-center shadow-inner">
+              <div v-if="canWrite" class="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all z-10">
+                <button type="button" @click.stop="startEditCard(card)" class="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all">
+                  <Pencil class="w-3.5 h-3.5" />
+                </button>
+                <button type="button" @click.stop="handleDeleteCard(card.id)" class="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all">
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
               <span class="font-bold text-sm text-primary line-clamp-3">{{ card.back }}</span>
             </div>
           </div>
@@ -182,8 +278,8 @@
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess, useModuleLoad } from '@/lib/workspaceScope'
 import { ref, computed, watch, onDeactivated } from 'vue'
-import { Layers, Trash2, ArrowLeft, Play, Award, CheckSquare } from 'lucide-vue-next'
-import { useFlashcardStore, type Deck } from '@/features/flashcards/stores/flashcards'
+import { Layers, Trash2, ArrowLeft, Play, Award, CheckSquare, Pencil, Check, X } from 'lucide-vue-next'
+import { useFlashcardStore, type Deck, type Flashcard } from '@/features/flashcards/stores/flashcards'
 import { useUIStore } from '@/stores/ui'
 import { useI18n } from 'vue-i18n'
 
@@ -211,7 +307,12 @@ const newDeckTitle = ref('')
 const newDeckColor = ref('#f97316') 
 const newCardFront = ref('')
 const newCardBack = ref('')
-const flippedCards = ref<string[]>([]) 
+const flippedCards = ref<string[]>([])
+const editingDeckId = ref<string | null>(null)
+const editingDeckTitle = ref('')
+const editingCardId = ref<string | null>(null)
+const editingCardFront = ref('')
+const editingCardBack = ref('')
 
 // Results State
 const testResults = ref<{cardId: string, isCorrect: boolean}[]>([])
@@ -219,6 +320,7 @@ const gameScore = ref(0)
 const gameErrors = ref(0)
 onDeactivated(() => {
   newDeckTitle.value='';newCardFront.value='';newCardBack.value='';newDeckColor.value='#f97316'
+  editingDeckId.value = null; editingDeckTitle.value = ''; editingCardId.value = null; editingCardFront.value = ''; editingCardBack.value = ''
   currentView.value = 'decks'; activeDeck.value = null; flippedCards.value = []
   testResults.value = []; gameScore.value = 0; gameErrors.value = 0
 })
@@ -243,6 +345,55 @@ const handleDeleteDeck = async (id: string) => {
   if (canWrite.value) {
     if (!await store.deleteDeck(id)) return
   }
+}
+
+const startEditDeck = (deck: Deck) => {
+  if (!canWrite.value) return
+  editingDeckId.value = deck.id
+  editingDeckTitle.value = deck.title
+}
+
+const cancelEditDeck = () => {
+  editingDeckId.value = null
+  editingDeckTitle.value = ''
+}
+
+const saveEditDeck = async (id: string) => {
+  if (!canWrite.value || !editingDeckTitle.value.trim()) return
+  const ok = await store.updateDeck(id, { title: editingDeckTitle.value.trim() })
+  if (!ok) {
+    uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
+    return
+  }
+  uiStore.addToast('Deste güncellendi', 'success')
+  cancelEditDeck()
+}
+
+const startEditCard = (card: Flashcard) => {
+  if (!canWrite.value) return
+  editingCardId.value = card.id
+  editingCardFront.value = card.front
+  editingCardBack.value = card.back
+}
+
+const cancelEditCard = () => {
+  editingCardId.value = null
+  editingCardFront.value = ''
+  editingCardBack.value = ''
+}
+
+const saveEditCard = async (deckId: string, cardId: string) => {
+  if (!canWrite.value || !editingCardFront.value.trim() || !editingCardBack.value.trim()) return
+  const ok = await store.updateCard(deckId, cardId, {
+    front: editingCardFront.value.trim(),
+    back: editingCardBack.value.trim(),
+  })
+  if (!ok) {
+    uiStore.addToast(t('sharing.errors.SAVE_FAILED'), 'error')
+    return
+  }
+  uiStore.addToast('Kart güncellendi', 'success')
+  cancelEditCard()
 }
 
 const openDeck = (deck: Deck) => {

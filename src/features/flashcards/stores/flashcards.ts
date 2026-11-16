@@ -77,6 +77,33 @@ export const useFlashcardStore = defineStore('flashcards', () => {
     finally { savingChildren.value-- }
   }
 
+  const updateDeck = async (id: string, patch: { title?: string; color?: string }) => {
+    const deck = decks.value.find(item => item.id === id)
+    if (!deck) return false
+    const updates: Record<string, unknown> = {}
+    if (patch.title !== undefined) {
+      const cleanTitle = patch.title.trim()
+      if (!cleanTitle) return false
+      updates.title = cleanTitle
+    }
+    if (patch.color !== undefined) {
+      updates.color = patch.color
+    }
+    if (!Object.keys(updates).length) return true
+    savingChildren.value++
+    try {
+      const { data, error } = await supabase.from('flashcard_decks').update(updates).eq('id', id).select().single()
+      if (error) throw error
+      Object.assign(deck, data || updates)
+      return true
+    } catch (err) {
+      console.error('Error updating deck:', err)
+      return false
+    } finally {
+      savingChildren.value--
+    }
+  }
+
   const deleteDeck = async (id: string) => {
     savingChildren.value++
     try {
@@ -92,34 +119,50 @@ export const useFlashcardStore = defineStore('flashcards', () => {
     try {
       const { error } = await supabase.from('flashcard_decks').update({ cards }).eq('id', deckId)
       if (error) throw error
+      return true
     } catch (err) {
       console.error('Error updating cards:', err)
+      return false
     }
   }
 
   const addCard = async (deckId: string, front: string, back: string) => {
     const deck = decks.value.find(d => d.id === deckId)
-    if (!deck) return
+    if (!deck) return false
     if (supabase.collection('flashcards')) {
       return changeItem(deckId, 'add', { front, back })
     }
     deck.cards.push({ id: Date.now().toString(), front, back })
-    syncCards(deckId, deck.cards)
-    return true
+    return await syncCards(deckId, deck.cards)
+  }
+
+  const updateCard = async (deckId: string, cardId: string, patch: { front: string; back: string }) => {
+    const deck = decks.value.find(d => d.id === deckId)
+    if (!deck) return false
+    const card = deck.cards.find(c => c.id === cardId)
+    if (!card) return false
+    const nextFront = patch.front.trim()
+    const nextBack = patch.back.trim()
+    if (!nextFront || !nextBack) return false
+    if (supabase.collection('flashcards')) {
+      return changeItem(deckId, 'update', { id: cardId, front: nextFront, back: nextBack }, card._version)
+    }
+    card.front = nextFront
+    card.back = nextBack
+    return await syncCards(deckId, deck.cards)
   }
 
   const deleteCard = async (deckId: string, cardId: string) => {
     const deck = decks.value.find(d => d.id === deckId)
-    if (!deck) return
+    if (!deck) return false
     if (supabase.collection('flashcards')) {
       const card = deck.cards.find(c => c.id === cardId)
       return changeItem(deckId, 'delete', { id: cardId }, card?._version)
     }
     deck.cards = deck.cards.filter(c => c.id !== cardId)
-    syncCards(deckId, deck.cards)
-    return true
+    return await syncCards(deckId, deck.cards)
   }
 
   supabase.listen?.({ flashcard_decks: fetchDecks }, () => isLoading.value || Boolean(savingChildren.value))
-  return { decks, isLoading, fetchDecks, addDeck, deleteDeck, addCard, deleteCard }
+  return { decks, isLoading, fetchDecks, addDeck, updateDeck, deleteDeck, addCard, updateCard, deleteCard }
 })

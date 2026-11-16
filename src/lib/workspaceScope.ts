@@ -1,5 +1,5 @@
 import { defineStore, getActivePinia, type StoreGeneric } from 'pinia'
-import { ref, computed, watch, onScopeDispose, getCurrentScope, inject, onMounted, onActivated, onDeactivated, type InjectionKey, type Ref } from 'vue'
+import { ref, computed, watch, onScopeDispose, getCurrentScope, inject, onMounted, onActivated, onDeactivated, onUnmounted, type InjectionKey, type Ref } from 'vue'
 import { supabase } from './supabase'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { tableModules } from './sharing'
@@ -419,7 +419,7 @@ export function useWorkspaceDraft<T>(key: string, initial: T): Ref<T> {
 export const moduleLoadKey: InjectionKey<(delta: number) => void> = Symbol('workspace-module-load')
 
 /** Load once on first mount, then once per reactivation, including async children. */
-export function useModuleLoad(load: () => unknown) {
+export function useModuleLoad(load: () => unknown, onMutated: () => unknown = load) {
   const pending = inject(moduleLoadKey, null)
   let active = false
   let inFlight: Promise<unknown> | undefined
@@ -431,7 +431,18 @@ export function useModuleLoad(load: () => unknown) {
     inFlight = Promise.resolve().then(load).finally(() => { pending?.(-1); inFlight = undefined })
     return inFlight
   }
-  onMounted(activate)
+  function handleAiMutated() {
+    if (!active) return
+    void Promise.resolve().then(onMutated)
+  }
+  onMounted(() => {
+    void activate()
+    if (typeof window !== 'undefined') window.addEventListener('workspace-ai-mutated', handleAiMutated)
+  })
   onActivated(activate)
   onDeactivated(() => { active = false })
+  onUnmounted(() => {
+    active = false
+    if (typeof window !== 'undefined') window.removeEventListener('workspace-ai-mutated', handleAiMutated)
+  })
 }

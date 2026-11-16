@@ -379,6 +379,17 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
     isRunning.value=false;deadline=null;stopClock();publish(true);void flushJournal();title()
   }
   const storageChanged=(event:StorageEvent)=>{if(event.key===`focus-owner:${owner}`&&event.newValue){try{mirror(JSON.parse(event.newValue))}catch{}}}
+  const handleAiPomodoroCommand=(event:Event)=>{
+    const detail=(event as CustomEvent<{command?:'start'|'pause'|'reset'|'mode';mode?:ModeKey;minutes?:number}>)?.detail
+    if(!detail?.command)return
+    if(typeof detail.minutes==='number'&&Number.isFinite(detail.minutes)){
+      configure({...durations.value,focus:Math.min(90,Math.max(10,Math.round(detail.minutes)))})
+    }
+    if(detail.command==='start'){if(!isRunning.value)void startTimer()}
+    else if(detail.command==='pause'){if(isRunning.value)pauseTimer()}
+    else if(detail.command==='reset'){void resetTimer()}
+    else if(detail.command==='mode'&&detail.mode){void setMode(detail.mode)}
+  }
   function init() {
     const uid=auth.user?.id||workspaces.userId
     if(initialized&&owner===uid)return
@@ -405,7 +416,7 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
     if(typeof BroadcastChannel!=='undefined'){
       try{channel=new BroadcastChannel(`focus:${owner}`);channel.onmessage=event=>mirror(event.data)}catch{channel=undefined}
     }
-    if(typeof window!=='undefined'){window.addEventListener('storage',storageChanged);window.addEventListener('online',visibility);window.addEventListener('pagehide',pagehide)}
+    if(typeof window!=='undefined'){window.addEventListener('storage',storageChanged);window.addEventListener('online',visibility);window.addEventListener('pagehide',pagehide);window.addEventListener('workspace-pomodoro-command',handleAiPomodoroCommand as EventListener)}
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',visibility)
     void sync()
   }
@@ -413,7 +424,7 @@ export const usePomodoroStore = defineStore('pomodoro',()=>{
     if(!initialized)return
     if(!remote.value&&modeKey.value==='focus')journal?.checkpoint()
     void flushJournal();publish();stopClock();channel?.close();channel=undefined;initialized=false;epoch++;syncing=false;isRunning.value=false;deadline=null;remote.value=false
-    if(typeof window!=='undefined'){window.removeEventListener('storage',storageChanged);window.removeEventListener('online',visibility);window.removeEventListener('pagehide',pagehide)}
+    if(typeof window!=='undefined'){window.removeEventListener('storage',storageChanged);window.removeEventListener('online',visibility);window.removeEventListener('pagehide',pagehide);window.removeEventListener('workspace-pomodoro-command',handleAiPomodoroCommand as EventListener)}
     if(typeof document!=='undefined')document.removeEventListener('visibilitychange',visibility)
     if(typeof document!=='undefined')document.title=originalTitle
   }

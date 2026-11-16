@@ -115,6 +115,19 @@ test('deleting the selected project inside the editor preserves local edits and 
  f.state.projectId.value='';f.state.submit();assert.equal(f.emitted[0][1].taskVersion,5);assert.equal(f.emitted[0][1].task.title,'Unsaved edit')
 })
 
+test('saving a renamed task clears stale titles on its linked scheduled blocks so calendar views follow the live task title',t=>{
+ const staleBlock={id:'stale',task_id:'task',title:'test başlığında not ekle bugün için',starts_at:'2026-11-15T09:00:00Z',ends_at:'2026-11-15T10:00:00Z',version:2,timezone:'UTC',subtask_ids:[]}
+ const task={id:'task',title:'test başlığında not ekle bugün için',status:'todo',version:3,checklist:[],scheduled_blocks:[staleBlock]}
+ const f=editorFixture({mode:'task',task,block:undefined});t.after(f.stop)
+ f.state.title.value='yapılacaklar'
+ f.state.submit()
+ const draft=f.emitted[0][1]
+ assert.equal(draft.task.title,'yapılacaklar')
+ assert.equal(draft.times.length,1)
+ assert.equal(draft.times[0].id,'stale')
+ assert.equal(draft.times[0].title,'')
+})
+
 function calendarFixture(overrides = {}, stored = {}, globals = {}) {
   const scope = vue.effectScope(), emitted = [], moves = [], drafts = new Map(), dragInstances = []
   class Draggable {

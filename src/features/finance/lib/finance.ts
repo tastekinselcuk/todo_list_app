@@ -2,7 +2,7 @@ import type { InjectionKey } from 'vue'
 export const openFinanceAnalysisKey: InjectionKey<(month?:string) => void> = Symbol('open-finance-analysis')
 export type FinanceCurrency = 'TRY' | 'USD' | 'EUR' | 'GBP'
 export type FinanceEntity = 'transaction' | 'position'
-export interface FinanceTransaction { id:string;title:string;kind:'income'|'expense';category:string;category_id?:string|null;amount:number;occurred_on:string;version:number;recurring_id?:string|null }
+export interface FinanceTransaction { id:string;title:string;kind:'income'|'expense';category:string;category_id?:string|null;amount:number;occurred_on:string;version:number;recurring_id?:string|null;note?:string|null }
 export interface FinanceSchedule { id:string;title:string;kind:'income'|'expense';category_id?:string|null;amount:number;cadence:'weekly'|'monthly'|'yearly';starts_on:string;timezone:string;next_on:string;active:boolean;version:number }
 export interface FinanceBudgetCategory { id:string;name:string;archived:boolean;version:number;budget_version:number;budget:number|null;budget_scope:'month'|'forward'|null;spent:number }
 export interface FinanceFilters { search:string;kind:string;category:string;recurring:string }

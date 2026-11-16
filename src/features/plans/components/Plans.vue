@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed,inject,ref,onMounted,onActivated,onDeactivated,onUnmounted,watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUpRight,Check,Copy,History,Trash2,Play,Pause } from 'lucide-vue-next'
+import { ArrowUpRight,Check,Copy,FileText,History,Trash2,Play,Pause } from 'lucide-vue-next'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import { useSearchReveal } from '@/lib/searchNavigation'
 import { useModuleAccess,useModuleLoad } from '@/lib/workspaceScope'
@@ -13,9 +13,20 @@ import { usePlansStore,type Plan } from '../stores/plans'
 import { firstPopulatedPeriod,periodStart,periods,type Period } from '../lib/periods'
 const {canWrite}=useModuleAccess('plans'),store=usePlansStore(),timer=usePomodoroStore(),settings=useSettingsStore(),ui=useUIStore(),{locale}=useI18n()
 const copy=computed(()=>locale.value==='tr'?{
- timeless:'Hızlı Not',daily:'Günlük',weekly:'Haftalık',monthly:'Aylık',yearly:'Yıllık',placeholder:'Aklında ne var?',add:'Ekle',archive:'Geçmişi göster',current:'Bu dönem',done:'tamamlandı',pending:'yapılacak',carried:'Önceki dönemden',history:'Geçmiş dönemler',historyEmpty:'Henüz geçmiş bir dönem yok.',setup:'Planlar yüklenemedi. Bağlantıyı kontrol et; yeni kurulumda PLANS_SETUP.md dosyasındaki güncellemeyi tamamla.',retry:'Tekrar dene',complete:'Tamamla',undo:'Tamamlanmadı olarak işaretle',copy:'Kopyala',copied:'Kopyalandı',copyFailed:'Kopyalama başarısız',delete:'Sil',deleteFailed:'Plan silinemedi',focus:'Odaklan',pause:'Duraklat',next:'Sıradaki odak',goals:'Pomodoro ayarları',sessions:'Oturum hedefi',minutes:'Oturum süresi (dakika)',save:'Kaydet',cancel:'Vazgeç',focusFailed:'Odak başlatılamadı. Veritabanı güncellemesini ve bağlantını kontrol et.',goalHint:'Hedefe ulaşmak planı otomatik tamamlamaz.'
-}:{timeless:'Quick Notes',daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly',placeholder:'What’s on your mind?',add:'Add',archive:'Show history',current:'This period',done:'completed',pending:'to do',carried:'Carried forward',history:'Past periods',historyEmpty:'No past periods yet.',setup:'Could not load plans. Check your connection and complete the update in PLANS_SETUP.md.',retry:'Retry',complete:'Complete',undo:'Mark incomplete',copy:'Copy',copied:'Copied',copyFailed:'Could not copy',delete:'Delete',deleteFailed:'Could not delete plan',focus:'Focus',pause:'Pause',next:'Next focus',goals:'Pomodoro settings',sessions:'Session goal',minutes:'Session duration (minutes)',save:'Save',cancel:'Cancel',focusFailed:'Could not start focus. Check the database update and your connection.',goalHint:'Reaching the goal does not complete the plan automatically.'})
+ timeless:'Hızlı Not',daily:'Günlük',weekly:'Haftalık',monthly:'Aylık',yearly:'Yıllık',placeholder:'Aklında ne var?',add:'Ekle',archive:'Geçmişi göster',current:'Bu dönem',done:'tamamlandı',pending:'yapılacak',carried:'Önceki dönemden',history:'Geçmiş dönemler',historyEmpty:'Henüz geçmiş bir dönem yok.',setup:'Planlar yüklenemedi. Bağlantıyı kontrol et; yeni kurulumda PLANS_SETUP.md dosyasındaki güncellemeyi tamamla.',retry:'Tekrar dene',complete:'Tamamla',undo:'Tamamlanmadı olarak işaretle',copy:'Kopyala',copied:'Kopyalandı',copyFailed:'Kopyalama başarısız',delete:'Sil',deleteFailed:'Plan silinemedi',focus:'Odaklan',pause:'Duraklat',next:'Sıradaki odak',goals:'Pomodoro ayarları',sessions:'Oturum hedefi',minutes:'Oturum süresi (dakika)',save:'Kaydet',cancel:'Vazgeç',focusFailed:'Odak başlatılamadı. Veritabanı güncellemesini ve bağlantını kontrol et.',goalHint:'Hedefe ulaşmak planı otomatik tamamlamaz.',notes:'Plan notu',notesPlaceholder:'Bu plan için detay, kontrol listesi veya AI notu ekleyin...',titleLabel:'Başlık'
+}:{timeless:'Quick Notes',daily:'Daily',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly',placeholder:'What’s on your mind?',add:'Add',archive:'Show history',current:'This period',done:'completed',pending:'to do',carried:'Carried forward',history:'Past periods',historyEmpty:'No past periods yet.',setup:'Could not load plans. Check your connection and complete the update in PLANS_SETUP.md.',retry:'Retry',complete:'Complete',undo:'Mark incomplete',copy:'Copy',copied:'Copied',copyFailed:'Could not copy',delete:'Delete',deleteFailed:'Could not delete plan',focus:'Focus',pause:'Pause',next:'Next focus',goals:'Pomodoro settings',sessions:'Session goal',minutes:'Session duration (minutes)',save:'Save',cancel:'Cancel',focusFailed:'Could not start focus. Check the database update and your connection.',goalHint:'Reaching the goal does not complete the plan automatically.',notes:'Plan note',notesPlaceholder:'Add details, checklist, or AI notes for this plan...',titleLabel:'Title'})
 const selected=ref<Period>('timeless'),inputPeriod=ref<Period>('timeless'),title=ref(''),showHistory=ref(false),today=ref(new Date())
+const editingNoteId=ref(''),titleDraft=ref(''),noteDraft=ref('')
+function plainNotePreview(raw?:string){return String(raw||'').replace(/<[^>]+>/g,' ').replace(/[#*_`~>-]/g,' ').replace(/\s+/g,' ').trim()}
+function toggleNoteEditor(plan:Plan){
+ if(editingNoteId.value===plan.id){editingNoteId.value='';titleDraft.value='';noteDraft.value='';return}
+ editingNoteId.value=plan.id;titleDraft.value=plan.title;noteDraft.value=plan.notes||''
+}
+async function savePlanNote(plan:Plan){
+ if(!editable(plan)||store.isSaving(plan.id))return
+ const current=store.plans.find(p=>p.id===plan.id&&p.source===plan.source)
+ if(current&&await store.update(current,{title:titleDraft.value.trim()||current.title,notes:noteDraft.value.trim()})){editingNoteId.value='';titleDraft.value='';noteDraft.value=''}
+}
 let periodChosen=false
 const periodOptions=computed(()=>periods.map(value=>({value,label:copy.value[value]})))
 const inPeriod=(plan:Plan,period:Period)=>plan.period===period&&(period==='timeless'||plan.period_date===periodStart(period,today.value,store.timezone))
@@ -56,7 +67,7 @@ watch(selected,value=>{inputPeriod.value=value;periodChosen=true;if(value==='tim
 watch(()=>timer.taskStatsSequence,()=>{void refresh()})
 let clock:ReturnType<typeof setInterval>|undefined
 function watchDay(){clearInterval(clock);clock=setInterval(()=>{if(periodStart('daily',new Date(),store.timezone)!==periodStart('daily',today.value,store.timezone))void refresh()},30000)}
-onMounted(watchDay);onActivated(watchDay);useModuleLoad(()=>refresh(true));onDeactivated(()=>{title.value='';clearInterval(clock);showHistory.value=false;selected.value='timeless';inputPeriod.value='timeless';periodChosen=false});onUnmounted(()=>{clearInterval(clock)})
+onMounted(watchDay);onActivated(watchDay);useModuleLoad(()=>refresh(true),()=>refresh());onDeactivated(()=>{title.value='';editingNoteId.value='';titleDraft.value='';noteDraft.value='';clearInterval(clock);showHistory.value=false;selected.value='timeless';inputPeriod.value='timeless';periodChosen=false});onUnmounted(()=>{clearInterval(clock)})
 useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.period as Period))selected.value=hit.meta.period as Period;periodChosen=true;today.value=new Date();await store.load(hit.record_id);if(!isCurrent())return;const plan=store.plans.find(p=>p.id===hit.record_id);if(plan){selected.value=plan.period;showHistory.value=plan.period!=='timeless'&&plan.period_date<periodStart(plan.period,today.value,store.timezone)}})
 </script>
 <template>
@@ -67,16 +78,25 @@ useSearchReveal('plans',async(hit,isCurrent)=>{if(periods.includes(hit.meta.peri
    <div class="period-toolbar"><nav class="period-tabs" :aria-label="copy.current"><button v-for="period in periods" :key="period" :class="{selected:selected===period}" :aria-pressed="selected===period" @click="selected=period">{{ copy[period] }}<span v-if="count(period)">{{ count(period) }}</span></button></nav><button v-if="selected!=='timeless'" class="history-switch" role="switch" :aria-checked="showHistory" @click="showHistory=!showHistory"><History :size="15" />{{ copy.archive }}<span class="switch-track" :class="{on:showHistory}"><i /></span></button></div>
   </div>
   <div v-if="!currentPlans.length&&!store.busy&&!store.error" class="empty-state"><p>{{ emptyMessage }}</p></div>
-  <div class="task-list"><article v-for="plan in displayedPlans" :key="(plan.source||'plans')+plan.id" :data-search-record="plan.id" class="workspace-card task-row" :class="{completed:plan.completed}" @click="editable(plan)&&toggle(plan)">
+  <div class="task-list"><template v-for="plan in displayedPlans" :key="(plan.source||'plans')+plan.id"><article :data-search-record="plan.id" class="workspace-card task-row" :class="{completed:plan.completed}" @click="editable(plan)&&toggle(plan)">
    <button :disabled="!editable(plan)" class="task-check" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-label="plan.completed?copy.undo:copy.complete" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><Check v-if="plan.completed" :size="13" /></button>
-   <button :disabled="!editable(plan)" class="task-content" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.period!=='timeless'&&plan.history.length&&!plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
+   <button :disabled="!editable(plan)" class="task-content" :aria-disabled="store.busy||store.isSaving(plan.id)" :aria-pressed="plan.completed" @click.stop="toggle(plan)"><span>{{ plan.title }}</span><small v-if="plan.notes" class="plan-note-preview">{{ plainNotePreview(plan.notes) }}</small><small v-if="plan.period!=='timeless'&&plan.history.length&&!plan.completed"><ArrowUpRight :size="11" />{{ copy.carried }}</small></button>
    <div class="task-actions" @click.stop>
     <button v-if="plan.focus && settings.isModuleActive('pomodoro')" type="button" class="focus-goal" :disabled="plan.completed||store.busy||store.isSaving(plan.id)||timer.starting||timer.clearing" :aria-label="copy.goals" :title="copy.goals" @click.stop="openGoal(plan)">{{ plan.focus.sessions }}/{{ plan.focus.estimated_sessions }}</button>
+    <button v-if="editable(plan) || plan.notes" type="button" class="task-action note-action" :class="{'is-focused':Boolean(plan.notes)||editingNoteId===plan.id}" :aria-label="copy.notes" :title="copy.notes" :aria-expanded="editingNoteId===plan.id" @click.stop="toggleNoteEditor(plan)"><FileText :size="15" /></button>
     <button type="button" class="task-action" :aria-label="copy.copy" :title="copy.copy" @click.stop="copyPlan(plan)"><Copy :size="15" /></button>
     <button v-if="settings.isModuleActive('pomodoro')" type="button" class="task-action focus-action" :class="{'is-focused':isRunning(plan)}" :disabled="plan.completed||store.busy||store.isSaving(plan.id)||store.isFocusing(plan)||timer.starting||timer.clearing" :aria-label="copy.goals" :title="copy.goals" :aria-pressed="isRunning(plan)" @click.stop="openGoal(plan)"><Pause v-if="isRunning(plan)" :size="15" /><Play v-else :size="15" /></button>
     <button v-if="editable(plan)" type="button" class="task-action delete-action" :disabled="store.busy||store.isSaving(plan.id)" :aria-label="copy.delete" :title="copy.delete" @click.stop="deletePlan(plan)"><Trash2 :size="15" /></button>
    </div>
-  </article></div>
+  </article>
+  <div v-if="editingNoteId===plan.id" class="workspace-card plan-note-panel" @click.stop>
+   <input v-model="titleDraft" type="text" maxlength="500" :readonly="!editable(plan)" :disabled="store.busy||store.isSaving(plan.id)" :aria-label="copy.titleLabel" :placeholder="copy.titleLabel" class="plan-title-input" />
+   <textarea v-model="noteDraft" rows="3" maxlength="20000" :readonly="!editable(plan)" :disabled="store.busy||store.isSaving(plan.id)" :aria-label="copy.notes" :placeholder="copy.notesPlaceholder" class="plan-note-textarea" />
+   <div v-if="editable(plan)" class="plan-note-actions">
+    <button type="button" class="plan-note-cancel" :disabled="store.busy||store.isSaving(plan.id)" @click="editingNoteId='';titleDraft='';noteDraft=''">{{ copy.cancel }}</button>
+    <button type="button" class="plan-note-save" :disabled="store.busy||store.isSaving(plan.id)" @click="savePlanNote(plan)">{{ copy.save }}</button>
+   </div>
+  </div></template></div>
   <section v-if="selected!=='timeless'&&showHistory" class="archive-section"><h3><History :size="16" />{{ copy.history }}</h3><p v-if="!archived.length" class="archive-empty">{{ copy.historyEmpty }}</p><details v-for="[date,rows] in archived" :key="date" class="workspace-card archive-group"><summary>{{ formatDate(date) }}<span>{{ rows.filter(row=>row.completed).length }} / {{ rows.length }} {{ copy.done }}</span></summary><div v-for="row in rows" :key="row.id" :data-search-record="row.id" class="archive-row"><Check v-if="row.completed" :size="15" /><History v-else :size="15" /><div><span :class="{'past-done':row.completed}">{{ row.title }}</span><small>{{ row.completed?copy.done:copy.pending }}</small></div></div></details></section>
  </section>
 </template>
@@ -446,6 +466,78 @@ button:disabled {
   .capture>.add-button {
     margin-left:auto
   }
+}
+.plan-note-preview {
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  margin-top:3px;
+  font-size:11px;
+  color:hsl(var(--muted-foreground));
+  line-height:1.45
+}
+.plan-note-panel {
+  padding:12px 14px;
+  border-radius:14px;
+  background:hsl(var(--card)/.6);
+  border:1px solid hsl(var(--border)/.6);
+  display:flex;
+  flex-direction:column;
+  gap:8px
+}
+.plan-title-input {
+  width:100%;
+  height:34px;
+  border-radius:10px;
+  border:1px solid hsl(var(--border)/.6);
+  background:hsl(var(--background)/.6);
+  padding:0 11px;
+  font-size:13px;
+  font-weight:500;
+  color:hsl(var(--foreground));
+  outline:none
+}
+.plan-title-input:focus {
+  border-color:hsl(var(--primary)/.45);
+  box-shadow:0 0 0 1px hsl(var(--primary)/.25)
+}
+.plan-note-textarea {
+  width:100%;
+  min-height:68px;
+  resize:vertical;
+  border-radius:10px;
+  border:1px solid hsl(var(--border)/.6);
+  background:hsl(var(--background)/.6);
+  padding:8px 11px;
+  font-size:12px;
+  line-height:1.5;
+  color:hsl(var(--foreground));
+  outline:none
+}
+.plan-note-textarea:focus {
+  border-color:hsl(var(--primary)/.45);
+  box-shadow:0 0 0 1px hsl(var(--primary)/.25)
+}
+.plan-note-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:6px
+}
+.plan-note-cancel,.plan-note-save {
+  height:30px;
+  padding:0 12px;
+  border-radius:8px;
+  font-size:11px;
+  font-weight:500
+}
+.plan-note-cancel {
+  border:1px solid hsl(var(--border)/.6);
+  color:hsl(var(--muted-foreground))
+}
+.plan-note-save {
+  background:hsl(var(--primary));
+  color:hsl(var(--primary-foreground))
 }
 @media(prefers-reduced-motion:reduce) {
   * {

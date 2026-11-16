@@ -3,7 +3,7 @@
     <button type="button" :disabled="!canWrite || busy" class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default" :class="done?'border-primary bg-primary':'border-muted-foreground/40 hover:border-primary/50'" :aria-label="t(done?'periodicTasks.undo':'periodicTasks.complete')" :aria-pressed="done" @click="$emit('toggle',task.id)"><Check v-if="done" class="h-3 w-3 text-primary-foreground" /></button>
     <div class="min-w-0 flex-1">
       <button type="button" :disabled="!canWrite || busy" class="w-full min-w-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default" @click="$emit('toggle',task.id)"><p class="break-words text-sm font-medium leading-snug" :class="done?'text-muted-foreground line-through':'text-foreground'">{{ task.title }}</p></button>
-      <p v-if="task.notes" class="mt-1 line-clamp-2 text-xs text-muted-foreground">{{ task.notes }}</p>
+      <p v-if="plainNotes" class="mt-1 line-clamp-2 text-xs text-muted-foreground">{{ plainNotes }}</p>
       <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
         <span class="inline-flex items-center gap-1"><Repeat class="h-3 w-3" />{{ recurrenceLabel }}</span>
         <span v-if="task.reminder_time" class="inline-flex items-center gap-1 tabular-nums"><Clock3 class="h-3 w-3" />{{ task.reminder_time }}</span>
@@ -27,6 +27,7 @@ const {canWrite}=useModuleAccess('periodic'),{t}=useI18n()
 const props=defineProps<{task:PeriodicTask;busy?:boolean}>()
 defineEmits<{toggle:[id:string];delete:[id:string];edit:[task:PeriodicTask]}>()
 const done=computed(()=>isCompletedForPeriod(props.task))
+const plainNotes=computed(()=>String(props.task.notes || '').replace(/<[^>]+>/g,' ').replace(/[#*_`~>-]/g,' ').replace(/\s+/g,' ').trim())
 const recurrenceLabel=computed(()=>{
  const task=props.task
  if(task.frequency==='daily')return t('periodicTasks.daily')

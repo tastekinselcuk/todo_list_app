@@ -76,6 +76,14 @@ export const useActivityListsStore=defineStore('activityLists',()=>{
   catch(failure){if(current())error.value=activityLibraryError(failure);return false}
   finally{saving.value--;pending.value=pending.value.filter(key=>key!==id)}
  }
+ async function updateItemNotes(id:string,notes:string){
+  if(pending.value.includes(id))return false
+  const item=items.value.find(i=>i.id===id);if(!item||!current())return false
+  try{
+   await mutate('item.notes',id,{notes:notes.trim()},item.version)
+   error.value=null;return true
+  }catch(failure){if(current()){error.value=activityLibraryError(failure);if(error.value==='conflict')void loadItems()}return false}
+ }
  client.listen({activity_items:loadItems},()=>isLoading.value||busy.value)
- return {items,collections,memberships,isLoading,busy,pending,error,setupRequired,wantCount,doneCount,itemsByType,inCollection,loadItems,mutate,addFromSearch,toggleStatus,deleteItem}
+ return {items,collections,memberships,isLoading,busy,pending,error,setupRequired,wantCount,doneCount,itemsByType,inCollection,loadItems,mutate,addFromSearch,toggleStatus,updateItemNotes,deleteItem}
 })

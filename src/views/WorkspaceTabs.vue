@@ -15,6 +15,19 @@
 
         <button
           type="button"
+          data-open-ai-assistant
+          class="absolute top-0 right-8 z-20 !m-0 p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full transition-all duration-300 opacity-0 scale-90 pointer-events-none group-hover/workspace:opacity-100 group-hover/workspace:scale-100 group-hover/workspace:pointer-events-auto focus-visible:opacity-100 focus-visible:scale-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 [@media(hover:none)]:pointer-events-auto"
+          :class="assistantOpen ? '!opacity-100 !scale-100 !pointer-events-auto text-primary bg-primary/10' : ''"
+          :title="t('ai.openAssistant')"
+          :aria-label="t('ai.openAssistant')"
+          :aria-pressed="assistantOpen"
+          @click="assistantOpen = !assistantOpen"
+        >
+          <Sparkles class="w-4 h-4" />
+        </button>
+
+        <button
+          type="button"
           class="absolute top-0 right-0 z-20 !m-0 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-300 opacity-0 scale-90 pointer-events-none group-hover/workspace:opacity-100 group-hover/workspace:scale-100 group-hover/workspace:pointer-events-auto focus-visible:opacity-100 focus-visible:scale-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 [@media(hover:none)]:pointer-events-auto"
           :title="widthToggleLabel"
           :aria-label="widthToggleLabel"
@@ -41,6 +54,7 @@
       </div>
 
       <WorkspaceTrash v-if="trashOpen" @close="trashOpen = false" />
+      <WorkspaceAssistant v-if="assistantOpen" @close="assistantOpen = false" />
       <WorkspaceSearch ref="contentSearch" :enabled="activeModules.map(tab => tab.id)" @select="selectSearchHit" />
 
     </div>
@@ -51,7 +65,7 @@
 import { computed, watch, defineAsyncComponent, defineComponent, h, onMounted, onBeforeUnmount, ref, nextTick, shallowReactive, provide, type Component } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
-import { Expand, Shrink } from 'lucide-vue-next'
+import { Expand, Shrink, Sparkles } from 'lucide-vue-next'
 import WorkspaceModulePicker from '@/components/ui/WorkspaceModulePicker.vue'
 import { workspaceNavigationKey, workspaceActiveViewKey, workspaceOpenItemKey, type WorkspaceNavigationIntent } from '@/lib/workspaceNavigation'
 import { useWorkspaceDraft } from '@/lib/workspaceScope'
@@ -90,7 +104,9 @@ function createModule(id: keyof typeof loaders): Component {
 }
 
 const WorkspaceTrash = defineAsyncComponent(() => import('@/components/ui/WorkspaceTrash.vue'))
+const WorkspaceAssistant = defineAsyncComponent(() => import('@/features/ai/components/WorkspaceAssistant.vue'))
 const trashOpen = ref(false)
+const assistantOpen = ref(false)
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
 const widthToggleLabel = computed(() => t(settingsStore.isFullScreen ? 'workspace.collapseWorkspace' : 'workspace.expandWorkspace'))
@@ -163,7 +179,7 @@ const activeModules = computed(() => {
   return allTabs.filter(tab => settingsStore.isModuleActive(tab.id))
 })
 
-watch(() => [settingsStore.isFullScreen, settingsStore.isPomodoroDocked, activeModules.value.length], () => { void nextTick(() => workspaceScroll?.refresh()) })
+watch(() => [settingsStore.isFullScreen, settingsStore.isPomodoroDocked, activeModules.value.length, assistantOpen.value], () => { void nextTick(() => workspaceScroll?.refresh()) })
 
 const currentComponent = computed(() => {
   return activeModules.value.some(tab => tab.id === activeTab.value) ? componentMap[activeTab.value] : null
@@ -187,7 +203,7 @@ const stopTrashChanges=onTrashChange(change=>{if(change.owner===workspaces.userI
 onBeforeUnmount(()=>{stopTrashMoves();stopTrashChanges()})
 watch(() => workspaces.sessionKey, () => { destination.value = null;contentSearch.value?.close() })
 async function openTabSearch() { await contentSearch.value?.open() }
-defineExpose({ openSearch: openTabSearch, openTrash: () => { trashOpen.value = true }, selectModule })
+defineExpose({ openSearch: openTabSearch, openTrash: () => { trashOpen.value = true }, openAssistant: () => { assistantOpen.value = true }, selectModule })
 function selectSearchHit(hit: SearchHit) {
   if (['secure','finance'].includes(hit.module) || !activeModules.value.some(tab => tab.id === hit.module)) return
   destination.value = { ...hit, sequence: ++searchSequence }
@@ -200,10 +216,87 @@ function handleShortcut(event: KeyboardEvent) {
     if (document.querySelector('dialog[open]') && !document.querySelector('.workspace-search[open]')) return
     event.preventDefault()
     void openTabSearch()
+  } else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'j') {
+    event.preventDefault()
+    assistantOpen.value = !assistantOpen.value
   }
 }
-onMounted(() => window.addEventListener('keydown', handleShortcut))
-onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
+
+async function handleAiTransform(event: Event) {
+  if (activeTab.value === 'secure') {
+    ui.addToast('Güvenli Kasa alanı AI erişimine tamamen kapalıdır.', 'info')
+    return
+  }
+  const detail = (event as CustomEvent<{
+    action?: string
+    html?: string
+    selectedText?: string
+    targetFormat?: 'html' | 'markdown' | 'plain'
+    apply?: (nextHtml: string) => void
+  }>)?.detail
+  if (!detail?.action) return
+
+  const [{ useAiAssistantStore }, { notePlainTextPreview }] = await Promise.all([
+    import('@/features/ai/stores/aiAssistant'),
+    import('@/lib/aiNoteFormat'),
+  ])
+  const aiStore = useAiAssistantStore()
+  const sourceText = (detail.selectedText || notePlainTextPreview(detail.html || '', 2500)).trim()
+
+  if (detail.action === 'to_flashcards') {
+    if (!sourceText) {
+      ui.addToast('Bilgi kartı oluşturmak için not içeriği boş.', 'info')
+      return
+    }
+    assistantOpen.value = true
+    await aiStore.open('chat')
+    await aiStore.sendPrompt(`Bilgi kartlarına şu nottan yeni bir deste ve kartlar oluştur:\n${sourceText}`)
+    return
+  }
+
+  if (detail.action === 'to_task') {
+    if (!sourceText) {
+      ui.addToast('Göreve dönüştürmek için not içeriği boş.', 'info')
+      return
+    }
+    assistantOpen.value = true
+    await aiStore.open('chat')
+    await aiStore.sendPrompt(`Görevlere şu nottan alt maddeli yeni bir görev oluştur:\n${sourceText}`)
+    return
+  }
+
+  const sourceHtml = String(detail.html || '').trim()
+  if (!notePlainTextPreview(sourceHtml, 0)) {
+    ui.addToast('Dönüştürülecek not içeriği boş.', 'info')
+    return
+  }
+
+  try {
+    const res = await aiStore.transformNote({
+      text: sourceHtml,
+      instruction: detail.action as 'summarize' | 'expand' | 'action_items' | 'fix_grammar' | 'translate' | 'structure',
+      targetFormat: detail.targetFormat || 'html',
+      writeMode: 'replace',
+    })
+    if (res?.text && typeof detail.apply === 'function') {
+      detail.apply(res.text)
+      ui.addToast(res.reply || 'Not AI ile güncellendi.', 'success')
+    } else {
+      ui.addToast(aiStore.error || 'Not dönüştürme işlemi tamamlanamadı.', 'error')
+    }
+  } catch {
+    ui.addToast(aiStore.error || 'Not dönüştürme işlemi tamamlanamadı.', 'error')
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleShortcut)
+  window.addEventListener('workspace-ai-transform', handleAiTransform as EventListener)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleShortcut)
+  window.removeEventListener('workspace-ai-transform', handleAiTransform as EventListener)
+})
 
 watch([() => props.initialTab, () => props.navigationRequest, () => props.initialView], ([newVal]) => {
   if (newVal && activeModules.value.find(t => t.id === newVal)) {

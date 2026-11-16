@@ -22,9 +22,9 @@
       <button v-for="day in weekDays" :key="day.value" type="button" :disabled="loading" :aria-pressed="form.daysOfWeek.includes(day.value)" class="h-7 min-w-8 rounded-lg border px-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50" :class="form.daysOfWeek.includes(day.value)?'border-primary/30 bg-primary/10 text-primary':'border-border/50 bg-background/40 text-muted-foreground hover:bg-background/70 hover:text-foreground'" @click="toggleDay(day.value)">{{ day.label }}</button>
       <span v-if="!form.daysOfWeek.length" class="text-[11px] text-muted-foreground">{{ t('periodicTasks.selectDayError') }}</span>
     </div>
-    <details v-if="form.notes.trim() || editTask?.notes" class="text-xs text-muted-foreground">
+    <details class="text-xs text-muted-foreground" :open="Boolean(form.notes.trim() || editTask?.notes)">
       <summary class="w-fit cursor-pointer">{{ t('periodicTasks.savedNotes') }}</summary>
-      <textarea v-model="form.notes" rows="2" maxlength="500" :disabled="loading" :aria-label="t('periodicTasks.savedNotes')" class="routine-input mt-2 !h-auto resize-y py-2" />
+      <textarea v-model="form.notes" rows="3" maxlength="10000" :disabled="loading" :aria-label="t('periodicTasks.savedNotes')" class="routine-input mt-2 !h-auto resize-y py-2" />
     </details>
   </form>
 </template>

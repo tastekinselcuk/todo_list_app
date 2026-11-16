@@ -293,8 +293,8 @@ const handleLogout = async (scope: 'local' | 'global' = 'local') => {
 </script>
 
 <style>
-:root { --workspace-rail-open-width:224px; }
-.profile-host.app-profile { position:absolute; }
+:root { --workspace-rail-open-width:224px; --workspace-ai-open-width:clamp(340px, 28vw, 392px); }
+.profile-host.app-profile { position:absolute; transition: right 230ms cubic-bezier(.22,1,.36,1); }
 .app-content { padding-top:var(--app-top-space,4.25rem); transition: padding-top 260ms cubic-bezier(.22,1,.36,1), padding-left 240ms cubic-bezier(.22,1,.36,1), padding-right 240ms cubic-bezier(.22,1,.36,1); }
 @media (max-width:1023px) { .app-content { padding-top:max(4.25rem,var(--app-top-space,4.25rem)); } }
 .workspace-width-transition, .page-width-transition { transition: max-width 300ms cubic-bezier(.22,1,.36,1); }
@@ -309,6 +309,13 @@ const handleLogout = async (scope: 'local' | 'global' = 'local') => {
     --workspace-content-shift:0px;
     --workspace-wide-max:100%;
   }
+  body:has([data-workspace-assistant]) {
+    --workspace-right-inset:calc(var(--workspace-ai-open-width) + 28px);
+    --workspace-content-shift:0px;
+    --workspace-wide-max:100%;
+  }
+  body:has([data-workspace-assistant]) .profile-host.app-profile,
+  body:has([data-workspace-assistant]) .pomodoro-dock { right:calc(var(--workspace-ai-open-width) + 24px); }
   .app-content.workspace-layout { padding-left:var(--workspace-sidebar-inset,104px); padding-right:var(--workspace-right-inset,24px); }
   .workspace-layout[data-workspace-wide] .workspace-width-transition,
   .workspace-layout[data-workspace-wide] .page-width-transition,

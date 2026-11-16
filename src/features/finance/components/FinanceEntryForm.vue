@@ -29,6 +29,7 @@
     <div v-if="detailsOpen || entity==='position'" class="flex flex-wrap items-end gap-3 rounded-xl bg-muted/20 p-3">
       <label class="space-y-1.5"><span class="block text-xs text-muted-foreground">{{ t(entity==='position'?'finance.purchaseDate':'finance.date') }}</span><input v-model="date" required type="date" min="1900-01-01" :max="entity==='position'?today:'2100-12-31'" :disabled="disabled" class="finance-input !h-9 !w-36 !px-2.5 !text-xs" /></label>
       <label v-if="entity==='transaction' && (!record || schedule)" class="space-y-1.5"><span class="block text-xs text-muted-foreground">{{ t('finance.repeat') }}</span><CustomSelect v-model="cadence" :options="cadenceOptions" :aria-label="t('finance.repeat')" :disabled="disabled" size="sm" class="w-36" popover /></label>
+      <label v-if="entity==='transaction' && cadence==='once'" class="min-w-[200px] flex-1 space-y-1.5"><span class="block text-xs text-muted-foreground">{{ t('finance.note') }}</span><input v-model="note" maxlength="2000" :aria-label="t('finance.note')" :placeholder="t('finance.notePlaceholder')" :disabled="disabled" class="finance-input !h-9 !px-2.5 !text-xs" /></label>
     </div>
     <p v-else class="text-xs text-muted-foreground">{{ new Date(`${date}T12:00:00Z`).toLocaleDateString(locale,{day:'numeric',month:'short',timeZone:'UTC'}) }} · {{ t(`finance.${cadence}`) }}</p>
     <div v-if="legacy" class="flex flex-wrap items-center gap-1.5">
@@ -60,6 +61,7 @@ const date=ref(props.schedule?.starts_on || cash?.occurred_on || position?.purch
 const amount=ref(props.schedule?String(props.schedule.amount):cash?String(cash.amount):'')
 const entryTitle=props.schedule?.title || cash?.title || ''
 const name=ref(['income','expense'].includes(entryTitle)?'':entryTitle)
+const note=ref(cash?.note || '')
 const quantity=ref(position?String(position.quantity):''),buyPrice=ref(position?String(position.buy_price):''),manualPrice=ref(position?.manual_price==null?'':String(position.manual_price))
 const selected=computed(()=>investmentInstruments.find(item=>item.value===selection.value && item.category===category.value)),legacy=computed(()=>selection.value==='legacy' && position?.kind===category.value)
 const validation=ref('')
@@ -92,7 +94,9 @@ async function save() {
    const payload={title:name.value.trim() || kind.value,kind:kind.value,amount:value,cadence:cadence.value,starts_on:date.value,timezone:props.schedule?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Istanbul',category_id:cashCategory.value || null}
    if(await store.mutateSchedule(props.schedule?'update':'create',props.schedule?.id || props.draftId,payload,props.schedule?.version || null))emit('saved')
   }else {
-   if(await store.mutate('transaction',cash?'update':'create',cash?.id || props.draftId,{title:name.value.trim() || kind.value,kind:kind.value,amount:value,occurred_on:date.value,category_id:cashCategory.value || null},cash?.version || null))emit('saved')
+   const txPayload:Record<string,unknown>={title:name.value.trim() || kind.value,kind:kind.value,amount:value,occurred_on:date.value,category_id:cashCategory.value || null}
+   if(note.value.trim() || cash?.note)txPayload.note=note.value.trim() || null
+   if(await store.mutate('transaction',cash?'update':'create',cash?.id || props.draftId,txPayload,cash?.version || null))emit('saved')
   }
  }else {
   const units=parseFinanceNumber(quantity.value,8),purchase=parseFinanceNumber(buyPrice.value,8),current=manualPrice.value.trim()?parseFinanceNumber(manualPrice.value,8):null

@@ -10,6 +10,7 @@ export interface Plan {
   id: string
   user_id: string
   title: string
+  notes?: string
   period: Period
   period_date: string
   completed: boolean
@@ -77,15 +78,17 @@ export const usePlansStore = defineStore('plans', () => {
     } finally { busy.value = false }
   }
 
-  async function add(title: string, period: Period) {
+  async function add(title: string, period: Period, notes?: string) {
     if (!title.trim() || busy.value || !auth.user) return false
     busy.value = true
     error.value = ''
     try {
       const userId = auth.user.id
-      const result = await supabase.from('plans').insert({
+      const payload: Record<string, unknown> = {
         user_id: userId, title: title.trim(), period, period_date: periodStart(period, new Date(), timezone),
-      }).select().single()
+      }
+      if (notes && notes.trim()) payload.notes = notes.trim()
+      const result = await supabase.from('plans').insert(payload).select().single()
       if (result.error) throw result.error
       if (auth.user?.id !== userId) return false
       plans.value.push(result.data)
@@ -94,22 +97,30 @@ export const usePlansStore = defineStore('plans', () => {
     finally { busy.value = false }
   }
 
-  async function update(plan: Plan, updates: Partial<Pick<Plan, 'completed'>>) {
+  async function update(plan: Plan, updates: Partial<Pick<Plan, 'completed' | 'notes' | 'title'>>) {
     if (busy.value || savingIds.value.includes(plan.id) || !auth.user) return false
     const userId = auth.user.id
-    const previous = { completed: plan.completed }
+    const previous = { completed: plan.completed, ...(plan.notes !== undefined ? { notes: plan.notes } : {}), title: plan.title }
     savingIds.value.push(plan.id)
     error.value = ''
     // Render immediately, then restore the previous state if the write fails.
     Object.assign(plan, updates)
     try {
-      let query = supabase.from(plan.source==='quick'?'quick_notes':'plans').update({ ...updates, ...(plan.version === undefined ? {} : { version: plan.version }) })
+      const dbUpdates = plan.source==='quick'
+        ? {
+            ...(updates.completed !== undefined ? { completed: updates.completed } : {}),
+            ...(updates.title !== undefined ? { content: updates.title } : {}),
+            ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
+            ...(plan.version === undefined ? {} : { version: plan.version }),
+          }
+        : { ...updates, ...(plan.version === undefined ? {} : { version: plan.version }) }
+      let query = supabase.from(plan.source==='quick'?'quick_notes':'plans').update(dbUpdates)
         .eq('id', plan.id).eq(plan.source==='quick'?'created_by':'user_id', userId)
       if(plan.source!=='quick')query=query.eq('period_date',plan.period_date)
       const result=await query.select().single()
       if (result.error) throw result.error
       if (auth.user?.id !== userId) return false
-      Object.assign(plan, plan.source==='quick'?{completed:result.data.completed,version:result.data.version}:result.data)
+      Object.assign(plan, plan.source==='quick'?{completed:result.data.completed,version:result.data.version,...(result.data.notes!==undefined?{notes:result.data.notes}:{}),...(result.data.content!==undefined?{title:result.data.content}:{})}:result.data)
       return true
     } catch (err) {
       Object.assign(plan, previous)

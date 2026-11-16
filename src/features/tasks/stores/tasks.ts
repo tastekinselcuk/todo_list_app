@@ -164,5 +164,5 @@ export const useTasksStore=defineWorkspaceStore('work-tasks',()=>{
     })
   })
   onScopeDispose(()=>{disposed=true;generation++;calendarGeneration++;stop()})
-  return {projects,tasks,blocks,deadlines,project,range,loading,calendarLoading,saving,paging,error,calendarError,ready,calendarReady,calendarActive,calendarDirty,hasMore,total,counts,load,loadCalendar,setCalendarActive,selectProject,mutate,findTask,saveDetails,deleteProject}
+  return {projects,tasks,blocks,deadlines,project,range,loading,calendarLoading,saving,paging,error,calendarError,ready,calendarReady,calendarActive,calendarDirty,hasMore,total,counts,load,loadCalendar,invalidateCalendar,setCalendarActive,selectProject,mutate,findTask,saveDetails,deleteProject}
 })

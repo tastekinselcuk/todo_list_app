@@ -54,9 +54,17 @@
         </section>
       </div>
 
-      <section v-if="insights.length" class="workspace-card bg-card/30 px-4 py-3">
-        <h2 class="mb-2 text-xs font-medium">{{ t('analytics.findings') }}</h2>
-        <ul class="flex flex-col gap-2 text-xs leading-5 text-muted-foreground"><li v-for="insight in insights" :key="insight.key"><button type="button" class="flex items-start gap-2 text-left hover:text-foreground" @click="chooseMetric(insight.target)"><span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/60" />{{ insight.text }}</button></li></ul>
+      <section v-if="insights.length || aiSummary" class="workspace-card bg-card/30 px-4 py-3">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-xs font-medium">{{ t('analytics.findings') }}</h2>
+          <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50" :disabled="aiLoading" @click="generateAiInsight">{{ aiLoading ? '...' : 'AI ile Yorumla' }}</button>
+        </div>
+        <ul v-if="insights.length" class="flex flex-col gap-2 text-xs leading-5 text-muted-foreground"><li v-for="insight in insights" :key="insight.key"><button type="button" class="flex items-start gap-2 text-left hover:text-foreground" @click="chooseMetric(insight.target)"><span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/60" />{{ insight.text }}</button></li></ul>
+        <p v-if="aiSummary" class="mt-2.5 border-t border-border/40 pt-2.5 text-xs leading-5 text-foreground whitespace-pre-line">{{ aiSummary }}</p>
+      </section>
+      <section v-else class="workspace-card flex items-center justify-between gap-3 bg-card/30 px-4 py-3">
+        <span class="text-xs text-muted-foreground">{{ t('analytics.findings') }}</span>
+        <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50" :disabled="aiLoading" @click="generateAiInsight">{{ aiLoading ? '...' : 'AI ile Yorumla' }}</button>
       </section>
 
       <section v-for="panel in reportPanels" :key="panel" :ref="element => setReportPanel(panel, element as HTMLElement | null)" :aria-labelledby="`analytics-${panel}-heading`" class="context-panel workspace-card bg-card/40">
@@ -197,6 +205,22 @@ function openItem(item:AnalyticsItem) {
   const wid=item.workspace_id || workspace.value
   if(wid!==workspaces.activeId)workspaces.switchTo(wid)
   emit('enter-workspace',item.module==='quick'?'plans':item.module)
+}
+const aiSummary=ref(''),aiLoading=ref(false)
+async function generateAiInsight() {
+  if(aiLoading.value)return
+  aiLoading.value=true
+  try {
+    const wid=workspace.value || workspaces.activeId
+    const {invokeAiAssistant}=await import('@/features/ai/lib/aiClient')
+    const prompt=`Dönem analizi (${dateLabel.value}): Odak ${duration(sum.value.seconds)}, Tamamlanan ${sum.value.completed}, 30+ gün bekleyen ${oldItems.value.length}, Devreden plan ${carried.value.length}. Bu dönem için kısa verimlilik yorumu ve 2 somut öneri ver.`
+    const res=await invokeAiAssistant({workspace_id:wid,mode:'analyze',prompt})
+    aiSummary.value=res.reply || 'Dönem analizi hazır.'
+  } catch {
+    aiSummary.value=`Özet (${dateLabel.value}): ${duration(sum.value.seconds)} odak, ${sum.value.completed} tamamlanan iş, ${oldItems.value.length} bekleyen ve ${carried.value.length} devreden plan.`
+  } finally {
+    aiLoading.value=false
+  }
 }
 function exportReport() {
   if(!report.value)return

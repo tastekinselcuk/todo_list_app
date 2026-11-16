@@ -11,6 +11,7 @@
     <p class="text-[13px] mb-1 font-medium">{{ item?.title }}</p><p class="activity-hint mb-4">{{ t('activityLibrary.organizeHint') }}</p>
     <label v-for="group in collections" :key="group.id" class="activity-membership" :class="{'is-archived':group.archived_at}"><input type="checkbox" :checked="chosen.has(group.id)" :disabled="busy||!!group.archived_at" @change="toggle(group.id)" /><span class="activity-color-dot" :style="{backgroundColor:group.color}" /><span>{{ group.name }}</span><span v-if="group.archived_at" class="activity-hint">{{ t('activityLibrary.archived') }}</span></label>
     <p v-if="!collections.length" class="activity-hint py-3">{{ t('activityLibrary.noCollectionsHint') }}</p>
+    <label class="activity-field mt-4"><span>{{ t('activityLibrary.itemNotes') }}</span><textarea v-model="notes" rows="3" maxlength="4000" :disabled="busy" :aria-label="t('activityLibrary.itemNotes')" :placeholder="t('activityLibrary.itemNotesPlaceholder')" class="activity-input !h-auto py-2 resize-y" /></label>
    </template>
    <p v-if="error" role="alert" class="text-xs text-destructive mt-4">{{ t('activityLibrary.errors.'+error) }}</p>
   </div>
@@ -26,13 +27,13 @@ import { isDialogBackdropDoubleClick } from '@/lib/utils'
 import { collectionColors,type ActivityCollection } from '../lib/collections'
 import type { ActivityItem } from '../stores/activityLists'
 const props=defineProps<{mode:'collection'|'memberships';collection?:ActivityCollection|null;item?:ActivityItem|null;collections:ActivityCollection[];groupIds?:string[];busy:boolean;error:string|null}>()
-const emit=defineEmits<{close:[];save:[payload:{name:string;color:string;group_ids:string[]}];archive:[]}>(),{t}=useI18n()
-const name=ref(props.collection?.name||''),color=ref<string|null>(props.collection?.color||'#64748B'),chosen=ref(new Set(props.groupIds||[])),dialog=ref<HTMLDialogElement>(),titleId=`activity-${crypto.randomUUID()}`
+const emit=defineEmits<{close:[];save:[payload:{name:string;color:string;group_ids:string[];notes?:string}];archive:[]}>(),{t}=useI18n()
+const name=ref(props.collection?.name||''),color=ref<string|null>(props.collection?.color||'#64748B'),chosen=ref(new Set(props.groupIds||[])),notes=ref(props.item?.notes||''),dialog=ref<HTMLDialogElement>(),titleId=`activity-${crypto.randomUUID()}`
 let previous:HTMLElement|null=null,bodyOverflow='',rootOverflow=''
 function toggle(id:string){const next=new Set(chosen.value);if(next.has(id))next.delete(id);else next.add(id);chosen.value=next}
 function close(){if(!props.busy)emit('close')}
 function backdrop(event:MouseEvent){if(isDialogBackdropDoubleClick(event))close()}
-function submit(){if(props.busy||(props.mode==='collection'&&(!name.value.trim()||props.collection?.archived_at)))return;emit('save',{name:name.value.trim(),color:color.value||'#64748B',group_ids:[...chosen.value]})}
+function submit(){if(props.busy||(props.mode==='collection'&&(!name.value.trim()||props.collection?.archived_at)))return;emit('save',{name:name.value.trim(),color:color.value||'#64748B',group_ids:[...chosen.value],notes:notes.value.trim()})}
 onMounted(()=>{previous=document.activeElement as HTMLElement;bodyOverflow=document.body.style.overflow;rootOverflow=document.documentElement.style.overflow;document.body.style.overflow='hidden';document.documentElement.style.overflow='hidden';dialog.value?.showModal()})
 onBeforeUnmount(()=>{dialog.value?.close();document.body.style.overflow=bodyOverflow;document.documentElement.style.overflow=rootOverflow;previous?.focus({preventScroll:true})})
 </script>

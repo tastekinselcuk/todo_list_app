@@ -1,14 +1,15 @@
 <template>
-  <div ref="rootRef" class="note-editor relative flex min-w-0 flex-col" :class="[fitHeight && 'editor-fitted', disabled && !fitHeight ? 'editor-reader' : 'editor-writer rounded-xl border border-border/50 bg-background/40 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20']" @keydown.esc="handleEscape">
+  <div ref="rootRef" class="note-editor relative flex min-w-0 flex-col" :class="[fitHeight && 'editor-fitted', compact && 'editor-compact', disabled && !fitHeight ? 'editor-reader' : 'editor-writer rounded-xl border border-border/50 bg-background/40 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20']" @keydown.esc="handleEscape">
     <div v-if="!disabled" class="flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-border/40 bg-muted/10 p-1">
       <CustomSelect ref="textSelectRef" :preserve-focus="true" @open-change="selectOpened('text', $event)" :model-value="textMode" :options="textOptions" :aria-label="t('noteEditor.textStyle')" variant="ghost" size="sm" class="w-fit" @update:model-value="setTextMode" />
       <button v-for="tool in formatTools" :key="tool.name" type="button" class="editor-tool" :class="[isActive(tool.name) && 'is-active',['underline','strike'].includes(tool.name) && 'editor-secondary']" :title="t('noteEditor.'+tool.name)" :aria-label="t('noteEditor.'+tool.name)" :aria-pressed="isActive(tool.name)" @mousedown.prevent @click="run(tool.name)"><component :is="tool.icon" class="h-3.5 w-3.5" /></button>
       <button type="button" class="editor-tool editor-secondary" data-editor-menu="color" :class="menu==='color' && 'is-active'" :title="t('noteEditor.colors')" :aria-label="t('noteEditor.colors')" :aria-expanded="menu==='color'" @mousedown.prevent @click="openMenu('color')"><Palette class="h-3.5 w-3.5" /></button>
       <span class="mx-1 h-4 w-px bg-border/50" aria-hidden="true" />
       <button v-for="tool in blockTools" :key="tool.name" type="button" class="editor-tool" :class="[isActive(tool.name) && 'is-active',['orderedList','details'].includes(tool.name) && 'editor-secondary']" :title="t('noteEditor.'+tool.name)" :aria-label="t('noteEditor.'+tool.name)" :aria-pressed="isActive(tool.name)" @mousedown.prevent @click="run(tool.name)"><component :is="tool.icon" class="h-3.5 w-3.5" /></button>
-      <button type="button" class="editor-tool editor-secondary" data-editor-menu="table" :class="menu==='table' && 'is-active'" :disabled="isActive('table')" :title="t('noteEditor.table')" :aria-label="t('noteEditor.table')" :aria-expanded="menu==='table'" @mousedown.prevent @click="openMenu('table')"><Table2 class="h-3.5 w-3.5" /></button>
-      <button type="button" class="editor-tool" :disabled="uploading" :title="t('noteEditor.image')" :aria-label="t('noteEditor.image')" data-editor-menu="image" :aria-expanded="menu==='image'" @mousedown.prevent @click="openMenu('image')"><ImagePlus class="h-3.5 w-3.5" /></button>
+      <button v-if="!compact" type="button" class="editor-tool editor-secondary" data-editor-menu="table" :class="menu==='table' && 'is-active'" :disabled="isActive('table')" :title="t('noteEditor.table')" :aria-label="t('noteEditor.table')" :aria-expanded="menu==='table'" @mousedown.prevent @click="openMenu('table')"><Table2 class="h-3.5 w-3.5" /></button>
+      <button v-if="canUploadImages" type="button" class="editor-tool" :disabled="uploading" :title="t('noteEditor.image')" :aria-label="t('noteEditor.image')" data-editor-menu="image" :aria-expanded="menu==='image'" @mousedown.prevent @click="openMenu('image')"><ImagePlus class="h-3.5 w-3.5" /></button>
       <button type="button" class="editor-tool editor-secondary" :class="isActive('link') && 'is-active'" :title="t('noteEditor.link')" :aria-label="t('noteEditor.link')" data-editor-menu="link" :aria-expanded="menu==='link'" @mousedown.prevent @click="openMenu('link')"><Link2 class="h-3.5 w-3.5" /></button>
+      <button type="button" class="editor-tool text-primary/80 hover:text-primary" :class="menu==='ai' && 'is-active'" :title="t('noteEditor.aiActions')" :aria-label="t('noteEditor.aiActions')" data-editor-menu="ai" :aria-expanded="menu==='ai'" @mousedown.prevent @click="openMenu('ai')"><Sparkles class="h-3.5 w-3.5" /></button>
       <button type="button" class="editor-tool" :title="t('noteEditor.more')" :aria-label="t('noteEditor.more')" data-editor-menu="more" :aria-expanded="menu==='more'" @mousedown.prevent @click="openMenu('more')"><MoreHorizontal class="h-3.5 w-3.5" /></button>
       <div class="editor-history ml-auto flex items-center gap-0.5">
         <button v-for="tool in historyTools" :key="tool.name" type="button" class="editor-tool" :disabled="!canHistory(tool.name)" :title="t('noteEditor.'+tool.name)" :aria-label="t('noteEditor.'+tool.name)" @mousedown.prevent @click="run(tool.name)"><component :is="tool.icon" class="h-3.5 w-3.5" /></button>
@@ -37,6 +38,10 @@
         <template v-else-if="menu==='link'">
           <div class="flex gap-1.5"><input v-model="linkUrl" type="url" class="editor-field min-w-0 flex-1" placeholder="https://…" :aria-label="t('noteEditor.link')" @keydown.enter.prevent="applyLink" /><button type="button" class="editor-confirm" @click="applyLink">{{ t('common.save') }}</button></div>
           <button v-if="isActive('link')" type="button" class="mt-2 text-xs text-muted-foreground hover:text-foreground" @click="removeLink">{{ t('noteEditor.removeLink') }}</button>
+        </template>
+        <template v-else-if="menu==='ai'">
+          <p class="editor-menu-label flex items-center gap-1"><Sparkles class="h-3 w-3 text-primary" />{{ t('noteEditor.aiActions') }}</p>
+          <button v-for="action in aiActions" :key="action.id" type="button" class="editor-menu-item" :data-ai-action="action.id" @mousedown.prevent @click="runAiAction(action.id)">{{ t('noteEditor.'+action.label) }}</button>
         </template>
         <template v-else>
           <button v-for="tool in mobileTools" :key="tool.name" type="button" class="editor-menu-item editor-mobile-only" @mousedown.prevent @click="mobileAction(tool.name)"><component :is="tool.icon" class="h-3.5 w-3.5" />{{ t('noteEditor.'+tool.name) }}</button>
@@ -81,7 +86,7 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import { Extension } from '@tiptap/core'
 import { NodeSelection, Plugin, PluginKey, TextSelection, type SelectionBookmark } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { Bold, Italic, Strikethrough, Underline, List, ListOrdered, ListTodo, ChevronRight, Table2, ImagePlus, Link2, Palette, MoreHorizontal, Undo2, Redo2, Quote, Code2, Minus, RemoveFormatting, Upload, Loader2, X, Trash2, Plus, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import { Bold, Italic, Strikethrough, Underline, List, ListOrdered, ListTodo, ChevronRight, Table2, ImagePlus, Link2, Palette, MoreHorizontal, Undo2, Redo2, Quote, Code2, Minus, RemoveFormatting, Upload, Loader2, X, Trash2, Plus, ZoomIn, ZoomOut, Sparkles } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import CustomSelect from '@/components/ui/CustomSelect.vue'
 import ColorPalette from '@/components/ui/ColorPalette.vue'
@@ -89,12 +94,45 @@ import { createNoteExtensions } from '@/lib/noteEditor'
 import { sanitizeNoteHtml, safeNoteImageUrl, safeNoteLink } from '@/lib/noteContent'
 import { uploadNoteImage, resolveNoteImage, discardNoteImage } from '@/lib/noteImages'
 
-const props=defineProps<{modelValue:string;placeholder?:string;disabled?:boolean;fitHeight?:boolean}>()
-const emit=defineEmits<{'update:modelValue':[value:string];'busy-change':[value:boolean];focus:[]}>()
+type AiTransformEventPayload = { action: string; html: string; selectedText: string }
+const props=defineProps<{modelValue:string;placeholder?:string;disabled?:boolean;fitHeight?:boolean;compact?:boolean;allowImages?:boolean}>()
+const emit=defineEmits<{'update:modelValue':[value:string];'busy-change':[value:boolean];focus:[];'ai-transform':[payload:AiTransformEventPayload]}>()
 const {t}=useI18n()
+const canUploadImages=computed(()=>props.allowImages ?? !props.compact)
 const rootRef=ref<HTMLElement|null>(null),fileRef=ref<HTMLInputElement|null>(null),panelRef=ref<HTMLElement|null>(null)
 const textSelectRef=ref<InstanceType<typeof CustomSelect>|null>(null),tableSelectRef=ref<InstanceType<typeof CustomSelect>|null>(null)
-const menu=ref<'color'|'image'|'link'|'more'|'table'|null>(null),imageUrl=ref(''),linkUrl=ref(''),imageAlt=ref(''),error=ref(''),uploading=ref(false),revision=ref(0)
+const menu=ref<'color'|'image'|'link'|'more'|'table'|'ai'|null>(null),imageUrl=ref(''),linkUrl=ref(''),imageAlt=ref(''),error=ref(''),uploading=ref(false),revision=ref(0)
+const aiActions=[
+ {id:'summarize',label:'aiSummarize'},
+ {id:'expand',label:'aiExpand'},
+ {id:'action_items',label:'aiActionItems'},
+ {id:'fix_grammar',label:'aiFixGrammar'},
+ {id:'translate',label:'aiTranslate'},
+ {id:'structure',label:'aiStructure'},
+ {id:'to_flashcards',label:'aiToFlashcards'},
+ {id:'to_task',label:'aiToTask'},
+]
+function runAiAction(action:string){
+ if(props.disabled || !editor.value)return
+ menu.value=null
+ const current=editor.value
+ const {from,to,empty}=current.state.selection
+ const selectedText=empty?'':current.state.doc.textBetween(from,to,'\n').trim()
+ const html=sanitizeNoteHtml(current.getHTML())
+ emit('ai-transform',{action,html,selectedText})
+ if(typeof window!=='undefined' && typeof window.dispatchEvent==='function' && typeof CustomEvent==='function'){
+  window.dispatchEvent(new CustomEvent('workspace-ai-transform',{detail:{
+   action,
+   html,
+   selectedText,
+   apply:(nextHtml:string)=>{
+    if(disposed || props.disabled || !editor.value)return
+    const cleaned=sanitizeNoteHtml(nextHtml || '')
+    editor.value.commands.setContent(cleaned,{emitUpdate:true})
+   },
+  }}))
+ }
+}
 const tableSize=ref({rows:1,columns:1})
 const imageDialogRef=ref<HTMLDialogElement|null>(null),imagePreview=ref<{src:string;alt:string}|null>(null),previewZoom=ref(false)
 let previewEpoch=0,previousBodyOverflow:string|null=null
@@ -400,6 +438,7 @@ defineExpose({focus:focusEditor})
  :deep(.note-prose[data-color-selection-preview]::selection),:deep(.note-prose[data-color-selection-preview] ::selection){background:transparent;color:inherit;text-shadow:none}
 }
 .editor-editable :deep(.note-prose) { min-height:112px; max-height:60vh; overflow-y:auto; resize:vertical; }
+.editor-compact .editor-editable :deep(.note-prose) { min-height:76px; max-height:36vh; }
 .editor-fitted { flex:1; min-height:0; }
 .editor-fitted .editor-panel { max-height:min(360px,45dvh); }
 .editor-fitted .editor-content { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }

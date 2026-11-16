@@ -7,7 +7,7 @@
     </CustomSelect>
     <button v-else type="button" class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors disabled:opacity-40" :class="task.status==='done'?'border-primary bg-primary text-primary-foreground':'border-border hover:border-primary/60'" :disabled="busy" :aria-label="t(task.status==='done'?'tasks.reopen':'tasks.complete',{title:task.title})" :aria-pressed="task.status==='done'" @click="$emit('toggle')"><Check v-if="task.status==='done'" class="h-3.5 w-3.5" /><span v-else-if="task.status==='doing'" class="h-2 w-2 rounded-sm bg-primary/60" /></button>
     <div class="min-w-0 flex-1">
-      <button type="button" class="w-full text-left focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :disabled="busy" @click="$emit('edit')"><p class="break-words text-sm leading-6" :class="task.status==='done'&&'text-muted-foreground line-through'">{{ task.title }}</p></button>
+      <button type="button" class="w-full text-left focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" :disabled="busy" @click="$emit('edit')"><p class="break-words text-sm leading-6" :class="task.status==='done'&&'text-muted-foreground line-through'">{{ task.title }}</p><p v-if="plainDescription && !compact" class="mt-0.5 line-clamp-1 text-[11px] leading-4 text-muted-foreground/85">{{ plainDescription }}</p></button>
       <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-4 text-muted-foreground">
         <button ref="checklistToggle" type="button" class="task-steps-toggle" :class="expanded&&'is-open'" :aria-expanded="expanded" :aria-controls="checklistId" :aria-label="t('tasks.toggleSubtasks',{title:task.title})" @click="toggleExpanded"><Loader2 v-if="pending" :size="12" class="animate-spin motion-reduce:animate-none" /><ListTodo v-else :size="12" /><span v-if="task.checklist.length" class="tabular-nums">{{ completed }}/{{ task.checklist.length }}</span><span v-else>{{ t('tasks.addSubtask') }}</span><ChevronDown :size="10" class="transition-transform motion-reduce:transition-none" :class="expanded&&'rotate-180'" /></button>
         <span v-if="projectName">{{ projectName }}</span><time v-if="task.due_on" :datetime="task.due_on" :class="overdue&&'font-medium text-destructive dark:text-rose-300'">{{ shortDate(task.due_on) }}</time><span v-if="task.priority!=='none'" class="inline-flex items-center gap-1"><Flag class="h-2.5 w-2.5" :class="task.priority==='high'&&'text-primary'" />{{ t(`tasks.${task.priority}`) }}</span>
@@ -52,6 +52,7 @@ const statusIcon=(value:string)=>statusIcons[value as TaskStatus]||Circle
 const expanded=ref(false),draft=ref(''),pending=ref(false),subtaskInput=ref<HTMLInputElement>(),checklistToggle=ref<HTMLButtonElement>()
 const checklistId=`task-checklist-${props.task.id}`
 const completed=computed(()=>props.task.checklist.filter(item=>item.done).length)
+const plainDescription=computed(()=>String(props.task.description||'').replace(/<[^>]+>/g,' ').replace(/[#*_`~>-]/g,' ').replace(/\s+/g,' ').trim())
 const locked=computed(()=>!!props.busy||pending.value)
 let disposed=false
 onBeforeUnmount(()=>{disposed=true})

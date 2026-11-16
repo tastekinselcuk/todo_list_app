@@ -126,7 +126,7 @@ async function remove(module:TrashModule,row:WorkTask|WorkBlock){if(busy.value)r
 async function removeEditorBlock(){const block=editor.value?.block;if(block?.id&&await remove('calendar',block as WorkBlock))editor.value=null}
 function rangeChanged(start:string,end:string){void store.loadCalendar(start,end)}
 async function openTask(id:string){const task=store.tasks.find(row=>row.id===id)||await store.findTask(id);if(task&&spaces.sessionKey===scope)editTask(task)}
-async function refresh(){await store.load();if(view.value==='calendar')await store.loadCalendar(undefined,undefined,true)}
-useModuleLoad(()=>store.project&&!store.saving?store.selectProject(''):store.load())
+async function refresh(){store.invalidateCalendar?.();await store.load();if(view.value==='calendar')await store.loadCalendar(undefined,undefined,true)}
+useModuleLoad(()=>store.project&&!store.saving?store.selectProject(''):store.load(),refresh)
 useSearchReveal('tasks',async(hit,isCurrent)=>{const task=await store.findTask(hit.record_id);if(!task||!isCurrent())throw Error('Unavailable');view.value='list';showCompleted.value=task.status==='done'||showCompleted.value;if(store.project&&store.project!==task.project_id)await store.selectProject('');if(!isCurrent())return;if(!store.tasks.some(row=>row.id===task.id))store.tasks.unshift(task)})
 </script>

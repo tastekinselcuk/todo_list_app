@@ -1043,6 +1043,7 @@ periodicTasks: {
     addRowBefore:'Üste satır ekle', addRowAfter:'Alta satır ekle', deleteRow:'Satırı sil',
     addColumnBefore:'Sola sütun ekle', addColumnAfter:'Sağa sütun ekle', deleteColumn:'Sütunu sil',
     mergeCells:'Hücreleri birleştir', splitCell:'Hücreyi böl', toggleHeaderRow:'Başlık satırını değiştir', deleteTable:'Tabloyu sil',
+    aiActions:'Yapay Zeka İşlemleri', aiSummarize:'Özetle', aiExpand:'Genişlet', aiActionItems:'Eylem Maddelerine Çevir', aiFixGrammar:'Dilbilgisini Düzelt', aiTranslate:'Çevir (EN/TR)', aiStructure:'Yapılandır', aiToFlashcards:'Bilgi Kartı Oluştur', aiToTask:'Göreve Dönüştür',
   },
   days: {
     sun: 'Pz',
@@ -1146,5 +1147,15 @@ dashboard: {
       title: 'Çalışma Alanınıza Hoş Geldiniz',
       desc: 'İhtiyacınız olan modülleri aktifleştirmek için Çalışma Alanı Ayarları\'nı kullanın.'
     }
+  },
+  ai: {
+    openAssistant: 'Yapay Zeka Asistanı (Ctrl+J)',
+    title: 'Yapay Zeka Asistanı',
+    subtitle: 'Çapraz modül analizi, akıllı öneriler ve tüm not alanlarına veri girişi',
+    analyze: 'Çalışma alanımı analiz et',
+    recommend: 'Önerileri getir',
+    approveAndApply: 'Onayla ve Uygula',
+    undo: 'Geri Al',
+    secureForbidden: 'Güvenli Notlar (Kasa) modülü gizlilik kuralları gereği yapay zeka erişimine kapalıdır.'
   }
 }

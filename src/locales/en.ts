@@ -1039,6 +1039,7 @@ periodicTasks: {
     addRowBefore:'Add row above', addRowAfter:'Add row below', deleteRow:'Delete row',
     addColumnBefore:'Add column left', addColumnAfter:'Add column right', deleteColumn:'Delete column',
     mergeCells:'Merge cells', splitCell:'Split cell', toggleHeaderRow:'Toggle header row', deleteTable:'Delete table',
+    aiActions:'AI Actions', aiSummarize:'Summarize', aiExpand:'Expand', aiActionItems:'Extract Action Items', aiFixGrammar:'Fix Grammar', aiTranslate:'Translate (EN/TR)', aiStructure:'Structure', aiToFlashcards:'Create Flashcards', aiToTask:'Convert to Task',
   },
   days: {
     sun: 'Sun',
@@ -1142,5 +1143,15 @@ dashboard: {
       title: 'Welcome to your Workspace',
       desc: 'Use the Workspace Settings to enable the modules you need.'
     }
+  },
+  ai: {
+    openAssistant: 'AI Workspace Assistant (Ctrl+J)',
+    title: 'AI Workspace Assistant',
+    subtitle: 'Cross-module analysis, smart recommendations, and note data entry across all modules',
+    analyze: 'Analyze my workspace',
+    recommend: 'Get recommendations',
+    approveAndApply: 'Approve & Apply',
+    undo: 'Undo',
+    secureForbidden: 'The Secure Notes (Vault) module is strictly excluded from AI access.'
   }
 }
