@@ -11,6 +11,19 @@
         <span class="inline-flex items-center rounded-lg border border-border/60 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
           {{ operationLabel }}
         </span>
+        <span
+          v-if="action.risk_level === 'high'"
+          data-action-risk-badge="high"
+          class="inline-flex items-center rounded-lg bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400"
+        >
+          Onay Gerekli
+        </span>
+        <span
+          v-if="typeof action.expected_version === 'number'"
+          class="inline-flex items-center rounded-lg bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+        >
+          v{{ action.expected_version }}
+        </span>
       </div>
 
       <div class="flex items-center gap-1.5">

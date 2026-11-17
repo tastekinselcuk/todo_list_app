@@ -2233,3 +2233,131 @@ test('semantic reasoning, local disambiguation, multi-turn history, and interact
     global.Document = prevDocument
   }
 })
+
+test('agentic client surfaces Edge errors transparently, clears localStorage keys on server save, isolates workspaces, and verifies SQL migration contract', async () => {
+  const mem = new Map()
+  const storageStub = {
+    getItem: k => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => mem.set(k, String(v)),
+    removeItem: k => mem.delete(k),
+  }
+  const aiClient = loadTs(
+    'src/features/ai/lib/aiClient.ts',
+    {
+      '@/lib/supabase': { supabase: {} },
+      '@/lib/noteContent': noteContent,
+      '@/lib/aiNoteFormat': aiNoteFormat,
+    },
+    { localStorage: storageStub },
+  )
+
+  // 1. Server save clears plaintext api_keys from localStorage
+  await aiClient.saveAiSettings(
+    { provider: 'gemini', model: 'gemini-2.5-flash', write_mode: 'ask_before_write', api_key: 'AIzaSecretServerOnly' },
+    {
+      async rpc(name) {
+        if (name === 'ai_settings_save') {
+          return {
+            data: {
+              provider: 'gemini',
+              model: 'gemini-2.5-flash',
+              write_mode: 'ask_before_write',
+              configured_providers: { gemini: true, openai: false, anthropic: false },
+              key_hints: { gemini: 'AIza***Only', openai: null, anthropic: null },
+            },
+            error: null,
+          }
+        }
+        return { data: null, error: null }
+      },
+    },
+  )
+  const rawStored = storageStub.getItem('pomodolist_ai_settings_v1') || ''
+  assert.ok(!rawStored.includes('AIzaSecretServerOnly'), 'plaintext API key must be cleared from localStorage after server save')
+
+  // 2. Explicit Edge errors (401/429) must NOT be silently masked as local fallback
+  await assert.rejects(
+    () =>
+      aiClient.invokeAiAssistant(
+        { workspace_id: 'ws-1', mode: 'chat', prompt: 'Merhaba' },
+        {
+          functions: {
+            async invoke(_name, opts) {
+              assert.ok(opts.body.timezone)
+              assert.ok(opts.body.request_id)
+              return { data: { ok: false, error: 'PROVIDER_RATE_LIMIT' }, error: null }
+            },
+          },
+        },
+      ),
+    /PROVIDER_RATE_LIMIT/,
+  )
+
+  // 3. High-risk finance/delete actions must NOT auto-execute even under auto_apply
+  let executedCount = 0
+  const highRiskRes = await aiClient.invokeAiAssistant(
+    {
+      workspace_id: 'ws-1',
+      mode: 'write',
+      write_mode: 'auto_apply',
+      prompt: 'markete 300 TL harcama ekle',
+    },
+    {
+      auth: { async getUser() { return { data: { user: { id: 'u1' } }, error: null } } },
+      async rpc(name) {
+        if (name === 'ai_execute_actions') {
+          executedCount += 1
+          return { data: { run_id: 'r1', status: 'applied', applied_count: 1, applied_changes: [] }, error: null }
+        }
+        return { data: null, error: { code: 'PGRST202' } }
+      },
+      from() {
+        const b = { select: () => b, eq: () => b, order: () => b, limit: () => b, then: r => r({ data: [], error: null }) }
+        return b
+      },
+    },
+  )
+  assert.equal(executedCount, 0)
+  assert.equal(highRiskRes.applied_run, null)
+  assert.equal(highRiskRes.proposed_actions.length, 1)
+  assert.equal(highRiskRes.proposed_actions[0].module, 'finance')
+
+  // 4. Workspace-isolated store conversations & newConversation()
+  const piniaInstance = pinia.createPinia()
+  pinia.setActivePinia(piniaInstance)
+  const activeWsId = vue.ref('ws-alpha')
+  const useAiAssistantStore = loadTs(
+    'src/features/ai/stores/aiAssistant.ts',
+    {
+      pinia,
+      vue,
+      '@/stores/workspaces': { useWorkspacesStore: () => ({ activeId: activeWsId.value }) },
+      '@/stores/ui': { useUIStore: () => ({ addToast() {} }) },
+      '@/features/ai/lib/aiClient': aiClient,
+    },
+    { localStorage: storageStub },
+  ).useAiAssistantStore
+
+  const store = useAiAssistantStore()
+  store.messages.push({ id: 'm1', role: 'user', content: 'Alpha mesajı', createdAt: new Date().toISOString() })
+  await vue.nextTick()
+  activeWsId.value = 'ws-beta'
+  await vue.nextTick()
+  assert.equal(store.messages.length, 0, 'switching workspace must isolate chat history')
+  store.messages.push({ id: 'm2', role: 'user', content: 'Beta mesajı', createdAt: new Date().toISOString() })
+  await vue.nextTick()
+  activeWsId.value = 'ws-alpha'
+  await vue.nextTick()
+  assert.equal(store.messages.length, 1)
+  assert.equal(store.messages[0].content, 'Alpha mesajı')
+  store.newConversation()
+  assert.equal(store.messages.length, 0)
+
+  // 5. SQL migration contract check for 202611180001_ai_conversations_and_metrics.sql
+  const { migrationFiles, migrationTransaction } = await import('../scripts/migration-contract.mjs')
+  const files = migrationFiles()
+  const convMig = files.find(f => f.version === '202611180001')
+  assert.ok(convMig, '202611180001 migration must be tracked by migration-contract')
+  assert.ok(migrationTransaction(convMig).includes('supabase_migrations.schema_migrations'))
+  assert.ok(convMig.sql.includes('ai_conversations') && convMig.sql.includes('ai_query_metrics'))
+})

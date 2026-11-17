@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useUIStore } from '@/stores/ui'
 import {
@@ -49,6 +49,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   const insights = ref<AiInsightItem[]>([])
   const recommendations = ref<AiRecommendationItem[]>([])
   const messages = ref<AiChatMessage[]>([])
+  const conversationId = ref<string>('')
   const pendingActions = ref<ProposedAiAction[]>([])
   const actionHistory = ref<AiActionRunRecord[]>([])
   const lastTransformResult = ref<{ text: string; markdown: string; reply: string } | null>(null)
@@ -57,15 +58,97 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     Boolean(settings.value.configured_providers?.[settings.value.provider]),
   )
 
+  const CHAT_STORAGE_PREFIX = 'pomodolist_ai_chat_v1:'
+
+  function newId(prefix: string): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}-${crypto.randomUUID()}`
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
   function activeWorkspaceId(): string {
     const workspaces = useWorkspacesStore()
     return workspaces.activeId || ''
   }
 
+  function persistWorkspaceSession(wid: string) {
+    if (!wid || typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return
+    try {
+      globalThis.localStorage.setItem(
+        `${CHAT_STORAGE_PREFIX}${wid}`,
+        JSON.stringify({
+          conversationId: conversationId.value,
+          messages: messages.value.slice(-40),
+        }),
+      )
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+
+  function restoreWorkspaceSession(wid: string) {
+    pendingActions.value = []
+    error.value = ''
+    if (!wid || typeof globalThis === 'undefined' || !('localStorage' in globalThis)) {
+      conversationId.value = newId('conv')
+      messages.value = []
+      return
+    }
+    try {
+      const raw = globalThis.localStorage.getItem(`${CHAT_STORAGE_PREFIX}${wid}`)
+      if (!raw) {
+        conversationId.value = newId('conv')
+        messages.value = []
+        return
+      }
+      const parsed = JSON.parse(raw) as { conversationId?: string; messages?: AiChatMessage[] }
+      conversationId.value = typeof parsed.conversationId === 'string' && parsed.conversationId ? parsed.conversationId : newId('conv')
+      messages.value = Array.isArray(parsed.messages) ? parsed.messages.slice(-40) : []
+    } catch {
+      conversationId.value = newId('conv')
+      messages.value = []
+    }
+  }
+
+  function newConversation() {
+    const wid = activeWorkspaceId()
+    conversationId.value = newId('conv')
+    messages.value = []
+    pendingActions.value = []
+    error.value = ''
+    if (wid) persistWorkspaceSession(wid)
+  }
+
+  watch(
+    () => activeWorkspaceId(),
+    (nextWid, prevWid) => {
+      if (prevWid && prevWid !== nextWid) {
+        persistWorkspaceSession(prevWid)
+      }
+      if (nextWid && nextWid !== prevWid) {
+        restoreWorkspaceSession(nextWid)
+      }
+    },
+    { immediate: true },
+  )
+
+  watch(
+    () => messages.value.length,
+    () => {
+      const wid = activeWorkspaceId()
+      if (wid) persistWorkspaceSession(wid)
+    },
+  )
+
   async function open(tab: 'chat' | 'insights' | 'history' | 'settings' = 'chat') {
     activeTab.value = tab
     isOpen.value = true
     error.value = ''
+    const wid = activeWorkspaceId()
+    if (wid && !conversationId.value) {
+      restoreWorkspaceSession(wid)
+    }
     await Promise.allSettled([loadSettings(), refreshWorkspaceAnalysis(), loadHistory()])
   }
 
@@ -287,7 +370,16 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
           createdAt: new Date().toISOString(),
         })
       } else {
-        error.value = code
+        const errorMap: Record<string, string> = {
+          PROVIDER_AUTH: 'Sağlayıcı API anahtarı geçersiz veya yetkisiz (401/403). Lütfen AI Ayarlarından anahtarınızı kontrol edin.',
+          PROVIDER_RATE_LIMIT: 'AI istek sınırı aşıldı (429). Lütfen kısa bir süre bekleyip tekrar deneyin.',
+          RATE_LIMITED: 'Çok sık istek gönderildi (429). Lütfen biraz bekleyin.',
+          PROVIDER_TIMEOUT: 'AI sağlayıcısı zaman aşımına uğradı. Lütfen tekrar deneyin.',
+          PROVIDER_UNAVAILABLE: 'AI sağlayıcısına şu anda ulaşılamıyor.',
+          PROVIDER_INVALID_JSON: 'AI sağlayıcısı beklenmeyen bir yanıt formatı döndürdü.',
+          AUTH_REQUIRED: 'Oturum doğrulaması gerekli. Lütfen yeniden giriş yapın.',
+        }
+        error.value = errorMap[code] || code
       }
       return null
     } finally {
@@ -516,12 +608,14 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     insights,
     recommendations,
     messages,
+    conversationId,
     pendingActions,
     actionHistory,
     lastTransformResult,
     hasActiveProviderKey,
     open,
     close,
+    newConversation,
     loadSettings,
     updateSettings,
     refreshWorkspaceAnalysis,

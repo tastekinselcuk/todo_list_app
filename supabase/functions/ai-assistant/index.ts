@@ -80,18 +80,26 @@ Deno.serve(
         options: {},
       })) as Record<string, unknown>
     },
-    async searchWorkspace(token, workspaceId, query) {
+    async searchWorkspace(token, workspaceId, query, onlyModule = null, pageSize = 8, pageOffset = 0) {
       return (await userRPC(token, 'search_workspace', {
         wid: workspaceId,
         query_text: query,
-        page_size: 10,
-        page_offset: 0,
+        page_size: pageSize,
+        page_offset: pageOffset,
+        only_module: onlyModule,
       })) as Record<string, unknown>
     },
     async readRecords(token, workspaceId, targets) {
       return (await userRPC(token, 'ai_read_records', {
         wid: workspaceId,
         targets,
+      })) as Record<string, unknown>
+    },
+    async queryMetrics(token, workspaceId, metric, params = {}) {
+      return (await userRPC(token, 'ai_query_metrics', {
+        wid: workspaceId,
+        metric,
+        params,
       })) as Record<string, unknown>
     },
     async executeActions(token, workspaceId, actions, meta) {

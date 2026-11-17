@@ -36,6 +36,9 @@ export interface ProposedAiAction {
   target_id?: string | null
   write_mode?: AiNoteWriteMode
   section_heading?: string | null
+  expected_version?: number
+  risk_level?: 'low' | 'medium' | 'high'
+  requires_confirmation?: boolean
   title?: string
   summary?: string
   payload: Record<string, unknown>
@@ -176,6 +179,11 @@ export interface AiAssistantRequest {
   prompt?: string
   scope?: AiPromptScope | null
   history?: AiConversationTurn[]
+  timezone?: string
+  locale?: string
+  conversation_id?: string
+  request_id?: string
+  auto_execute?: boolean
   provider?: AiProviderId
   model?: string
   write_mode?: AiWriteMode
@@ -212,6 +220,8 @@ export interface AiAssistantResponse {
   transformed_text?: string
   transformed_markdown?: string
   digest?: AiWorkspaceDigest | null
+  tool_trace?: Array<{ step: number; tool: string; ok: boolean; duration_ms: number }>
+  error_code?: string
 }
 
 export const PROVIDER_MODELS: Record<AiProviderId, Array<{ id: string; label: string }>> = {
@@ -3404,6 +3414,15 @@ export async function saveAiSettings(
     }
     throw error
   }
+  // Once server-side credentials are confirmed in private.user_ai_credentials, clear plaintext keys from localStorage.
+  if (data?.configured_providers?.[payload.provider]) {
+    writeLocalSettings({
+      provider: payload.provider,
+      model: payload.model,
+      write_mode: payload.write_mode,
+      api_keys: {},
+    })
+  }
   const defaults = defaultAiSettings()
   return {
     provider: (data?.provider || payload.provider) as AiProviderId,
@@ -5966,6 +5985,25 @@ async function callClientSideProvider(
   }
 }
 
+const EDGE_EXPLICIT_ERROR_CODES = new Set([
+  'AI_SECURE_MODULE_FORBIDDEN',
+  'PROVIDER_AUTH',
+  'PROVIDER_RATE_LIMIT',
+  'PROVIDER_TIMEOUT',
+  'PROVIDER_UNAVAILABLE',
+  'PROVIDER_INVALID_JSON',
+  'RATE_LIMITED',
+  'AUTH_REQUIRED',
+])
+
+function isHighRiskAction(action: ProposedAiAction, batchSize: number): boolean {
+  const op = String(action.operation || '').toLowerCase()
+  if (op === 'delete' || op === 'purge' || op === 'remove') return true
+  if (action.module === 'finance' || action.module === 'calendar') return true
+  if (batchSize > 1) return true
+  return false
+}
+
 export async function invokeAiAssistant(
   request: AiAssistantRequest,
   client: any = supabase,
@@ -5983,23 +6021,44 @@ export async function invokeAiAssistant(
     assertNotSecureTarget(request.note_context.module)
   }
 
+  const resolvedTimezone =
+    request.timezone ||
+    (typeof Intl !== 'undefined' && Intl.DateTimeFormat
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      : 'UTC')
+  const generatedRequestId =
+    request.request_id ||
+    (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
+
+  const edgePayload: AiAssistantRequest = {
+    ...request,
+    timezone: resolvedTimezone,
+    locale: request.locale || 'tr',
+    request_id: generatedRequestId,
+    auto_execute: request.auto_execute ?? request.write_mode === 'auto_apply',
+  }
+
   // Try Edge Function first when available
   if (client?.functions && typeof client.functions.invoke === 'function') {
     try {
       const { data, error } = await client.functions.invoke('ai-assistant', {
-        body: request,
+        body: edgePayload,
       })
       if (!error && data && typeof data === 'object' && data.ok !== false && !data.error) {
         return data as AiAssistantResponse
       }
-      if (error && String(error.message || '').includes('AI_SECURE_MODULE_FORBIDDEN')) {
+      const errCode = String(data?.error || error?.message || '')
+      if (errCode.includes('AI_SECURE_MODULE_FORBIDDEN')) {
         throw new Error('AI_SECURE_MODULE_FORBIDDEN')
       }
-      if (data?.error === 'AI_SECURE_MODULE_FORBIDDEN') {
-        throw new Error('AI_SECURE_MODULE_FORBIDDEN')
+      if (EDGE_EXPLICIT_ERROR_CODES.has(errCode)) {
+        throw new Error(errCode)
       }
     } catch (err: any) {
-      if (String(err?.message || '').includes('AI_SECURE_MODULE_FORBIDDEN')) {
+      const msg = String(err?.message || '')
+      if (EDGE_EXPLICIT_ERROR_CODES.has(msg) || msg.includes('AI_SECURE_MODULE_FORBIDDEN')) {
         throw err
       }
       // Otherwise fall back to direct provider BYOK / local synthesis + RPC execution
@@ -6166,11 +6225,14 @@ export async function invokeAiAssistant(
   }
 
   const actionsToHandle = request.actions?.length ? request.actions : synthesis.proposed_actions
+  const allAutoEligible =
+    actionsToHandle.length > 0 &&
+    actionsToHandle.every(act => !isHighRiskAction(act, actionsToHandle.length))
 
   let appliedRun: AiAssistantResponse['applied_run'] = null
   if (
     actionsToHandle.length > 0 &&
-    (writeMode === 'auto_apply' || (request.mode === 'write' && request.actions?.length))
+    ((writeMode === 'auto_apply' && allAutoEligible) || (request.mode === 'write' && request.actions?.length))
   ) {
     appliedRun = await executeAiActions(
       request.workspace_id,

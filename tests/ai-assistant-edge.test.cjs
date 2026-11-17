@@ -4,26 +4,48 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const ts = require('typescript')
 
+const path = require('node:path')
+
 function loadHandler() {
-  const source = fs.readFileSync('supabase/functions/ai-assistant/handler.ts', 'utf8')
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText
-  const exports = {}
-  vm.runInNewContext(transpiled, {
-    exports,
-    require,
-    Response,
-    Request,
-    Headers,
-    AbortSignal,
-    URL,
-    console,
-  })
-  return exports
+  const baseDir = path.resolve('supabase/functions/ai-assistant')
+  const cache = new Map()
+  function loadTsModule(filePath) {
+    const abs = path.resolve(filePath)
+    if (cache.has(abs)) return cache.get(abs).exports
+    const source = fs.readFileSync(abs, 'utf8')
+    const transpiled = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText
+    const mod = { exports: {} }
+    cache.set(abs, mod)
+    vm.runInNewContext(
+      transpiled,
+      {
+        exports: mod.exports,
+        module: mod,
+        require: id => {
+          if (id.startsWith('./') || id.startsWith('../')) {
+            const target = path.resolve(path.dirname(abs), id)
+            return loadTsModule(target.endsWith('.ts') ? target : `${target}.ts`)
+          }
+          return require(id)
+        },
+        Response,
+        Request,
+        Headers,
+        AbortSignal,
+        URL,
+        Intl,
+        console,
+      },
+      { filename: abs },
+    )
+    return mod.exports
+  }
+  return loadTsModule(path.join(baseDir, 'handler.ts'))
 }
 
 const { aiAssistantHandler } = loadHandler()
@@ -285,4 +307,294 @@ test('aiAssistantHandler enforces auth, rate limits, secure module boundaries an
     })
   )
   assert.equal(rateRes.status, 429)
+})
+
+test('agent loop executes multi-step tool calls across Gemini/OpenAI/Anthropic, enforces risk policy, and surfaces provider errors', async () => {
+  const searchCalls = []
+  const metricCalls = []
+  const readCalls = []
+  const executed = []
+  let providerMode = 'gemini-tools'
+
+  const handler = aiAssistantHandler({
+    async authenticate(token) {
+      return token === 'valid-jwt' ? 'user-1' : null
+    },
+    async consumeBudget() {
+      return true
+    },
+    async resolveCredentials() {
+      return {
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        write_mode: 'auto_apply',
+        api_key: 'gem-secret',
+        api_keys: { gemini: 'gem-secret', openai: 'oai-secret', anthropic: 'ant-secret' },
+      }
+    },
+    async loadWorkspaceDigest() {
+      return { workspace: { id: wid, active_modules: ['plans', 'tasks', 'finance'] }, recommendations_signals: {} }
+    },
+    async searchWorkspace(_t, _w, query, onlyModule) {
+      searchCalls.push({ query, onlyModule })
+      return { groups: [{ module: 'plans', items: [{ record_id: '20000000-0000-0000-0000-000000000001', title: 'Sprint' }] }] }
+    },
+    async readRecords(_t, _w, targets) {
+      readCalls.push(targets)
+      return { items: [{ id: targets[0].id, module: targets[0].module, title: 'Sprint', version: 3 }] }
+    },
+    async queryMetrics(_t, _w, metric, params) {
+      metricCalls.push({ metric, params })
+      return { metric, this_month_expense: 4200, last_month_expense: 3100 }
+    },
+    async executeActions(_t, _w, actions) {
+      executed.push(actions)
+      return { run_id: 'run-1', status: 'applied', applied_count: actions.length }
+    },
+    now: () => new Date('2026-11-18T21:30:00.000Z'),
+    async fetch(url, init) {
+      const u = String(url)
+      const body = JSON.parse(String(init.body || '{}'))
+
+      if (providerMode === 'auth-401') {
+        return new Response('{}', { status: 401 })
+      }
+      if (providerMode === 'rate-429') {
+        return new Response('{}', { status: 429 })
+      }
+      if (providerMode === 'secure-tool' && u.includes('generativelanguage')) {
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ functionCall: { name: 'search_workspace_records', args: { query: 'pin', module: 'secure' } } }] } }],
+          }),
+          { status: 200 },
+        )
+      }
+
+      if (u.includes('generativelanguage')) {
+        const hasToolResp = Array.isArray(body.contents) && body.contents.some(c => c.parts?.some(p => p.functionResponse))
+        if (!hasToolResp) {
+          return new Response(
+            JSON.stringify({
+              candidates: [
+                {
+                  content: {
+                    parts: [
+                      { thought: true, text: 'internal reasoning' },
+                      {
+                        functionCall: { name: 'search_workspace_records', args: { query: 'Sprint', module: 'plans' } },
+                        thoughtSignature: 'sig-123',
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          )
+        }
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        reply: 'Sprint planı bulundu; finans/silme yüksek riskli olduğu için onayınıza sunuldu.',
+                        proposed_actions: [
+                          {
+                            module: 'finance',
+                            operation: 'create',
+                            summary: '4200 TL gider ekle',
+                            payload: { title: 'Market', kind: 'expense', amount: 4200 },
+                          },
+                        ],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        )
+      }
+
+      if (u.includes('api.openai.com')) {
+        const hasToolMsg = Array.isArray(body.messages) && body.messages.some(m => m.role === 'tool')
+        if (!hasToolMsg) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    tool_calls: [
+                      {
+                        id: 'tc-1',
+                        type: 'function',
+                        function: { name: 'query_workspace_metrics', arguments: JSON.stringify({ metric: 'finance_monthly_comparison', days: 30 }) },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          )
+        }
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    reply: 'Bu ay harcamanız geçen aya göre 1100 TL arttı.',
+                    proposed_actions: [],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        )
+      }
+
+      if (u.includes('api.anthropic.com')) {
+        const hasToolResult =
+          Array.isArray(body.messages) &&
+          body.messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'))
+        if (!hasToolResult) {
+          return new Response(
+            JSON.stringify({
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'tu-1',
+                  name: 'read_workspace_records',
+                  input: { targets: [{ module: 'plans', id: '20000000-0000-0000-0000-000000000001' }] },
+                },
+              ],
+            }),
+            { status: 200 },
+          )
+        }
+        return new Response(
+          JSON.stringify({
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  reply: 'Kayıt sürüm 3 olarak okundu.',
+                  proposed_actions: [],
+                }),
+              },
+            ],
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response('{}', { status: 500 })
+    },
+  })
+
+  // 1. Gemini tool call + authoritative Europe/Istanbul timezone + high-risk finance confirmation gate
+  const gemRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace_id: wid,
+        mode: 'chat',
+        prompt: 'Dün konuştuğumuz Sprint planını bul',
+        timezone: 'Europe/Istanbul',
+        auto_execute: true,
+        history: [{ role: 'user', content: 'Önceki mesaj' }],
+      }),
+    }),
+  )
+  assert.equal(gemRes.status, 200)
+  const gemBody = await gemRes.json()
+  assert.equal(gemBody.time.timezone, 'Europe/Istanbul')
+  assert.equal(gemBody.time.local_date, '2026-11-19')
+  assert.equal(gemBody.time.tomorrow_date, '2026-11-20')
+  assert.equal(searchCalls.length, 1)
+  assert.equal(searchCalls[0].query, 'Sprint')
+  assert.equal(gemBody.tool_trace[0].tool, 'search_workspace_records')
+  // High-risk finance action must require confirmation even with auto_apply + auto_execute
+  assert.equal(gemBody.proposed_actions[0].risk_level, 'high')
+  assert.equal(gemBody.proposed_actions[0].requires_confirmation, true)
+  assert.equal(gemBody.applied_run, null)
+  assert.equal(executed.length, 0)
+
+  // 2. OpenAI tool call (query_workspace_metrics)
+  const oaiRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace_id: wid,
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        mode: 'chat',
+        prompt: 'Bu ay geçen aya göre hangi giderim arttı?',
+      }),
+    }),
+  )
+  assert.equal(oaiRes.status, 200)
+  const oaiBody = await oaiRes.json()
+  assert.equal(metricCalls.length, 1)
+  assert.equal(metricCalls[0].metric, 'finance_monthly_comparison')
+  assert.match(oaiBody.reply, /1100 TL/)
+
+  // 3. Anthropic tool call (read_workspace_records)
+  const antRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace_id: wid,
+        provider: 'anthropic',
+        model: 'claude-3-5-haiku-latest',
+        mode: 'chat',
+        prompt: 'Sprint kaydını oku',
+      }),
+    }),
+  )
+  assert.equal(antRes.status, 200)
+  assert.equal(readCalls.length, 1)
+
+  // 4. Secure tool call blocked (403)
+  providerMode = 'secure-tool'
+  const secRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: wid, mode: 'chat', prompt: 'notları ara' }),
+    }),
+  )
+  assert.equal(secRes.status, 403)
+
+  // 5. Transparent provider errors (401 / 429) — no fake local success
+  providerMode = 'auth-401'
+  const authErrRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: wid, mode: 'chat', prompt: 'Selam' }),
+    }),
+  )
+  assert.equal(authErrRes.status, 401)
+  assert.equal((await authErrRes.json()).error, 'PROVIDER_AUTH')
+
+  providerMode = 'rate-429'
+  const rateErrRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: wid, mode: 'chat', prompt: 'Selam' }),
+    }),
+  )
+  assert.equal(rateErrRes.status, 429)
+  assert.equal((await rateErrRes.json()).error, 'PROVIDER_RATE_LIMIT')
 })

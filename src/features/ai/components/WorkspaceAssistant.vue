@@ -41,6 +41,16 @@
           </span>
           <button
             type="button"
+            data-assistant-new-chat
+            aria-label="Yeni sohbet"
+            title="Yeni sohbet"
+            class="rounded-xl px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            @click="store.newConversation()"
+          >
+            + Yeni
+          </button>
+          <button
+            type="button"
             data-assistant-settings-btn
             aria-label="Ayarlar"
             title="Ayarlar"
@@ -193,6 +203,16 @@
                 </button>
               </div>
             </div>
+          </div>
+
+          <!-- Busy Status Indicator -->
+          <div
+            v-if="store.busy"
+            data-assistant-busy
+            class="mr-8 flex items-center gap-2 rounded-2xl border border-border/50 bg-card/60 px-3 py-2 text-[11px] text-muted-foreground"
+          >
+            <span class="h-2 w-2 animate-pulse rounded-full bg-primary" />
+            <span>Düşünüyor ve verileri kontrol ediyor...</span>
           </div>
 
           <!-- Pending Action Approval Cards (in-flow at bottom of chat) -->
