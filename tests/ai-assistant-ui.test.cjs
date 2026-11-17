@@ -1757,7 +1757,7 @@ test('hierarchical / slash directory tree, scope enforcement, and WorkspaceAssis
   const iconStub = { render: () => vue.h('span') }
   const deps = {
     vue,
-    'lucide-vue-next': { Sparkles: iconStub, X: iconStub },
+    'lucide-vue-next': { Sparkles: iconStub, X: iconStub, Settings: iconStub },
     '@/features/ai/stores/aiAssistant': { useAiAssistantStore: () => storeMock },
     '@/lib/aiNoteFormat': aiNoteFormat,
     '@/features/ai/lib/aiClient': aiClient,
@@ -1832,6 +1832,9 @@ test('hierarchical / slash directory tree, scope enforcement, and WorkspaceAssis
 
     const input = doc.querySelector('[data-assistant-prompt-input]')
     assert.ok(input, 'prompt input must exist')
+    assert.ok(doc.querySelector('[data-assistant-settings-btn]'), 'settings icon button must exist in header')
+    assert.ok(doc.querySelector('[data-assistant-resize-handle]'), 'left-edge resize handle must exist')
+    assert.equal(doc.querySelector('[data-assistant-tab="insights"]'), null, 'insights tab should be removed')
 
     // Step A: type '/' -> top-level menu opens
     input.value = '/'
@@ -2159,7 +2162,7 @@ test('semantic reasoning, local disambiguation, multi-turn history, and interact
   const iconStub = { render: () => vue.h('span') }
   const deps = {
     vue,
-    'lucide-vue-next': { Sparkles: iconStub, X: iconStub },
+    'lucide-vue-next': { Sparkles: iconStub, X: iconStub, Settings: iconStub },
     '@/features/ai/stores/aiAssistant': { useAiAssistantStore: () => storeMock },
     '@/lib/aiNoteFormat': aiNoteFormat,
     '@/features/ai/lib/aiClient': aiClient,

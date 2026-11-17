@@ -5805,7 +5805,8 @@ async function callClientSideProvider(
           contents: [{ role: 'user', parts: [{ text: userPayload }] }],
           generationConfig: {
             responseMimeType: 'application/json',
-            temperature: 0.45,
+            temperature: 0.55,
+            maxOutputTokens: 2048,
           },
         }),
       })
@@ -5841,7 +5842,7 @@ async function callClientSideProvider(
       },
       body: JSON.stringify({
         model: model || 'gpt-4.1-mini',
-        temperature: 0.45,
+        temperature: 0.55,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
@@ -5863,8 +5864,8 @@ async function callClientSideProvider(
       },
       body: JSON.stringify({
         model: model || 'claude-3-5-haiku-latest',
-        max_tokens: 1500,
-        temperature: 0.45,
+        max_tokens: 2048,
+        temperature: 0.55,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPayload }],
       }),
