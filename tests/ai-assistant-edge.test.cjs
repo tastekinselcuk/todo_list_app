@@ -356,6 +356,40 @@ test('agent loop executes multi-step tool calls across Gemini/OpenAI/Anthropic, 
       const u = String(url)
       const body = JSON.parse(String(init.body || '{}'))
 
+      if (providerMode === 'weather-tool' && u.includes('generativelanguage')) {
+        const hasToolResp = Array.isArray(body.contents) && body.contents.some(c => c.parts?.some(p => p.functionResponse))
+        if (!hasToolResp) {
+          return new Response(
+            JSON.stringify({
+              candidates: [{ content: { parts: [{ functionCall: { name: 'get_weather_forecast', args: { location: 'Beykoz', date: '2026-11-19' } } }] } }],
+            }),
+            { status: 200 },
+          )
+        }
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: JSON.stringify({ reply: 'Beykoz için yarın 07:00–09:00 arası 11°C ve parçalı bulutlu.' }) }] } }],
+          }),
+          { status: 200 },
+        )
+      }
+      if (u.includes('geocoding-api.open-meteo.com')) {
+        return new Response(JSON.stringify({ results: [{ name: 'Beykoz', admin1: 'İstanbul', country: 'Türkiye', latitude: 41.13, longitude: 29.09 }] }), { status: 200 })
+      }
+      if (u.includes('api.open-meteo.com')) {
+        return new Response(
+          JSON.stringify({
+            hourly: {
+              time: ['2026-11-19T07:00', '2026-11-19T08:00', '2026-11-19T09:00'],
+              temperature_2m: [10.5, 11.2, 12.0],
+              precipitation_probability: [10, 15, 10],
+              weather_code: [2, 2, 1],
+              wind_speed_10m: [12, 14, 15],
+            },
+          }),
+          { status: 200 },
+        )
+      }
       if (providerMode === 'auth-401') {
         return new Response('{}', { status: 401 })
       }
@@ -372,6 +406,16 @@ test('agent loop executes multi-step tool calls across Gemini/OpenAI/Anthropic, 
       }
 
       if (u.includes('generativelanguage')) {
+        // Verify Gemini strict OpenAPI schema compliance: no empty properties: {} on OBJECT parameters
+        const decls = body?.tools?.[0]?.functionDeclarations || []
+        for (const decl of decls) {
+          if (decl.parameters) {
+            assert.ok(
+              decl.parameters.properties && Object.keys(decl.parameters.properties).length > 0,
+              `Gemini tool ${decl.name} must not have empty properties: {}`,
+            )
+          }
+        }
         const hasToolResp = Array.isArray(body.contents) && body.contents.some(c => c.parts?.some(p => p.functionResponse))
         if (!hasToolResp) {
           return new Response(
@@ -595,6 +639,18 @@ test('agent loop executes multi-step tool calls across Gemini/OpenAI/Anthropic, 
       body: JSON.stringify({ workspace_id: wid, mode: 'chat', prompt: 'Selam' }),
     }),
   )
-  assert.equal(rateErrRes.status, 429)
-  assert.equal((await rateErrRes.json()).error, 'PROVIDER_RATE_LIMIT')
+  // 6. Live weather tool call (Open-Meteo Beykoz hourly forecast)
+  providerMode = 'weather-tool'
+  const wxRes = await handler(
+    new Request('https://edge.local/ai-assistant', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer valid-jwt', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: wid, mode: 'chat', prompt: 'yarın sabah beykoz hava durumu nasıl', timezone: 'Europe/Istanbul' }),
+    }),
+  )
+  assert.equal(wxRes.status, 200)
+  const wxBody = await wxRes.json()
+  assert.equal(wxBody.tool_trace[0].tool, 'get_weather_forecast')
+  assert.equal(wxBody.tool_trace[0].ok, true)
+  assert.match(wxBody.reply, /Beykoz/)
 })

@@ -377,7 +377,8 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
           PROVIDER_TIMEOUT: 'AI sağlayıcısı zaman aşımına uğradı. Lütfen tekrar deneyin.',
           PROVIDER_UNAVAILABLE: 'AI sağlayıcısına şu anda ulaşılamıyor.',
           PROVIDER_INVALID_JSON: 'AI sağlayıcısı beklenmeyen bir yanıt formatı döndürdü.',
-          AUTH_REQUIRED: 'Oturum doğrulaması gerekli. Lütfen yeniden giriş yapın.',
+          AUTH_REQUIRED: 'Oturum veya MFA doğrulaması gerekli. Lütfen yeniden giriş yapın.',
+          AI_SERVICE_UNAVAILABLE: 'Edge Function sunucu servisine veya veritabanı RPC fonksiyonlarına ulaşılamadı.',
         }
         error.value = errorMap[code] || code
       }

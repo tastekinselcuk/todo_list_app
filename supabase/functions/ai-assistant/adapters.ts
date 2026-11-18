@@ -52,14 +52,24 @@ export function extractJsonObject(rawText: string): Record<string, unknown> | nu
   }
 }
 
-function mapHttpError(provider: AiProviderId, status: number): AiProviderError {
+function mapHttpError(provider: AiProviderId, status: number, detail?: string): AiProviderError {
+  const suffix = detail ? `: ${detail.slice(0, 180)}` : ''
   if (status === 401 || status === 403) {
-    return new AiProviderError('PROVIDER_AUTH', provider, `${provider.toUpperCase()} authentication failed (${status})`, status)
+    return new AiProviderError('PROVIDER_AUTH', provider, `${provider.toUpperCase()} authentication failed (${status})${suffix}`, status)
   }
   if (status === 429) {
-    return new AiProviderError('PROVIDER_RATE_LIMIT', provider, `${provider.toUpperCase()} rate limit exceeded`, status)
+    return new AiProviderError('PROVIDER_RATE_LIMIT', provider, `${provider.toUpperCase()} rate limit exceeded${suffix}`, status)
   }
-  return new AiProviderError('PROVIDER_UNAVAILABLE', provider, `${provider.toUpperCase()} HTTP ${status}`, status)
+  return new AiProviderError('PROVIDER_UNAVAILABLE', provider, `${provider.toUpperCase()} HTTP ${status}${suffix}`, status)
+}
+
+async function readHttpErrorDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as Record<string, any>
+    return String(body?.error?.message || body?.message || '')
+  } catch {
+    return ''
+  }
 }
 
 function wrapFetchError(provider: AiProviderId, err: unknown): AiProviderError {
@@ -137,11 +147,15 @@ const geminiAdapter: AiProviderAdapter = {
     if (input.tools?.length && cap.supportsTools) {
       body.tools = [
         {
-          functionDeclarations: input.tools.map(t => ({
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters,
-          })),
+          functionDeclarations: input.tools.map(t => {
+            const props = (t.parameters as Record<string, unknown> | undefined)?.properties
+            const hasProps = Boolean(props && typeof props === 'object' && Object.keys(props).length > 0)
+            return {
+              name: t.name,
+              description: t.description,
+              ...(hasProps ? { parameters: t.parameters } : {}),
+            }
+          }),
         },
       ]
     }
@@ -159,7 +173,7 @@ const geminiAdapter: AiProviderAdapter = {
           body: JSON.stringify(body),
         },
       )
-      if (!res.ok) throw mapHttpError('gemini', res.status)
+      if (!res.ok) throw mapHttpError('gemini', res.status, await readHttpErrorDetail(res))
       const data = await res.json()
       const parts = Array.isArray(data?.candidates?.[0]?.content?.parts) ? data.candidates[0].content.parts : []
       const toolCalls: AiToolCall[] = []
@@ -271,7 +285,7 @@ const openaiAdapter: AiProviderAdapter = {
         },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw mapHttpError('openai', res.status)
+      if (!res.ok) throw mapHttpError('openai', res.status, await readHttpErrorDetail(res))
       const data = await res.json()
       const choice = data?.choices?.[0]?.message || {}
       const rawText = typeof choice.content === 'string' ? choice.content : ''
@@ -373,7 +387,7 @@ const anthropicAdapter: AiProviderAdapter = {
         },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw mapHttpError('anthropic', res.status)
+      if (!res.ok) throw mapHttpError('anthropic', res.status, await readHttpErrorDetail(res))
       const data = await res.json()
       const blocks = Array.isArray(data?.content) ? data.content : []
       const textParts: string[] = []

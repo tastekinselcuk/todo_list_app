@@ -26,6 +26,15 @@ create index if not exists ai_conversations_ws_user_updated_idx
 
 alter table public.ai_conversations enable row level security;
 
+drop policy if exists require_verified_mfa on public.ai_conversations;
+create policy require_verified_mfa on public.ai_conversations as restrictive for all to authenticated
+  using (public.session_mfa_satisfied())
+  with check (public.session_mfa_satisfied());
+
+revoke all on table public.ai_conversations from public, anon;
+grant select, insert, update, delete on table public.ai_conversations to authenticated;
+grant all on table public.ai_conversations to service_role;
+
 drop policy if exists "ai_conversations_owner_select" on public.ai_conversations;
 create policy "ai_conversations_owner_select" on public.ai_conversations
   for select to authenticated
@@ -73,6 +82,15 @@ create index if not exists ai_messages_conv_created_idx
 
 alter table public.ai_messages enable row level security;
 
+drop policy if exists require_verified_mfa on public.ai_messages;
+create policy require_verified_mfa on public.ai_messages as restrictive for all to authenticated
+  using (public.session_mfa_satisfied())
+  with check (public.session_mfa_satisfied());
+
+revoke all on table public.ai_messages from public, anon;
+grant select, insert, update, delete on table public.ai_messages to authenticated;
+grant all on table public.ai_messages to service_role;
+
 drop policy if exists "ai_messages_owner_all" on public.ai_messages;
 create policy "ai_messages_owner_all" on public.ai_messages
   for all to authenticated
@@ -100,6 +118,15 @@ create table if not exists public.ai_user_preferences (
 );
 
 alter table public.ai_user_preferences enable row level security;
+
+drop policy if exists require_verified_mfa on public.ai_user_preferences;
+create policy require_verified_mfa on public.ai_user_preferences as restrictive for all to authenticated
+  using (public.session_mfa_satisfied())
+  with check (public.session_mfa_satisfied());
+
+revoke all on table public.ai_user_preferences from public, anon;
+grant select, insert, update, delete on table public.ai_user_preferences to authenticated;
+grant all on table public.ai_user_preferences to service_role;
 
 drop policy if exists "ai_user_preferences_owner_all" on public.ai_user_preferences;
 create policy "ai_user_preferences_owner_all" on public.ai_user_preferences

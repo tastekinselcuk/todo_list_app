@@ -2690,7 +2690,7 @@ const CONVERSATIONAL_NEGATION_RE =
   /(?:^|[^\p{L}\p{N}_])(hiçbirine|ekleme|yazma|kaydetme|vazgeç\p{L}*|iptal\s+et|olmasın|boşver|gerek\s+yok)(?=$|[^\p{L}\p{N}_])/iu
 
 const CONVERSATIONAL_QUESTION_RE =
-  /\?|(?:^|[^\p{L}\p{N}_])(neler\p{L}*|nasıl|ne\s+ekleyebilir\p{L}*|ne\s+yapabilir\p{L}*|ne\s+önerir\p{L}*|fikir\s+ver\p{L}*|ne\s+dersin|hangisi|acaba|yardım\s+et|anlat\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
+  /\?|(?:^|[^\p{L}\p{N}_])(saat\s+kaç|ayın\s+kaçı|hangi\s+gün|günlerden\s+ne|tarih\s+ne\p{L}*|hava\s+durumu|nasıl|neler\p{L}*|ne\s+ekleyebilir\p{L}*|ne\s+yapabilir\p{L}*|ne\s+önerir\p{L}*|fikir\s+ver\p{L}*|ne\s+dersin|hangisi|acaba|yardım\s+et|anlat\p{L}*)(?=$|[^\p{L}\p{N}_])/iu
 
 export function isConversationalOnlyPrompt(prompt: string): boolean {
   const text = String(prompt || '').trim()
@@ -2715,6 +2715,20 @@ export function buildConversationalReply(prompt: string, digest?: AiWorkspaceDig
   const prefix = hasNegation ? 'Tamam, hiçbir yere eklemedim. ' : ''
 
   if (hasQuestion) {
+    if (/(hava\s+durumu|sıcaklık|yağmur|kaç\s+derece|hava\s+nasıl)/iu.test(lower)) {
+      return `${prefix}Canlı hava durumu tahmini için Edge Function + internet aracı (\`get_weather_forecast\`) gerekir; şu an çevrimdışı yerel sentez modundayım ve internete çıkamıyorum.`
+    }
+    if (/(saat\s+kaç|ayın\s+kaçı|hangi\s+gün|günlerden\s+ne|tarih\s+ne)/iu.test(lower)) {
+      const now = new Date()
+      const timeStr = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now)
+      const dateStr = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'full' }).format(now)
+      if (/yarın/iu.test(lower)) {
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+        const tomorrowStr = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'full' }).format(tomorrow)
+        return `${prefix}Yarın **${tomorrowStr}**. (Şu an saat **${timeStr}** — ${dateStr})`
+      }
+      return `${prefix}Şu an saat **${timeStr}** — **${dateStr}**.`
+    }
     if (/(takvim|tkavim|randevu|zaman\s+bloğ)/iu.test(lower)) {
       return (
         `${prefix}Takvim alanına günlük akışını netleştirecek pek çok şey ekleyebiliriz:\n` +
@@ -3313,7 +3327,10 @@ export function synthesizeWorkspaceAnalysis(
 
   const isAnalysisPrompt =
     !prompt.trim() ||
-    /(analiz|özet|rapor|durum|neler\s+var|incele|bak|istatistik|özetle|durumum|öneri\s+ver)/iu.test(prompt)
+    (!/(hava\s+durumu)/iu.test(prompt) &&
+      /(?:^|[^\p{L}\p{N}_])(analiz|özet|rapor|durumum|durumu\s+nedir|neler\s+var|incele|istatistik|özetle|öneri\s+ver)(?=$|[^\p{L}\p{N}_])/iu.test(
+        prompt,
+      ))
 
   let clarification: AiClarificationPrompt | null = null
   let finalReply: string
@@ -5994,6 +6011,7 @@ const EDGE_EXPLICIT_ERROR_CODES = new Set([
   'PROVIDER_INVALID_JSON',
   'RATE_LIMITED',
   'AUTH_REQUIRED',
+  'AI_SERVICE_UNAVAILABLE',
 ])
 
 function isHighRiskAction(action: ProposedAiAction, batchSize: number): boolean {
@@ -6049,7 +6067,12 @@ export async function invokeAiAssistant(
       if (!error && data && typeof data === 'object' && data.ok !== false && !data.error) {
         return data as AiAssistantResponse
       }
-      const errCode = String(data?.error || error?.message || '')
+      let errBody: Record<string, unknown> | null =
+        data && typeof data === 'object' ? (data as Record<string, unknown>) : null
+      if (!errBody && error?.context && typeof error.context.json === 'function') {
+        errBody = await error.context.json().catch(() => null)
+      }
+      const errCode = String(errBody?.error || error?.message || '')
       if (errCode.includes('AI_SECURE_MODULE_FORBIDDEN')) {
         throw new Error('AI_SECURE_MODULE_FORBIDDEN')
       }

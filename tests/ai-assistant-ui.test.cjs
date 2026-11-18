@@ -2075,6 +2075,11 @@ test('semantic reasoning, local disambiguation, multi-turn history, and interact
   assert.ok(cancelAndAskSyn.reply.includes('hiçbir yere eklemedim'))
   assert.ok(cancelAndAskSyn.reply.includes('Takvim'))
 
+  const timeQuestionSyn = aiClient.synthesizeWorkspaceAnalysis(emptyDigest, 'şuan saat kaç')
+  assert.equal(timeQuestionSyn.clarification, null)
+  assert.equal(timeQuestionSyn.proposed_actions.length, 0)
+  assert.ok(timeQuestionSyn.reply.includes('Şu an saat'))
+
   // 2. LLM-first semantic clarification + multi-turn history preservation
   await aiClient.saveAiSettings(
     { provider: 'gemini', model: 'gemini-2.5-flash', write_mode: 'ask_before_write', api_key: 'test-key-123456' },
